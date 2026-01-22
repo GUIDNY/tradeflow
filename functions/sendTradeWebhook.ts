@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
         };
 
         // Use the hardcoded webhook URL
-        const finalWebhookUrl = "https://sayyess.app.n8n.cloud/webhook-test/bestaction";
+        const finalWebhookUrl = "https://sayyess.app.n8n.cloud/webhook/bestaction";
 
         const webhookResponse = await fetch(finalWebhookUrl, {
             method: 'POST',
