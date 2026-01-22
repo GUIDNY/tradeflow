@@ -5,11 +5,14 @@ import { motion } from 'framer-motion';
 import { TrendingUp, Activity } from 'lucide-react';
 import TradeTable from '../components/trades/TradeTable';
 import StatusFilter from '../components/trades/StatusFilter';
+import BulkActions from '../components/trades/BulkActions';
 import { useToast } from "@/components/ui/use-toast";
 
 export default function TradeDashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [activatingId, setActivatingId] = useState(null);
+  const [selectedTrades, setSelectedTrades] = useState([]);
+  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -52,6 +55,93 @@ export default function TradeDashboard() {
   const handleActivate = (tradeId) => {
     setActivatingId(tradeId);
     activateTradeMutation.mutate(tradeId);
+  };
+
+  // Selection handlers
+  const handleToggleSelect = (tradeId) => {
+    setSelectedTrades(prev =>
+      prev.includes(tradeId)
+        ? prev.filter(id => id !== tradeId)
+        : [...prev, tradeId]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedTrades.length === filteredTrades.length) {
+      setSelectedTrades([]);
+    } else {
+      setSelectedTrades(filteredTrades.map(t => t.id));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedTrades([]);
+  };
+
+  // Delete selected trades
+  const handleDeleteSelected = async () => {
+    if (selectedTrades.length === 0) return;
+
+    if (!confirm(`האם אתה בטוח שברצונך למחוק ${selectedTrades.length} רעיונות?`)) {
+      return;
+    }
+
+    setIsProcessingBulk(true);
+    try {
+      const response = await base44.functions.invoke('deleteTradeIdeas', { 
+        tradeIds: selectedTrades 
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['tradeIdeas'] });
+      toast({
+        title: "הצלחה!",
+        description: response.data.message,
+        className: "bg-green-600 text-white border-green-700"
+      });
+      setSelectedTrades([]);
+    } catch (error) {
+      toast({
+        title: "שגיאה",
+        description: error.message || "לא ניתן למחוק את הרעיונות",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  };
+
+  // Move selected trades to top
+  const handleMoveToTop = async () => {
+    if (selectedTrades.length === 0) return;
+
+    setIsProcessingBulk(true);
+    try {
+      const currentTime = new Date();
+      const updatePromises = selectedTrades.map((id, index) => {
+        const newDate = new Date(currentTime.getTime() + (selectedTrades.length - index) * 1000);
+        return base44.entities.TradeIdea.update(id, { 
+          updated_date: newDate.toISOString() 
+        });
+      });
+
+      await Promise.all(updatePromises);
+      
+      queryClient.invalidateQueries({ queryKey: ['tradeIdeas'] });
+      toast({
+        title: "הצלחה!",
+        description: `${selectedTrades.length} רעיונות הועברו למעלה`,
+        className: "bg-green-600 text-white border-green-700"
+      });
+      setSelectedTrades([]);
+    } catch (error) {
+      toast({
+        title: "שגיאה",
+        description: "לא ניתן להעביר את הרעיונות",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessingBulk(false);
+    }
   };
 
   // Filter trades by status
@@ -155,9 +245,21 @@ export default function TradeDashboard() {
               trades={filteredTrades}
               onActivate={handleActivate}
               activatingId={activatingId}
+              selectedTrades={selectedTrades}
+              onToggleSelect={handleToggleSelect}
+              onToggleSelectAll={handleToggleSelectAll}
             />
           )}
         </motion.div>
+
+        {/* Bulk Actions */}
+        <BulkActions
+          selectedCount={selectedTrades.length}
+          onDelete={handleDeleteSelected}
+          onMoveUp={handleMoveToTop}
+          onClearSelection={handleClearSelection}
+          isProcessing={isProcessingBulk}
+        />
       </div>
     </div>
   );

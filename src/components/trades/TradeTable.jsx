@@ -2,6 +2,7 @@ import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Play, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -18,7 +19,7 @@ const sideConfig = {
   sell: { label: 'מכירה', color: 'text-red-400' }
 };
 
-export default function TradeTable({ trades, onActivate, activatingId }) {
+export default function TradeTable({ trades, onActivate, activatingId, selectedTrades, onToggleSelect, onToggleSelectAll }) {
   if (!trades || trades.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
@@ -27,11 +28,20 @@ export default function TradeTable({ trades, onActivate, activatingId }) {
     );
   }
 
+  const allSelected = trades.length > 0 && selectedTrades.length === trades.length;
+
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur-sm">
       <Table>
         <TableHeader>
           <TableRow className="border-gray-800 hover:bg-transparent">
+            <TableHead className="text-gray-400 font-semibold text-center w-12">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={onToggleSelectAll}
+                className="border-gray-600"
+              />
+            </TableHead>
             <TableHead className="text-gray-400 font-semibold text-right">סימול</TableHead>
             <TableHead className="text-gray-400 font-semibold text-right">צד</TableHead>
             <TableHead className="text-gray-400 font-semibold text-right">כניסה</TableHead>
@@ -53,6 +63,13 @@ export default function TradeTable({ trades, onActivate, activatingId }) {
               transition={{ delay: index * 0.05 }}
               className="border-gray-800 hover:bg-gray-800/30 transition-colors"
             >
+              <TableCell className="text-center">
+                <Checkbox
+                  checked={selectedTrades.includes(trade.id)}
+                  onCheckedChange={() => onToggleSelect(trade.id)}
+                  className="border-gray-600"
+                />
+              </TableCell>
               <TableCell className="font-bold text-white text-right">{trade.symbol}</TableCell>
               <TableCell className="text-right">
                 <span className={`font-semibold ${sideConfig[trade.side]?.color}`}>
