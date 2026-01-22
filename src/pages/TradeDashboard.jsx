@@ -260,8 +260,9 @@ export default function TradeDashboard() {
           onMoveUp={handleMoveToTop}
           onClearSelection={handleClearSelection}
           isProcessing={isProcessingBulk}
-        />
-      </div>
-    </div>
-  );
-}
+          />
+          <Toaster />
+          </div>
+          </div>
+          );
+          }
