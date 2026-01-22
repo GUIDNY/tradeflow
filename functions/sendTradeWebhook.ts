@@ -47,10 +47,15 @@ Deno.serve(async (req) => {
             entry_price: trade.entry_price,
             stop_loss: trade.stop_loss,
             take_profit: trade.take_profit,
-            qty: trade.qty
+            qty: trade.qty,
+            risk_reward: trade.risk_reward,
+            reason: trade.reason
         };
 
-        const webhookResponse = await fetch(webhookUrl, {
+        // Use the hardcoded webhook URL
+        const finalWebhookUrl = "https://sayyess.app.n8n.cloud/webhook-test/bestaction";
+
+        const webhookResponse = await fetch(finalWebhookUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
