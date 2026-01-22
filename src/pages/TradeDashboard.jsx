@@ -7,6 +7,7 @@ import TradeTable from '../components/trades/TradeTable';
 import StatusFilter from '../components/trades/StatusFilter';
 import BulkActions from '../components/trades/BulkActions';
 import { useToast } from "@/components/ui/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 
 export default function TradeDashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
