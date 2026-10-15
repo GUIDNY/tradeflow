@@ -76,9 +76,30 @@
     const depth=o=>{ let d=0; while(o.parent){ d++; o=o.parent; } return d; }; R.order=Object.keys(R.bones).sort((a,b)=>depth(R.bones[a])-depth(R.bones[b]));   // parents first
     R.bind={}; R.order.forEach(k=>{ R.bind[k]=R.bones[k].getWorldQuaternion(new THREE.Quaternion()); });   // model still unrotated here
     rig.add(model); model.rotation.y=Math.PI/2; model.scale.setScalar(1.0);
-    R.dress(); R.addGear(); R.ready=true; R.pose({}); return model;
+    R.heroModel=model; R.heroMats=R.mats; R.dress(); R.addGear(); R.ready=true; R.pose({}); return model;
   };
-  R.dress=function(){ const k=R.look, M=R.mats; const set=(n,c)=>{ if(M[n]) M[n].color.setHex(c).convertSRGBToLinear(); };
+  /* ---------- any Mixamo-rigged character as the rider ---------- */
+  const MXMAP={Hips:'Hips',Abdomen:'Spine',Torso:'Spine1',Chest:'Spine2',Neck:'Neck',Head:'Head',ShoulderL:'LeftShoulder',UpperArmL:'LeftArm',LowerArmL:'LeftForeArm',WristL:'LeftHand',ShoulderR:'RightShoulder',UpperArmR:'RightArm',LowerArmR:'RightForeArm',WristR:'RightHand',
+    UpperLegL:'LeftUpLeg',LowerLegL:'LeftLeg',FootL:'LeftFoot',UpperLegR:'RightUpLeg',LowerLegR:'RightLeg',FootR:'RightFoot'};
+  R.droop=0; R.choices=['hero'].concat(ST.People?ST.People.names:[]); R.current='hero';
+  function adopt(model,boneFor,k,rotY){
+    if(R.model&&R.model.parent) R.model.parent.remove(R.model);
+    if(R.gear&&R.gear.parent) R.gear.parent.remove(R.gear);
+    model.rotation.set(0,0,0); model.scale.setScalar(k); model.position.set(0,0,0); rig.add(model); model.updateMatrixWorld(true);
+    R.model=model; R.bones={}; MIX.forEach(key=>{ const b=boneFor(key); if(b) R.bones[key]=b; });
+    const depth=o=>{ let d=0; while(o.parent){ d++; o=o.parent; } return d; }; R.order=Object.keys(R.bones).sort((a,b)=>depth(R.bones[a])-depth(R.bones[b]));
+    R.bind={}; R.order.forEach(key=>{ R.bind[key]=R.bones[key].getWorldQuaternion(new THREE.Quaternion()); });
+    // how far the arms hang in the bind pose (T-pose 0, A-pose ~45): the pose subtracts it
+    const a=R.bones.UpperArmL, f=R.bones.LowerArmL; let dr=0; if(a&&f){ const pa=a.getWorldPosition(new THREE.Vector3()), pf=f.getWorldPosition(new THREE.Vector3()); const d=pf.sub(pa); dr=Math.asin(clamp(-d.y/Math.max(d.length(),1e-6),-1,1))*180/Math.PI; } R.droop=dr;
+    model.rotation.y=rotY; R.addGear(); R.pose({}); }
+  R.swap=async function(name){
+    if(name===R.current) return; const prev=R.current;
+    if(name==='hero'){ const hm=R.heroModel; const B={}; hm.traverse(o=>{ if(o.isBone) B[o.name]=o; }); adopt(hm,key=>B[key],1.0,Math.PI/2); R.mats=R.heroMats; R.current='hero'; R.dress(); return; }
+    const T=await ST.People.template(name), m=THREE.SkeletonUtils.clone(T.scene);
+    m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; } });
+    const find=n=>{ let b=null; m.traverse(o=>{ if(!b&&o.name==='mixamorig'+n) b=o; }); return b; };
+    adopt(m,key=>find(MXMAP[key]),T.k,Math.PI/2); R.mats={}; R.current=name; };
+  R.dress=function(){ if(R.current!=='hero'&&R.current) return; const k=R.look, M=R.mats; const set=(n,c)=>{ if(M[n]) M[n].color.setHex(c).convertSRGBToLinear(); };
     set('Skin',k.skin); set('Skin2',k.skin); set('Hair',k.hair); set('Hair2',k.hair); set('Top',k.jacket); set('Top2',0x1a1c22); set('Accent',0xffffff); set('Pants',k.pants); set('Shoe',0x22242b); set('Sole',0xeeeeee);
     if(M.Top){ M.Top.roughness=.55; M.Top.metalness=.05; } };
   R.addGear=function(){
@@ -91,7 +112,7 @@
     const frame=new THREE.Mesh(new THREE.BoxGeometry(.225,.1,.05),new THREE.MeshStandardMaterial({color:0x101218,roughness:.5})); frame.position.set(0,.108,.118); gear.add(frame);
     gear.position.copy(hp.clone().sub(mp)).multiplyScalar(0); R.gear=gear;
     // gear is authored in the head's local frame: bone-local = world-up/forward only if the bone is bound upright; attach keeps the world pose
-    gear.position.set(0,0,0); R.model.add(gear); gear.position.copy(R.model.worldToLocal(hp.clone())); gear.rotation.set(0,0,0); gear.updateMatrixWorld(true); head.attach(gear);
+    rig.add(gear); gear.position.copy(rig.worldToLocal(hp.clone())); gear.rotation.set(0,R.model.rotation.y,0); gear.updateMatrixWorld(true); head.attach(gear);
   };
 
   /* pose: world-axis offsets from the bind pose. Angles in degrees; the model faces +Z, its left is +X, up is +Y. */
@@ -114,7 +135,7 @@
     rot('Neck',  mx(-(10+c*6+tk*10),-4),      mx(66+yawBody,P.look*.5),    0);
     rot('Head',  mx(-(8+c*4+tk*8),-4),        mx(84+yawBody,P.look),    0);
     // arms: out along the board for balance, wider in the air, tucked in a tuck, the leading hand down to the board in a grab; seated: resting on the lap
-    const spread=mx(46+a*24-tk*30-c*8,16);
+    const spread=mx(46+a*24-tk*30-c*8,16)-(R.droop||0)*(1-k*.0);
     rot('UpperArmL', mx(-14-c*6-tk*18+g*30,-28), mx(-6-a*8,-6), -spread+ln*14-g*40);
     rot('UpperArmR', mx(-10-c*6-tk*18,-28),       mx(6+a*8,6),  spread+ln*14);
     rot('LowerArmL', mx(-26-a*10+g*40,-58), 0, -(spread*.35)-g*10);

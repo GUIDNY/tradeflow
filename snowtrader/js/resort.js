@@ -28,7 +28,7 @@
       else { [[36,64],[92,64]].forEach(([x,y])=>{ g.beginPath(); g.moveTo(x,y-34); g.lineTo(x+30,y); g.lineTo(x,y+34); g.lineTo(x-30,y); g.closePath(); g.fill(); }); } }); }
 
   /* ---------- setup per track ---------- */
-  R.setTrack=function(tr){ for(const k in topCache) delete topCache[k]; T=tr; LEN=tr.len; const i=ST.TRACKS.indexOf(tr); liftSide=i%2===0?1:-1; lodgeSide=-liftSide; for(const k in chunkGeos) delete chunkGeos[k]; for(const k in chunkPlumes) delete chunkPlumes[k]; npcInit(); };
+  R.setTrack=function(tr){ if(ST.People) ST.People.reset(); for(const k in topCache) delete topCache[k]; T=tr; LEN=tr.len; const i=ST.TRACKS.indexOf(tr); liftSide=i%2===0?1:-1; lodgeSide=-liftSide; for(const k in chunkGeos) delete chunkGeos[k]; for(const k in chunkPlumes) delete chunkPlumes[k]; npcInit(); };
   const hw=s=>ST.World.halfW(s);
   const liftU=s=>liftSide*(hw(s)+19);
   R.liftU=liftU; R.lodgeSide=()=>lodgeSide;
@@ -81,7 +81,7 @@
       cyl(.65,.65,.08,M.concrete,x,1.05,z,g,12); cyl(.07,.07,1,M.steel,x,.55,z,g,6);
       cyl(.04,.04,2.6,M.steel,x,2.1,z,g,5); const para=new THREE.Mesh(new THREE.ConeGeometry(1.7,.55,10),new THREE.MeshStandardMaterial({color:cols[(i+seed)%cols.length],roughness:.7})); para.position.set(x,3.4,z); para.castShadow=true; g.add(para);
       const sn=new THREE.Mesh(new THREE.ConeGeometry(1.3,.22,10),M.snowRoof); sn.position.set(x,3.62,z); g.add(sn);
-      [[-1,0],[1,0]].forEach(([dx],j)=>{ box(.5,.08,.5,M.pole,x+dx*1.1,.62,z,g,false); box(.5,.6,.08,M.pole,x+dx*1.1,.95,z+(j?.2:-.2),g,false); person(g,x+dx*1.1,.2,z,dx>0?-PI/2:PI/2,seed*5+i*2+j,true); }); }
+      [[-1,0],[1,0]].forEach(([dx],j)=>{ box(.5,.08,.5,M.pole,x+dx*1.1,.62,z,g,false); box(.5,.6,.08,M.pole,x+dx*1.1,.95,z+(j?.2:-.2),g,false);  }); }
     // patio heaters + string lights
     [-1,1].forEach(sd=>{ const x=sd*(Math.max(8,n*3.2)/2-.4); cyl(.07,.07,2.6,M.steel,x,1.5,8.6,g,6); const hd=new THREE.Mesh(new THREE.SphereGeometry(.28,10,8),M.win); hd.position.set(x,2.9,8.6); g.add(hd); });
     for(let i=0;i<=10;i++){ const t=i/10, x=lerp(-Math.max(8,n*3.2)/2,Math.max(8,n*3.2)/2,t), y=4.6-Math.sin(t*PI)*.5; const b=new THREE.Mesh(new THREE.SphereGeometry(.09,6,5),M.win); b.position.set(x,y,8.6); g.add(b); }
@@ -90,6 +90,16 @@
       const bd=box(.3,.04,1.5,jackMats[(i+2)%jackMats.length],.38,.9,0,p,false); bd.rotation.x=.1; } 
     for(let i=0;i<8;i++) cyl(.04,.04,1.1,M.orange,-4+i*1.2,2.0,1.6,g,5); return g; }
 
+
+  /* real guests (Mixamo characters, spawned near the player by ST.People) around a building, in the building's own frame */
+  function guests(ci,i,o){ const P=ST.People; if(!P) return; const rot=o.rotation.y, c=Math.cos(rot), sn=Math.sin(rot);
+    const W=(lx,lz)=>[o.position.x+lx*c+lz*sn, o.position.z-lx*sn+lz*c];
+    const add=(lx,lz,type,fx,fz,extra)=>{ const [x,z]=W(lx,lz); const ry=(fx===undefined?0:Math.atan2(fx-lx,fz-lz))+rot; P.add(ci,Object.assign({x,z,type,ry},extra||{})); };
+    const circle=(cx,cz,n,type)=>{ for(let k=0;k<n;k++){ const a=k/n*PI*2+cx; add(cx+Math.cos(a)*1.0,cz+Math.sin(a)*1.0,type||'Idle',cx,cz); } };
+    if(i===0){ circle(-7,14,3); circle(6,13.5,3); circle(0,17,2); add(0,12,'Wave',0,30); add(-12,20,'Walk',0,20,{seg:[24*c,-24*sn]}); add(10,22,'Walk',0,22,{seg:[-20*c,20*sn]}); }
+    else if(i===1||i===5||i===6){ circle(-3,9.5,2); circle(3.2,10,2); add(0,12.5,'Wave',0,30); }
+    else if(i===2){ for(let k=0;k<7;k++) add(-9+k*3,11+hash2(k,4)*3,k%3?'Wave':'Idle',-9+k*3,40); }
+    else if(i===4){ for(let k=0;k<7;k++) add(-1.5+hash2(k,2)*3,2.5+k*1.25,'Idle',0,-8); } }
   function placeBuilding(grp,site,obj,faceTrack){ const W=ST.World, x=W.cx(site.s)+site.u, z=-site.s, y=W.groundY(x,z)+1.2; obj.position.set(x,y-2.1,z); const toward=site.u<0?1:-1; obj.rotation.y=faceTrack===false?0:(toward>0?PI/2:-PI/2); grp.add(obj); }
 
   /* ---------- chairlift geometry ---------- */
@@ -124,8 +134,7 @@
     R.sites(T).forEach((t,i)=>{ if(t.s<s0||t.s>=s0+L) return; let o;
       if(i===0) o=chalet(1.0,'BASE LODGE','SNOW TRADER RESORT'); else if(i===1) o=chalet(.62,'CAFÉ','ESPRESSO · COCOA'); else if(i===2) o=chalet(.6,'FINISH ZONE','TAKE PROFIT'); else if(i===5) o=chalet(.62,'APRÈS SKI','BAR & GRILL'); else if(i===6) o=chalet(.6,'MOUNTAIN CAFÉ','WAFFLES'); else o=station();
       if(i===0||i===1||i===5||i===6){ const tr=terrace(i===0?5:3,i); tr.position.set(0,.1,i===0?5:6); o.add(tr); }
-      if(i===4){ const cr=crowd(9,3); cr.position.set(0,-.2,3.5); o.add(cr); }
-      placeBuilding(grp,t,o,i<3||i>4); if(i<3||i>4) addSmoke(grp,o); });
+      placeBuilding(grp,t,o,i<3||i>4); if(i<3||i>4) addSmoke(grp,o); guests(ci,i,o); });
     // cannons
     for(let s=Math.ceil(s0/120)*120+37;s<s0+L;s+=120){ if(s<s0||s>LEN-30) continue; const side=Math.floor(s/120)%2?1:-1, u=side*(hw(s)+7), x=W.cx(s)+u, z=-s, y=W.groundY(x,z); const g=new THREE.Group(); g.position.set(x,y,z);
       cyl(.18,.25,3.4,M.steel,0,1.7,0,g,8); const barrel=cyl(.3,.4,1.6,M.orange,0,3.6,0,g,10); barrel.rotation.z=side*-.9; [0,1,2].forEach(i=>{ const l=box(.1,2.2,.1,M.steel,Math.cos(i*2.1)*.7,1,Math.sin(i*2.1)*.7,g); l.rotation.z=Math.cos(i*2.1)*.35; l.rotation.x=-Math.sin(i*2.1)*.35; });
@@ -133,7 +142,7 @@
       grp.add(g); }
   };
   const neonNet=new THREE.MeshBasicMaterial({color:0xff3df2,transparent:true,opacity:.55,side:THREE.DoubleSide});
-  R.disposeChunk=function(ci){ (chunkGeos[ci]||[]).forEach(g=>g.dispose()); delete chunkGeos[ci]; delete chunkPlumes[ci]; };
+  R.disposeChunk=function(ci){ if(ST.People) ST.People.clear(ci); (chunkGeos[ci]||[]).forEach(g=>g.dispose()); delete chunkGeos[ci]; delete chunkPlumes[ci]; };
   function addSmoke(grp,o){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:plumeTex,transparent:true,depthWrite:false,opacity:.35,color:0xdfe3ea,fog:true})); const p=new THREE.Vector3(-6,14,-1).applyMatrix4(o.matrixWorld.identity().compose(o.position,new THREE.Quaternion().setFromEuler(o.rotation),o.scale)); sp.position.copy(p); sp.scale.set(5,7,1); sp.userData.smoke=1; sp.userData.by=p.y; grp.add(sp); (chunkPlumes.smoke=chunkPlumes.smoke||[]); }
 
   /* ---------- moving chairs ---------- */

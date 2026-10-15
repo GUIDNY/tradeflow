@@ -7,7 +7,7 @@
 
   /* ---------- save ---------- */
   const KEY='snowtrader.v1';
-  let save={wallet:0,best:{},board:0,owned:[0],runs:0,track:0,muted:false};
+  let save={wallet:0,best:{},board:0,owned:[0],runs:0,track:0,muted:false,rider:0};
   try{ Object.assign(save,JSON.parse(localStorage.getItem(KEY)||'{}')); }catch(e){}
   const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} };
 
@@ -307,6 +307,8 @@
   }
 
   /* ---------- menu ---------- */
+  function renderRiders(){ const row=$('#riderRow'); row.innerHTML=Rider.choices.map((n,i)=>'<button data-i="'+i+'" class="'+(i===(save.rider||0)?'sel':'')+'">'+(i+1)+'</button>').join('');
+    row.querySelectorAll('button').forEach(b=>b.onclick=async()=>{ const i=+b.dataset.i; if(i===save.rider&&Rider.current===Rider.choices[i]) return; const st=$('#riderState'); st.textContent='טוענים…'; try{ await Rider.swap(Rider.choices[i]); save.rider=i; persist(); applyLook(); }catch(e){ console.warn(e); st.textContent='שגיאה'; setTimeout(()=>st.textContent='',1500); return; } st.textContent=''; renderRiders(); }); }
   function menuNote(t){ let n=document.getElementById('mnote'); if(!n){ n=document.createElement('div'); n.id='mnote'; document.body.appendChild(n); } n.textContent=t; n.className='show'; clearTimeout(menuNote.h); menuNote.h=setTimeout(()=>n.className='',2400); }
   function stars(n){ return '★'.repeat(n)+'☆'.repeat(3-n); }
   function unlocked(i){ if(i===0) return true; const prev=ST.TRACKS[i-1], b=save.best[prev.id]; return !!b&&b.stars>=2; }
@@ -314,6 +316,7 @@
     $('#walletN').textContent=fmt(save.wallet);
     ST.TrailMap.render($('#trailMap'),{tracks:ST.TRACKS,sel:trackIdx,best:save.best,unlocked},i=>{ if(!unlocked(i)){ menuNote('🔒 סיימו את '+ST.TRACKS[i-1].name+' עם 2 כוכבים כדי לפתוח'); return; } trackIdx=i; save.track=i; persist(); track=ST.TRACKS[i]; menuScene(); renderMenuCards(); });
     { const t=ST.TRACKS[trackIdx], b=save.best[t.id], drop=Math.round(t.len*t.slope*.92); $('#trackInfo').innerHTML='<div class="tn">'+t.en+'</div><span class="chip '+t.diff+'">'+t.diffName+'</span><div class="tb">'+t.blurb+'</div><div class="facts"><span>אורך<b>'+t.len+' מ׳</b></span><span>ירידה<b>'+drop+' מ׳</b></span><span>יעד רווח<b>'+fmt(t.goals[0])+'</b></span><span>שיא<b>'+(b?fmt(b.profit):'—')+'</b></span></div>'; }
+    renderRiders();
     $('#boardCards').innerHTML=Rider.BOARDS.map((b,i)=>{ const own=save.owned.includes(i); return '<div class="card'+(i===save.board?' sel':'')+'" data-b="'+i+'"><div class="sw" style="background:linear-gradient(90deg,'+b.top[0]+','+b.top[1]+')"></div><div class="nm">'+b.name+'</div><div class="meta"><span>'+(own?(i===save.board?'נבחר':'שלכם'):'לרכישה')+'</span>'+(own?'':'<span class="px">'+fmt(b.price)+'</span>')+'</div></div>'; }).join('');
         document.querySelectorAll('#boardCards .card').forEach(c=>c.onclick=()=>{ const i=+c.dataset.b, b=Rider.BOARDS[i]; if(!save.owned.includes(i)){ if(save.wallet<b.price){ c.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:220}); return; } save.wallet-=b.price; save.owned.push(i); }
       save.board=i; persist(); Rider.setBoard(i); renderMenuCards(); });
@@ -336,6 +339,7 @@
   function tick(dt){
     tAcc+=dt; frame++;
     if(mode==='pause') return;
+    ST.People.update(dt,camera.position.x,camera.position.z);
     if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
     if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); ST.Resort.update(tAcc,P.s+40); World.update(P.s); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); return; }
     if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.vx=Math.sin(P.hd)*5; P.vz=-Math.cos(P.hd)*5; subtitle('גררו לסיבוב · קפיצה בקצה הרמפה · תרגילים באוויר',3600); } }
@@ -371,9 +375,9 @@
     set(10,'בונים את ההר…'); ST.onResize(); ST.qApply(ST.Q.lv);
     const qt=new URLSearchParams(location.search).get('track'); const qi=ST.TRACKS.findIndex(t=>t.id===qt); if(qi>=0) save.track=qi; else if(!(save.track>=0&&save.track<ST.TRACKS.length)||!unlocked(save.track)) save.track=0; track=ST.TRACKS[save.track]; trackIdx=ST.TRACKS.indexOf(track); World.setTrack(track); set(35,'מלבישים את הרוכב…');
     try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
-    set(80,'מחממים את השוק…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted);
+    set(80,'מחממים את השוק…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(save.rider>0&&Rider.choices[save.rider]){ ST.People.template(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
     set(100); await new Promise(r=>setTimeout(r,250));
-    $('#loading').remove(); mode='menu'; toMenu(); P.t=0;
+    $('#loading').remove(); mode='menu'; toMenu(); P.t=0; ST.People.preload(5);
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ startRun(); }
     window.READY=true; requestAnimationFrame(loop);
   }

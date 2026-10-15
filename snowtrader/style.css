@@ -130,3 +130,8 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 #liftHud .lt b{color:var(--gold);font-weight:400;margin-inline-end:8px}
 #liftFact{max-width:min(560px,90vw);padding:10px 16px;background:var(--glass);backdrop-filter:blur(10px);border-radius:14px;border:1px solid rgba(255,255,255,.2);font-size:14px;font-weight:600;min-height:20px}
 #liftSkip{pointer-events:auto;margin-top:2px}
+
+#riderRow{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;touch-action:pan-x}
+#riderRow button{flex:0 0 auto;width:46px;height:46px;border-radius:50%;background:var(--glass);border:2px solid rgba(255,255,255,.3);font-family:var(--display);font-size:18px;color:#fff;backdrop-filter:blur(8px)}
+#riderRow button.sel{border-color:var(--g);background:rgba(22,224,138,.35);box-shadow:0 0 0 3px rgba(22,224,138,.25)}
+.sect h3 small{font-weight:600;letter-spacing:0;opacity:.8;margin-inline-start:8px}
