@@ -2,7 +2,7 @@
 (function(ST){
   const {clamp,lerp,smooth,damp,lerpAngle,fmt,$,hash2}=ST;
   const {scene,camera,sun,World,Rider,Audio}=ST;
-  const G=24, SLOPE_G=17.5, MAXV=46;
+  const G=24, SLOPE_G=17.5, MAXV=34;
   const PI=Math.PI;
 
   /* ---------- save ---------- */
@@ -47,7 +47,7 @@
   const KEYMAP={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowUp:'u',KeyW:'u',ArrowDown:'d',KeyS:'d'};
   addEventListener('keydown',e=>{ if(e.repeat) return; Audio.init(); const k=KEYMAP[e.code]; if(k){ input.k[k]=true; e.preventDefault(); }
     if(e.code==='Space'){ e.preventDefault(); input.jump=true; input.jumpEdge=true; } if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=true;
-    if((e.code==='Escape'||e.code==='KeyP')&&(mode==='play'||mode==='pause')) togglePause(); });
+    if((e.code==='Escape'||e.code==='KeyP')&&(mode==='play'||mode==='pause')) togglePause(); if(e.code==='Enter'&&mode==='lift') endLift(); });
   addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) input.k[k]=false; if(e.code==='Space') input.jump=false; if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=false; });
   document.addEventListener('visibilitychange',()=>{ if(document.hidden&&mode==='play') togglePause(); });
   addEventListener('blur',()=>{ input.k={}; input.jump=input.grab=false; if(mode==='play') togglePause(); });
@@ -82,9 +82,40 @@
   }
   function applyLook(){ const k=track.id; Rider.setLook({jacket:k==='bull'?0xff3d6e:k==='bear'?0x2f8bff:0xffd34a,helmet:k==='ipo'?0x1b1033:0x15161c});
     if(Rider.lens){ Rider.lens.material.color.setHex(k==='bear'?0x6fd0ff:k==='ipo'?0xff4fd8:0xff7a2e); Rider.lens.material.emissive.setHex(k==='bear'?0x2f9fff:k==='ipo'?0xff2fb8:0xff5a1e); } }
-  function startRun(){
+  /* ---------- the ride up: a chairlift time-lapse before every run (rope speed ~5 m/s, shown x12) ---------- */
+  const lift={t:0,T:14,s0:0,s1:0,cam:new THREE.Vector3(),look:new THREE.Vector3(),on:false,fact:-1};
+  const FACTS=['חבל הרכבל נע בערך 5 מטר בשנייה. כאן הקפצנו את הזמן פי 12.','מהירות ממוצעת של גולשים באתרי סקי: כ‑33 קמ״ש. מתחילים כ‑20, מתקדמים כ‑45.','בקפיצה טובה אפשר להישאר באוויר 2 עד 2.5 שניות.','את הספין מתחילים לפני שעוזבים את הקרקע. הקישו קפיצה בקצה הרמפה.','אל תסתובבו מוקדם מדי על הרמפה: נוחתים הצידה.'];
+  function startLift(){
     Audio.init(); Audio.music(!save.muted);
-    resetPlayer(); mode='countdown'; countdown=2.6; el.menu.hidden=true; el.end.hidden=true; el.hud.hidden=false; el.pause.hidden=true; el.tip.hidden=true; tipShown={};
+    resetPlayer(); mode='lift'; el.menu.hidden=true; el.end.hidden=true; el.hud.hidden=false; el.hud.classList.add('lifting'); el.pause.hidden=true; $('#liftHud').hidden=false; el.tip.hidden=true; tipShown={};
+    ST.Resort.liftMode=true; lift.t=0; lift.s0=track.len+34; lift.s1=-26; lift.on=true; lift.fact=-1; P.s=lift.s0; P.z=-P.s; World.update(P.s-150,true);
+    const R=Rider; R.model.rotation.y=PI; R.P.sit=1; R.P.swing=1; R.root.visible=true; ST.Resort.playerChair.visible=true; lift.cam.set(0,0,0); lift.first=true; subtitle(track.en,2000);
+  }
+  function endLift(){
+    lift.on=false; ST.Resort.liftMode=false; const R=Rider; R.model.rotation.y=PI/2; R.P.sit=0; R.P.swing=0; ST.Resort.playerChair.visible=false; el.hud.classList.remove('lifting'); $('#liftHud').hidden=true; beginCountdown();
+  }
+  const _tq=new THREE.Quaternion();
+  function updateLift(dt){
+    lift.t+=dt; const u=clamp(lift.t/lift.T,0,1), e=u*u*u*(u*(6*u-15)+10); const s=lerp(lift.s0,lift.s1,e); P.s=s; P.z=-s;
+    const Rs=ST.Resort, p=Rs.cablePoint(s,-1), p2=Rs.cablePoint(s-1.5,-1); const tx=p2.x-p.x, tz=p2.z-p.z, tl=Math.hypot(tx,tz)||1, tdx=tx/tl, tdz=tz/tl, yaw=Math.atan2(tx,tz);
+    const sway=Math.sin(lift.t*1.7)*.035, sway2=Math.sin(lift.t*1.1)*.03; _e.set(sway2,yaw,sway,'YXZ'); Rs.playerChair.quaternion.setFromEuler(_e); Rs.playerChair.position.set(p.x,p.y,p.z);
+    const R=Rider; R.root.position.set(p.x,p.y-3.28,p.z); R.root.rotation.set(0,yaw+PI,0); R.tilt.quaternion.identity(); R.tilt.quaternion.setFromEuler(_e.set(sway2,0,sway,'YXZ')); R.trick.rotation.set(0,0,0);
+    R.P.t=lift.t; R.P.look=Math.sin(lift.t*.7)*28; R.P.crouch=0; R.P.air=0; R.P.lean=0; R.P.grab=0; R.P.tuck=0; R.P.twist=0; R.pose({});
+    // three shots: from the track side, from behind looking up the line, from the top station looking back
+    const dirT=Rs.liftSide(); let cx,cy,cz,lx,ly,lz;
+    if(u<.34){ cx=p.x+dirT*4.2; cy=p.y-1.8; cz=p.z; lx=p.x; ly=p.y-1.9; lz=p.z; }
+    else if(u<.7){ cx=p.x-tdx*5.2-dirT*1.0; cy=p.y-.2; cz=p.z-tdz*5.2; lx=p.x+tdx*20; ly=p.y+1.6; lz=p.z+tdz*20; }
+    else { cx=p.x+tdx*3.4+dirT*3.2; cy=p.y-.9; cz=p.z+tdz*3.4; lx=p.x; ly=p.y-1.9; lz=p.z; }
+    _f.set(cx,cy,cz); _ft.set(lx,ly,lz); if(lift.first){ lift.cam.copy(_f); lift.look.copy(_ft); lift.first=false; } else { lift.cam.lerp(_f,1-Math.exp(-dt*2.6)); lift.look.lerp(_ft,1-Math.exp(-dt*3.2)); }
+    camera.position.copy(lift.cam); camera.lookAt(lift.look); camera.rotateZ(sway*1.4); if(camera.fov!==(ST.baseFov||62)+6){ camera.fov=(ST.baseFov||62)+6; camera.updateProjectionMatrix(); }
+    const fi=Math.min(FACTS.length-1,Math.floor(lift.t/3.4)); if(fi!==lift.fact){ lift.fact=fi; $('#liftFact').textContent=FACTS[fi]; }
+    gr('uSpeed',Math.sin(u*PI)*.35); if(u>=1) endLift();
+  }
+  $('#liftSkip').onclick=()=>{ if(mode==='lift') endLift(); };
+  function startRun(){ if(new URLSearchParams(location.search).get('nolift')==='1') beginCountdown(true); else startLift(); }
+  function beginCountdown(fresh){
+    Audio.init(); Audio.music(!save.muted);
+    if(fresh!==false) resetPlayer(); else resetPlayer(); mode='countdown'; countdown=2.6; el.menu.hidden=true; el.end.hidden=true; el.hud.hidden=false; el.hud.classList.remove('lifting'); el.pause.hidden=true; el.tip.hidden=true; tipShown={};
     camReset(); subtitle(track.en+' · '+track.blurb,3200); lastCd=99; joyHome();
   }
   let lastCd=99;
@@ -138,7 +169,7 @@
       const gy=World.groundY(P.x,P.z); P.vy-=G*dt; P.y+=P.vy*dt; if(P.y<gy){ P.y=gy; P.vy=P.vy<-3?-P.vy*.35:0; P.grounded=true; }
       P.fl+=P.wfl*dt; P.sp+=P.wfl*.35*dt; P.s=-P.z; if(P.tumble<=0) respawn(); return; }
     if(P.grounded){
-      const turn=lerp(2.7,1.3,clamp(speed/36,0,1));
+      const vr=track.vref||24, turn=lerp(2.7,1.5,clamp(speed/(vr*1.4),0,1));
       P.tuck=damp(P.tuck,iy<-.35?1:0,10,dt);
       if(P.stun<=0) P.hd+=sx*turn*dt;
       if(Math.abs(sx)<.1) P.hd=lerpAngle(P.hd,trackAng,1-Math.exp(-dt*.8));
@@ -148,7 +179,7 @@
       P.vx+=-SLOPE_G*gX*dt; P.vz+=-SLOPE_G*gZ*dt;
       let fwd=P.vx*dx+P.vz*dz, lx=P.vx-fwd*dx, lz=P.vz-fwd*dz; const grip=3.4+Math.abs(sx)*.6; const k=Math.exp(-grip*dt); lx*=k; lz*=k;
       // a hard carve scrubs speed; a tuck cuts the drag
-      const drag=(1.0+.0046*fwd*fwd)*(P.tuck>.5?.62:1)+Math.abs(sx)*speed*.025;
+      const drag=(1.0+(track.drag||.0046)*fwd*fwd)*(P.tuck>.5?.62:1)+Math.abs(sx)*speed*.025;
       fwd=Math.max(2,fwd-drag*dt)+P.boost*2.2*dt;
       P.vx=dx*fwd+lx; P.vz=dz*fwd+lz;
       const sp2=Math.hypot(P.vx,P.vz); if(sp2>MAXV){ P.vx*=MAXV/sp2; P.vz*=MAXV/sp2; }
@@ -201,7 +232,7 @@
     const sp=P.speed, air=!P.grounded;
     camHd=lerpAngle(camHd,P.hd,1-Math.exp(-dt*(air?1.2:3.1)));
     const fx=Math.sin(camHd), fz=-Math.cos(camHd);
-    const dist=lerp(5.4,7.4,clamp(sp/40,0,1))+(air?.7:0), h=lerp(2.1,2.9,clamp(sp/40,0,1))+(air?.8:0)+P.tuck*-.3;
+    const vq=clamp(sp/((track.vref||24)*1.3),0,1), dist=lerp(5.4,7.4,vq)+(air?.7:0), h=lerp(2.1,2.9,vq)+(air?.8:0)+P.tuck*-.3;
     const tx=P.x-fx*dist, tz=P.z-fz*dist; let ty=P.y+h;
     const gy=World.groundY(tx,tz)+1.3; if(ty<gy) ty=gy;
     _f.set(tx,ty,tz); if(camSnap){ camPos.copy(_f); camSnap=false; } else { const k=1-Math.exp(-dt*(air?6:11)); camPos.lerp(_f,k); }
@@ -211,7 +242,7 @@
       _g.set(P.x+Math.sin(th)*r*Math.cos(P.hd)+Math.sin(P.hd)*0, 0, P.z+Math.cos(th)*r); _g.y=Math.max(P.y+ch,World.groundY(_g.x,_g.z)+1.0); _gl.set(P.x,P.y+1.3,P.z); _gl.lerp(camLook,e); _g.lerp(camPos,e*e*e); }
     camera.position.copy(mode==='countdown'?_g:camPos); if(P.shake>0){ const s=P.shake*P.shake*.5; camera.position.x+=(Math.random()-.5)*s; camera.position.y+=(Math.random()-.5)*s; }
     camera.lookAt(mode==='countdown'?_gl:camLook); camera.rotateZ(-P.lean*.045-(P.tumble>0?Math.sin(P.t*20)*.03:0));
-    const base=ST.baseFov||62; const f=base+clamp((sp-8)/34,0,1)*14+(P.boost>0?3:0); if(Math.abs(camera.fov-f)>.05){ camera.fov=damp(camera.fov,f,4,dt); camera.updateProjectionMatrix(); }
+    const base=ST.baseFov||62; const f=base+clamp((sp/(track.vref||24)-.35)/1.0,0,1)*14+(P.boost>0?3:0); if(Math.abs(camera.fov-f)>.05){ camera.fov=damp(camera.fov,f,4,dt); camera.updateProjectionMatrix(); }
   }
   function menuCamera(t){ const W=innerWidth,H=innerHeight; if(W>H*1.1) camera.setViewOffset(W,H,W*.2,0,W,H); else if(camera.view&&camera.view.enabled) camera.clearViewOffset(); const a=PI+Math.sin(t*.15)*.9+.4, r=4.3; camera.position.set(P.x+Math.sin(a)*r*.6-1.2,P.y+1.45,P.z+Math.cos(a)*r); camera.lookAt(P.x,P.y+.95,P.z); camera.fov=ST.baseFov||62; camera.updateProjectionMatrix(); }
 
@@ -299,14 +330,15 @@
   function loop(now){
     requestAnimationFrame(loop);
     const raw=(now-last)/1000, dt=Math.min(.05,raw); last=now;
-    if(mode==='play'||mode==='countdown'||mode==='finish') ST.qTick(raw,now);
+    if(mode==='play'||mode==='countdown'||mode==='finish'||mode==='lift') ST.qTick(raw,now);
     tick(dt); ST.render();
   }
   function tick(dt){
     tAcc+=dt; frame++;
     if(mode==='pause') return;
+    if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
     if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); ST.Resort.update(tAcc,P.s+40); World.update(P.s); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); return; }
-    if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.vx=Math.sin(P.hd)*7; P.vz=-Math.cos(P.hd)*7; subtitle('גררו לסיבוב · קפיצה בקצה הרמפה · תרגילים באוויר',3600); } }
+    if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.vx=Math.sin(P.hd)*5; P.vz=-Math.cos(P.hd)*5; subtitle('גררו לסיבוב · קפיצה בקצה הרמפה · תרגילים באוויר',3600); } }
       updateRider(dt,true); updateCamera(dt); }
     else if(mode==='play'||mode==='finish'){
       runT+=mode==='play'?dt:0; if(mode==='finish'){ P.vx*=Math.exp(-dt*.7); P.vz*=Math.exp(-dt*.7); P.fin+=dt; }
@@ -325,12 +357,12 @@
     P.shown+=(P.money-P.shown)*Math.min(1,dt*7); el.money.textContent=fmt(P.shown); el.money.classList.toggle('neg',P.shown<0);
     el.spd.textContent=Math.round(P.speed*3.6); const pg=clamp(P.s/track.len,0,1); el.prog.style.width=(pg*100)+'%'; el.progTxt.textContent=Math.max(0,Math.round(track.len-P.s))+' מ׳ לסיום';
     const m=mult(); el.combo.hidden=P.combo<1; if(P.combo>0){ el.comboX.textContent='x'+m; el.comboBar.style.transform='scaleX('+clamp(P.comboT/6,0,1)+')'; }
-    el.speedfx.style.opacity=clamp((P.speed-22)/18,0,1)*.85;
+    { const vk=P.speed/(track.vref||24); el.speedfx.style.opacity=clamp((vk-.9)/.5,0,1)*.85; }
     if(frame%2===0) drawRadar(); el.radarTxt.textContent=Math.round(P.s)+' / '+track.len;
     if(subT>0){ subT-=dt*1000; if(subT<=0) el.sub.style.opacity=0; }
     if(flashK>0){ flashK=Math.max(0,flashK-dt*1.8); el.flash.style.opacity=flashK; }
-    gr('uSpeed',clamp((P.speed-20)/20,0,1)); if(P.tumble>0) gr('uDesat',damp(ST.GFX.grade?ST.GFX.grade.uniforms.uDesat.value:0,.85,6,dt)); else if(ST.GFX.grade&&ST.GFX.grade.uniforms.uDesat.value>0) gr('uDesat',damp(ST.GFX.grade.uniforms.uDesat.value,0,5,dt));
-    Audio.update(P.speed,Math.abs(P.lean)+P.tuck*.5,!P.grounded);
+    gr('uSpeed',clamp((P.speed/(track.vref||24)-.85)/.6,0,1)); if(P.tumble>0) gr('uDesat',damp(ST.GFX.grade?ST.GFX.grade.uniforms.uDesat.value:0,.85,6,dt)); else if(ST.GFX.grade&&ST.GFX.grade.uniforms.uDesat.value>0) gr('uDesat',damp(ST.GFX.grade.uniforms.uDesat.value,0,5,dt));
+    Audio.update(P.speed*(24/(track.vref||24)),Math.abs(P.lean)+P.tuck*.5,!P.grounded);
   }
 
   /* ---------- boot ---------- */
@@ -347,6 +379,6 @@
   }
   const isPortraitPhone=()=>innerHeight>innerWidth&&innerWidth<700; const rot=$('#rotate'); const chkRot=()=>{ rot.hidden=!isPortraitPhone()||false; }; // portrait still playable; hint only
   rot.hidden=true; addEventListener('resize',joyHome);
-  ST.debug={P,tick,startRun,showResults,finishRun,get mode(){return mode;},setMode:m=>mode=m,track:()=>track,toMenu,input};
+  ST.debug={P,tick,startRun,startLift,beginCountdown,endLift,showResults,finishRun,get mode(){return mode;},setMode:m=>mode=m,track:()=>track,toMenu,input};
   boot();
 })(window.ST);

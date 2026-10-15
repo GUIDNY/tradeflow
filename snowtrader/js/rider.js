@@ -95,29 +95,31 @@
   };
 
   /* pose: world-axis offsets from the bind pose. Angles in degrees; the model faces +Z, its left is +X, up is +Y. */
-  R.P={crouch:0,lean:0,air:0,grab:0,twist:0,tuck:0,fall:0,t:0};
+  R.P={crouch:0,lean:0,air:0,grab:0,twist:0,tuck:0,fall:0,t:0,sit:0,swing:0,look:0};
   function rot(k,ax,ay,az,order){ R.drive[k]=_q2.clone().setFromEuler(new THREE.Euler(ax*RAD,ay*RAD,az*RAD,order||'ZYX')); }
   R.pose=function(p){
     if(!R.ready) return; const P=Object.assign(R.P,p), c=P.crouch, a=P.air, g=P.grab, ln=P.lean, tw=P.twist, tk=P.tuck;
     R.drive={};
+    const k=P.sit||0, mx=(a0,b0)=>a0+(b0-a0)*k;   // mx(riding value, seated value)
     // absolute angles in the figure's own frame (+Z faces, +X is its left = the way it travels): rot(bone, pitch, yaw, roll)
-    const yawBody=tw*.5;
-    rot('UpperLegL',-(30+c*40+a*14+g*20),  14+yawBody*.3, -4);
-    rot('UpperLegR',-(36+c*36+a*14+g*10),  10+yawBody*.3,  4);
-    rot('LowerLegL',(26+c*34+a*8+g*34),    14, 0);
-    rot('LowerLegR',(32+c*30+a*8+g*24),    10, 0);
-    rot('Hips',   2,                    6+yawBody*.4,  ln*7);
-    rot('Abdomen',10+c*12+tk*16,       18+yawBody,    ln*-6);
-    rot('Torso',  12+c*10+tk*12,       32+yawBody,    ln*-5);
-    rot('Chest',  8+tk*8,              46+yawBody,    ln*-3);
-    rot('Neck',  -(10+c*6+tk*10),      66+yawBody,    0);
-    rot('Head',  -(8+c*4+tk*8),        84+yawBody,    0);
-    // arms: out along the board for balance, wider in the air, tucked in a tuck, the leading hand down to the board in a grab
-    const spread=46+a*24-tk*30-c*8;
-    rot('UpperArmL', -14-c*6-tk*18+g*30, -6-a*8, -spread+ln*14-g*40);
-    rot('UpperArmR', -10-c*6-tk*18,       6+a*8,  spread+ln*14);
-    rot('LowerArmL', -26-a*10+g*40, 0, -(spread*.35)-g*10);
-    rot('LowerArmR', -24-a*10,      0,  spread*.35);
+    const yawBody=tw*.5, sw=Math.sin(P.t*2.2)*P.swing;
+    rot('UpperLegL',mx(-(30+c*40+a*14+g*20),-84+sw*.3),  mx(14+yawBody*.3,7), -4);
+    rot('UpperLegR',mx(-(36+c*36+a*14+g*10),-86-sw*.3),  mx(10+yawBody*.3,-5),  4);
+    rot('LowerLegL',mx(26+c*34+a*8+g*34,-4+sw),    mx(14,7), 0);
+    rot('LowerLegR',mx(32+c*30+a*8+g*24,-8-sw),    mx(10,-5), 0);
+    rot('Hips',   mx(2,-6),                    mx(6+yawBody*.4,0),  ln*7);
+    rot('Abdomen',mx(10+c*12+tk*16,-4),       mx(18+yawBody,0),    ln*-6);
+    rot('Torso',  mx(12+c*10+tk*12,-4),       mx(32+yawBody,0),    ln*-5);
+    rot('Chest',  mx(8+tk*8,-2),              mx(46+yawBody,0),    ln*-3);
+    rot('Neck',  mx(-(10+c*6+tk*10),-4),      mx(66+yawBody,P.look*.5),    0);
+    rot('Head',  mx(-(8+c*4+tk*8),-4),        mx(84+yawBody,P.look),    0);
+    // arms: out along the board for balance, wider in the air, tucked in a tuck, the leading hand down to the board in a grab; seated: resting on the lap
+    const spread=mx(46+a*24-tk*30-c*8,16);
+    rot('UpperArmL', mx(-14-c*6-tk*18+g*30,-28), mx(-6-a*8,-6), -spread+ln*14-g*40);
+    rot('UpperArmR', mx(-10-c*6-tk*18,-28),       mx(6+a*8,6),  spread+ln*14);
+    rot('LowerArmL', mx(-26-a*10+g*40,-58), 0, -(spread*.35)-g*10);
+    rot('LowerArmR', mx(-24-a*10,-58),      0,  spread*.35);
+    if(g>0.01&&k<.5){ rot('UpperArmL',20+g*70, -10, -spread+ln*14-g*34-10); rot('LowerArmL',10+g*30, 0, 0); }
     // apply: top-down
     const parentOf=k=>{ let p=R.bones[k].parent; while(p&&!Object.keys(R.bones).some(n=>R.bones[n]===p)) p=p.parent; return p; };
     R.model.updateMatrixWorld(true); const F=R.model.getWorldQuaternion(new THREE.Quaternion());   // the figure's own frame: deltas turn with it
