@@ -4,7 +4,7 @@
 (function(ST){
   const {clamp}=ST;
   const canvas=document.getElementById('c');
-  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+  let renderer; try{ renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'}); }catch(err){ const t=document.getElementById('loadtxt'); if(t) t.textContent='הדפדפן או המכשיר לא תומכים ב‑WebGL. נסו Chrome או Safari עדכניים.'; throw err; }
   renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
   renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.0;

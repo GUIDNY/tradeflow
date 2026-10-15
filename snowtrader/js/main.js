@@ -49,6 +49,7 @@
     if(e.code==='Space'){ e.preventDefault(); input.jump=true; input.jumpEdge=true; } if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=true;
     if((e.code==='Escape'||e.code==='KeyP')&&(mode==='play'||mode==='pause')) togglePause(); });
   addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) input.k[k]=false; if(e.code==='Space') input.jump=false; if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=false; });
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden&&mode==='play') togglePause(); });
   addEventListener('blur',()=>{ input.k={}; input.jump=input.grab=false; if(mode==='play') togglePause(); });
   const steerX=()=>clamp(input.joy.x*1.25+(input.k.r?1:0)-(input.k.l?1:0),-1,1);
   const steerY=()=>clamp(input.joy.y*1.25+(input.k.d?1:0)-(input.k.u?1:0),-1,1);
@@ -97,7 +98,7 @@
     const ok=eS<.85&&eF<.9&&P.tumble<=0;
     const power=clamp(-P.vy/22,.15,1);
     if(P.airT<.18) return true;
-    if(!ok){ wipeout(); return false; }
+    if(!ok){ wipeout('land sp='+P.sp.toFixed(1)+' fl='+P.fl.toFixed(1)+' air='+P.airT.toFixed(1)); return false; }
     Audio.land(power); puff(power);
     let pts=0, parts=[];
     if(spins){ pts+=spins*130*(1+(spins-1)*.45); parts.push((spins*180)+'°'); }
@@ -113,8 +114,8 @@
     return true;
   }
   function puff(p){ const n=Math.round(10+p*22); for(let i=0;i<n;i++){ const a=Math.random()*PI*2, s=2+Math.random()*5*p; emit(P.x+Math.cos(a)*.4,P.y+.2,P.z+Math.sin(a)*.4,Math.cos(a)*s,1.5+Math.random()*3*p,Math.sin(a)*s,.45+Math.random()*.5,.7+Math.random()*.4); } }
-  function wipeout(){
-    if(P.tumble>0||P.invuln>0) return; P.tumble=1.5; P.wipes++; P.combo=0; P.comboT=0; P.shake=1; Audio.wipe();
+  function wipeout(why){
+    if(P.tumble>0||P.invuln>0) return; P.wipeLog=(P.wipeLog||[]); P.wipeLog.push((why||'?')+'@'+Math.round(P.s)); P.tumble=1.5; P.wipes++; P.combo=0; P.comboT=0; P.shake=1; Audio.wipe();
     const loss=Math.round(Math.max(120,P.money*.12)); addMoney(-loss,'STOP LOSS'); bigText('WIPEOUT','wasted'); flash('#ff1a30',.55);
     puff(1.2); for(let i=0;i<40;i++) emit(P.x,P.y+.5,P.z,(Math.random()-.5)*9,Math.random()*7,(Math.random()-.5)*9,.8,1.2);
     P.wfl=(Math.random()<.5?-1:1)*11; P.vx*=.5; P.vz*=.5;
@@ -185,15 +186,15 @@
       if(it.type==='coin'){ it.mesh.rotation.y+=dt*3.4; if(d2<it.r*it.r&&Math.abs(it.y-(py+1))<2.4){ it.dead=true; it.mesh.visible=false; P.coins++; addMoney(it.big?25:10); P.shown+=0; Audio.coin(Math.min(P.coins%12,11)); for(let i=0;i<5;i++) emit(it.x,it.y,it.z,(Math.random()-.5)*4,Math.random()*3,(Math.random()-.5)*4,.4,.5); } }
       else if(it.type==='green'){ it.mesh.position.y=it.y+Math.sin(P.t*2+it.x)*.12; if(d2<it.r*it.r&&py<it.y+it.h+1.5){ it.dead=true; it.mesh.visible=false; P.greens++; const v=Math.round(80+it.h*30); addMoney(v,'BULL'); toast('BULLISH',' +'+fmt(v)); Audio.green(); P.boost+=2.2; for(let i=0;i<16;i++) emit(it.x,it.y+it.h/2,it.z,(Math.random()-.5)*6,Math.random()*5,(Math.random()-.5)*6,.55,.8); } }
       else if(it.type==='red'){ if(P.invuln<=0&&d2<it.r*it.r&&py<it.y+it.h+.3){ it.dead=true; it.mesh.visible=false; P.reds++; const v=Math.round(110+it.h*25); addMoney(-v,'BEAR TRAP'); toast('BEARISH','−'+fmt(v),true); Audio.red(); P.shake=.7; P.stun=.35; P.vx*=.62; P.vz*=.62; P.combo=0; flash('#ff2244',.3); for(let i=0;i<22;i++) emit(it.x,it.y+1,it.z,(Math.random()-.5)*8,Math.random()*6,(Math.random()-.5)*8,.6,.8); } }
-      else if(it.type==='rockhaz'||it.type==='rock'){ if(P.invuln<=0&&d2<(it.r+.35)*(it.r+.35)&&py<it.y+1.6){ it.dead=true; wipeout(); } }
-      else if(it.type==='tree'){ if(P.invuln<=0&&d2<(it.r+.3)*(it.r+.3)&&py<it.y+4){ it.dead=true; wipeout(); } }
+      else if(it.type==='rockhaz'||it.type==='rock'){ if(P.invuln<=0&&d2<(it.r+.35)*(it.r+.35)&&py<it.y+1.6){ it.dead=true; wipeout('rock'); } }
+      else if(it.type==='tree'){ if(P.invuln<=0&&d2<(it.r+.3)*(it.r+.3)&&py<it.y+4){ it.dead=true; wipeout('tree'); } }
       else if(it.type==='finish'&&!P.finished&&P.s>=track.len-.5){ P.finished=true; finishRun(); }
     });
     if(!P.finished&&P.s>=track.len) { P.finished=true; finishRun(); }
   }
 
   /* ---------- camera ---------- */
-  let camHd=0, camSnap=true; const camPos=new THREE.Vector3(), camLook=new THREE.Vector3(), _f=new THREE.Vector3();
+  let camHd=0, camSnap=true; const camPos=new THREE.Vector3(), camLook=new THREE.Vector3(), _f=new THREE.Vector3(), _ft=new THREE.Vector3(), _g=new THREE.Vector3(), _gl=new THREE.Vector3();
   function camReset(){ camSnap=true; camHd=P.hd; }
   function updateCamera(dt){
     if(camera.view&&camera.view.enabled) camera.clearViewOffset();
@@ -206,8 +207,10 @@
     _f.set(tx,ty,tz); if(camSnap){ camPos.copy(_f); camSnap=false; } else { const k=1-Math.exp(-dt*(air?6:11)); camPos.lerp(_f,k); }
     const lx=P.x+fx*8, lz=P.z+fz*8, ly=P.y+1.2+(air?clamp(P.vy*.06,-1.5,1.5):0)-(sp>20?.2:0);
     camLook.lerp(new THREE.Vector3(lx,ly,lz),1-Math.exp(-dt*9));
-    camera.position.copy(camPos); if(P.shake>0){ const s=P.shake*P.shake*.5; camera.position.x+=(Math.random()-.5)*s; camera.position.y+=(Math.random()-.5)*s; }
-    camera.lookAt(camLook); camera.rotateZ(-P.lean*.045-(P.tumble>0?Math.sin(P.t*20)*.03:0));
+    if(mode==='countdown'){ const k=clamp(1-countdown/2.5,0,1), e=k*k*(3-2*k), th=lerp(PI*.92,0,e)*ST.Resort.lodgeSide(), r=lerp(6.2,dist,e), ch=lerp(1.5,h,e);
+      _g.set(P.x+Math.sin(th)*r*Math.cos(P.hd)+Math.sin(P.hd)*0, 0, P.z+Math.cos(th)*r); _g.y=Math.max(P.y+ch,World.groundY(_g.x,_g.z)+1.0); _gl.set(P.x,P.y+1.3,P.z); _gl.lerp(camLook,e); _g.lerp(camPos,e*e*e); }
+    camera.position.copy(mode==='countdown'?_g:camPos); if(P.shake>0){ const s=P.shake*P.shake*.5; camera.position.x+=(Math.random()-.5)*s; camera.position.y+=(Math.random()-.5)*s; }
+    camera.lookAt(mode==='countdown'?_gl:camLook); camera.rotateZ(-P.lean*.045-(P.tumble>0?Math.sin(P.t*20)*.03:0));
     const base=ST.baseFov||62; const f=base+clamp((sp-8)/34,0,1)*14+(P.boost>0?3:0); if(Math.abs(camera.fov-f)>.05){ camera.fov=damp(camera.fov,f,4,dt); camera.updateProjectionMatrix(); }
   }
   function menuCamera(t){ const W=innerWidth,H=innerHeight; if(W>H*1.1) camera.setViewOffset(W,H,W*.2,0,W,H); else if(camera.view&&camera.view.enabled) camera.clearViewOffset(); const a=PI+Math.sin(t*.15)*.9+.4, r=4.3; camera.position.set(P.x+Math.sin(a)*r*.6-1.2,P.y+1.45,P.z+Math.cos(a)*r); camera.lookAt(P.x,P.y+.95,P.z); camera.fov=ST.baseFov||62; camera.updateProjectionMatrix(); }

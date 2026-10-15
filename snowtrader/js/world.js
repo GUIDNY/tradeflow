@@ -5,15 +5,15 @@
   const {scene,renderer,camera,sun,hemi}=ST;
 
   ST.TRACKS=[
-    {id:'bunny',name:'באני בול',en:'BUNNY BULL',diff:'green',diffName:'ירוק · קל',blurb:'בוקר בהיר, מדרון רחב ונעים. מתחילים כאן.',len:1100,slope:.25,halfW:25,bend:[22,8],rampStart:150,rampEvery:130,rampH:[3.4,5.0],redRate:.12,goals:[1800,4200],par:62,net:true,snowfall:.2,
+    {id:'bunny',name:'באני בול',en:'BUNNY BULL',diff:'green',diffName:'ירוק · קל',blurb:'בוקר בהיר, מדרון רחב ונעים. מתחילים כאן.',len:1100,slope:.25,halfW:25,bend:[22,8],rampStart:150,rampEvery:130,rampH:[3.4,5.0],redRate:.12,goals:[1800,4200],par:55,net:true,snowfall:.2,
       sky:{zen:0x2f6fcf,mid:0x86bdf0,hor:0xe3f0fb,sun:0xfff7ea,sunDir:[-.30,.50,-.80],fog:0xc3d9ee,fogNear:80,fogFar:420,snow:0xf4f8ff,hemiS:0x9cc4ff,hemiG:0xcfdcf2,hemiI:1.0,sunI:1.6,exp:.9,stars:0,mount:[0xffffff,0x6f86a8],neon:0}},
-    {id:'bull',name:'עמק הבול',en:'BULL VALLEY',diff:'blue',diffName:'כחול · בינוני',blurb:'שקיעה, מדרון נעים וכסף קל.',len:1500,slope:.30,halfW:21,bend:[30,11],rampStart:130,rampEvery:112,rampH:[3.9,5.9],redRate:.30,goals:[2500,6000],par:70,net:true,snowfall:.4,
+    {id:'bull',name:'עמק הבול',en:'BULL VALLEY',diff:'blue',diffName:'כחול · בינוני',blurb:'שקיעה, מדרון נעים וכסף קל.',len:1500,slope:.30,halfW:21,bend:[30,11],rampStart:130,rampEvery:112,rampH:[3.9,5.9],redRate:.30,goals:[2500,6000],par:75,net:true,snowfall:.4,
       sky:{zen:0x1d2a78,mid:0xb8509a,hor:0xffa860,sun:0xffd2a2,sunDir:[-.42,.17,-.89],fog:0xe8a9a0,fogNear:55,fogFar:340,snow:0xfaf4ff,hemiS:0x9fb4ff,hemiG:0xd8d2e8,hemiI:.95,sunI:2.0,exp:1.0,stars:0,mount:[0xf2d9e8,0x7e5c8a],neon:0}},
-    {id:'bear',name:'קניון הדוב',en:'BEAR CANYON',diff:'red',diffName:'אדום · מאתגר',blurb:'שעת כחול, קניון צר, נרות אדומים.',len:1900,slope:.34,halfW:17,bend:[44,15],rampStart:120,rampEvery:98,rampH:[4.3,6.4],redRate:.46,goals:[4500,10500],par:80,net:true,snowfall:.6,
+    {id:'bear',name:'קניון הדוב',en:'BEAR CANYON',diff:'red',diffName:'אדום · מאתגר',blurb:'שעת כחול, קניון צר, נרות אדומים.',len:1900,slope:.34,halfW:17,bend:[44,15],rampStart:120,rampEvery:98,rampH:[4.3,6.4],redRate:.46,goals:[4500,10500],par:95,net:true,snowfall:.6,
       sky:{zen:0x070f2e,mid:0x2a4f93,hor:0x9ec4f0,sun:0xb8d4ff,sunDir:[.5,.2,-.84],fog:0x8fb2dc,fogNear:40,fogFar:300,snow:0xeaf3ff,hemiS:0x8fb4ff,hemiG:0xcfe0ff,hemiI:.7,sunI:2.0,exp:1.05,stars:.5,mount:[0xdfeaff,0x37507f],neon:0}},
-    {id:'ridge',name:'רכס הסופה',en:'WHITEOUT RIDGE',diff:'black',diffName:'שחור · מומחים',blurb:'סופת שלג, ראות נמוכה, מדרון תלול.',len:2000,slope:.40,halfW:15,bend:[48,16],rampStart:110,rampEvery:92,rampH:[4.6,6.8],redRate:.5,goals:[6000,14000],par:84,net:false,snowfall:1,
+    {id:'ridge',name:'רכס הסופה',en:'WHITEOUT RIDGE',diff:'black',diffName:'שחור · מומחים',blurb:'סופת שלג, ראות נמוכה, מדרון תלול.',len:2000,slope:.40,halfW:15,bend:[48,16],rampStart:110,rampEvery:92,rampH:[4.6,6.8],redRate:.5,goals:[6000,14000],par:100,net:false,snowfall:1,
       sky:{zen:0x56657c,mid:0x8996ab,hor:0xc9d2dd,sun:0xe8eef7,sunDir:[-.2,.35,-.9],fog:0xbfc9d6,fogNear:22,fogFar:200,snow:0xf1f5fb,hemiS:0xb9c6da,hemiG:0xdfe5ee,hemiI:1.15,sunI:.7,exp:1.0,stars:0,mount:[0xe8eef7,0x5a6678],neon:0}},
-    {id:'ipo',name:'פסגת ה‑IPO',en:'IPO SUMMIT',diff:'park',diffName:'פארק · לילה',blurb:'לילה, ניאון וקפיצות ענק.',len:2300,slope:.38,halfW:18,bend:[50,18],rampStart:110,rampEvery:90,rampH:[4.8,7.2],redRate:.5,goals:[8000,19000],par:92,net:true,snowfall:.6,
+    {id:'ipo',name:'פסגת ה‑IPO',en:'IPO SUMMIT',diff:'park',diffName:'פארק · לילה',blurb:'לילה, ניאון וקפיצות ענק.',len:2300,slope:.38,halfW:18,bend:[50,18],rampStart:110,rampEvery:90,rampH:[4.8,7.2],redRate:.5,goals:[8000,19000],par:115,net:true,snowfall:.6,
       sky:{zen:0x030014,mid:0x2b0c5e,hor:0xff2f92,sun:0xff6ad5,sunDir:[-.3,.3,-.9],fog:0x35145f,fogNear:35,fogFar:290,snow:0xcfd0ff,hemiS:0x6a5cff,hemiG:0xff3da0,hemiI:.85,sunI:1.5,exp:1.1,stars:1,mount:[0x7d5cff,0x180a3a],neon:1}}
   ];
 
@@ -102,7 +102,14 @@
   }
   function rockGeo(){ const g=new THREE.IcosahedronGeometry(1,1); const p=g.attributes.position; for(let i=0;i<p.count;i++){ const x=p.getX(i),y=p.getY(i),z=p.getZ(i), k=1+hash2(Math.round(x*7),Math.round(z*7+y*3))*.45; p.setXYZ(i,x*k*1.25,y*k*.8,z*k); }
     g.computeVertexNormals(); return paint(g,(x,y,z,c)=>{ const s=smooth(.15,.65,y); c.setRGB(.26,.25,.3).lerp(new THREE.Color(.93,.95,1),s*.9); }); }
-  const GEO={pine:pineGeo(),rock:rockGeo()};
+  function firGeo(){
+    const parts=[], trunk=new THREE.CylinderGeometry(.16,.24,2.6,6); trunk.translate(0,1.3,0); paint(trunk,(x,y,z,c)=>c.setRGB(.17,.1,.07)); parts.push(trunk);
+    for(let i=0;i<6;i++){ const r=2.1-i*.3, h=2.9, y0=1.6+i*1.45; const g=new THREE.ConeGeometry(r,h,8,2); g.translate(0,y0+h/2,0);
+      paint(g,(x,y,z,c)=>{ const t=(y-y0)/h, n=hash2(Math.round(x*8)+i,Math.round(z*8))*.1; const snow=smooth(.15,.7,t-Math.hypot(x,z)/r*.2+n+i*.02);
+        c.setRGB(.04+n*.4,.14+n,.12+n*.5).lerp(new THREE.Color(.93,.96,1),snow*.9); }); parts.push(g); }
+    return mergeGeos(parts);
+  }
+  const GEO={pine:pineGeo(),fir:firGeo(),rock:rockGeo()};
   const MATS={tree:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,metalness:0}),
     coin:new THREE.MeshStandardMaterial({color:0xffc83a,metalness:.9,roughness:.25,emissive:0xff9d00,emissiveIntensity:.9}),
     green:new THREE.MeshStandardMaterial({color:0x13d672,roughness:.35,metalness:.1,emissive:0x07ff7d,emissiveIntensity:1.5}),
@@ -163,8 +170,8 @@
     for(let n2=0;n2<9;n2++){ const s=s0+hash2(ci,n2*5+700)*L, w=halfW(s), side=hash2(ci,n2*5+701)<.5?-1:1, u=side*(w*.8+hash2(ci,n2*5+702)*14);
       if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s; rocks.push({x,y:groundY(x,z)-.15,z,sc:.9+hash2(ci,n2+333)*1.8,r:hash2(ci,n2+444)*6.28}); }
     const dummy=new THREE.Object3D();
-    if(trees.length){ const im=new THREE.InstancedMesh(GEO.pine,MATS.tree,trees.length); trees.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); dummy.scale.set(t.sc,t.sc*(.9+hash2(i,ci)*.4),t.sc); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
-      im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); trees.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+7) items.push({type:'tree',x:t.x,z:t.z,y:t.y,r:.8*t.sc}); }); }
+    if(trees.length){ const firs=trees.filter((t,i)=>hash2(i,ci+77)<.45), pines=trees.filter((t,i)=>!(hash2(i,ci+77)<.45));
+      [[GEO.pine,pines],[GEO.fir,firs]].forEach(([geo,arr])=>{ if(!arr.length) return; const im=new THREE.InstancedMesh(geo,MATS.tree,arr.length); arr.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); const k=geo===GEO.fir?t.sc*1.05:t.sc; dummy.scale.set(k*(geo===GEO.fir?.9:1),k*(.9+hash2(i,ci)*.45)*(geo===GEO.fir?1.25:1),k*(geo===GEO.fir?.9:1)); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); }); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); }); trees.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+7) items.push({type:'tree',x:t.x,z:t.z,y:t.y,r:.8*t.sc}); }); }
     if(rocks.length){ const im=new THREE.InstancedMesh(GEO.rock,MATS.tree,rocks.length); rocks.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); dummy.scale.setScalar(t.sc); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
       im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); rocks.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+2) items.push({type:'rock',x:t.x,z:t.z,y:t.y,r:1.1*t.sc}); }); }
 
@@ -207,7 +214,7 @@
   let lastCi=null;
   function update(playerS,force){
     const ci=Math.floor(playerS/L); if(!force&&ci===lastCi) return; lastCi=ci;
-    const want=new Set(); for(let i=ci-1;i<=ci+7;i++){ if(i<0||i*L>T.len+160) continue; want.add(i); }
+    const want=new Set(); for(let i=ci-1;i<=ci+7;i++){ if(i<-1||i*L>T.len+160) continue; want.add(i); }
     want.forEach(i=>{ if(!chunks.has(i)) chunks.set(i,buildChunk(i)); });
     chunks.forEach((c,i)=>{ if(!want.has(i)){ disposeChunk(c); chunks.delete(i); } });
   }

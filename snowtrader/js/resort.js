@@ -31,7 +31,7 @@
   R.setTrack=function(tr){ T=tr; LEN=tr.len; const i=ST.TRACKS.indexOf(tr); liftSide=i%2===0?1:-1; lodgeSide=-liftSide; for(const k in chunkGeos) delete chunkGeos[k]; for(const k in chunkPlumes) delete chunkPlumes[k]; npcInit(); };
   const hw=s=>ST.World.halfW(s);
   const liftU=s=>liftSide*(hw(s)+19);
-  R.liftU=liftU;
+  R.liftU=liftU; R.lodgeSide=()=>lodgeSide;
   R.sites=function(tr){ const i=ST.TRACKS.indexOf(tr), ls=i%2===0?1:-1, ld=-ls; const L=tr.len, W=s=>tr.halfW+3.5*Math.sin(s*.011+1);
     return [{s:26,u:ld*(W(26)+21),r:16},{s:L*.5,u:ld*(W(L*.5)+17),r:9},{s:L-8,u:ld*(W(L-8)+16),r:9},{s:-34,u:ls*(W(-34)+19),r:8},{s:L+34,u:ls*(W(L+34)+19),r:8}]; };
   R.blocked=function(s,u){ if(!T) return false; const lu=liftU(s); if(s>-40&&s<LEN+44&&Math.abs(u-lu)<8) return true;
