@@ -8,7 +8,7 @@
   const tilt=new THREE.Group();            // follows the ground normal, rolls into carves
   const trick=new THREE.Group();           // spin / flip in the air
   const rig=new THREE.Group();             // lets the whole body crouch
-  root.add(tilt); tilt.scale.setScalar(1.38); tilt.add(trick); trick.add(rig); scene.add(root);
+  root.add(tilt); tilt.scale.setScalar(1.2); tilt.add(trick); trick.add(rig); scene.add(root);
 
   const R={root,tilt,trick,rig,model:null,bones:{},bind:{},order:[],ready:false,sole:0,
     look:{jacket:0xff3d6e,pants:0x23283a,helmet:0x15161c,board:0,skin:0xd9a07a,hair:0x2b1b10}};

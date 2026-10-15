@@ -273,14 +273,15 @@
   }
 
   /* ---------- menu ---------- */
+  function menuNote(t){ let n=document.getElementById('mnote'); if(!n){ n=document.createElement('div'); n.id='mnote'; document.body.appendChild(n); } n.textContent=t; n.className='show'; clearTimeout(menuNote.h); menuNote.h=setTimeout(()=>n.className='',2400); }
   function stars(n){ return '★'.repeat(n)+'☆'.repeat(3-n); }
   function unlocked(i){ if(i===0) return true; const prev=ST.TRACKS[i-1], b=save.best[prev.id]; return !!b&&b.stars>=2; }
   function renderMenuCards(){
     $('#walletN').textContent=fmt(save.wallet);
-    $('#trackCards').innerHTML=ST.TRACKS.map((t,i)=>{ const b=save.best[t.id], lk=!unlocked(i); return '<div class="card'+(i===trackIdx?' sel':'')+(lk?' lock':'')+'" data-i="'+i+'"><div class="en">'+t.en+'</div><div class="nm">'+t.name+'</div><div class="bl">'+(lk?'🔒 כדי לפתוח: 2 כוכבים ב'+ST.TRACKS[i-1].name:t.blurb)+'</div><div class="meta"><span class="st">'+stars(b?b.stars:0)+'</span><span>'+(b?'שיא '+fmt(b.profit):t.len+' מ׳')+'</span></div></div>'; }).join('');
+    ST.TrailMap.render($('#trailMap'),{tracks:ST.TRACKS,sel:trackIdx,best:save.best,unlocked},i=>{ if(!unlocked(i)){ menuNote('🔒 סיימו את '+ST.TRACKS[i-1].name+' עם 2 כוכבים כדי לפתוח'); return; } trackIdx=i; save.track=i; persist(); track=ST.TRACKS[i]; menuScene(); renderMenuCards(); });
+    { const t=ST.TRACKS[trackIdx], b=save.best[t.id], drop=Math.round(t.len*t.slope*.92); $('#trackInfo').innerHTML='<div class="tn">'+t.en+'</div><span class="chip '+t.diff+'">'+t.diffName+'</span><div class="tb">'+t.blurb+'</div><div class="facts"><span>אורך<b>'+t.len+' מ׳</b></span><span>ירידה<b>'+drop+' מ׳</b></span><span>יעד רווח<b>'+fmt(t.goals[0])+'</b></span><span>שיא<b>'+(b?fmt(b.profit):'—')+'</b></span></div>'; }
     $('#boardCards').innerHTML=Rider.BOARDS.map((b,i)=>{ const own=save.owned.includes(i); return '<div class="card'+(i===save.board?' sel':'')+'" data-b="'+i+'"><div class="sw" style="background:linear-gradient(90deg,'+b.top[0]+','+b.top[1]+')"></div><div class="nm">'+b.name+'</div><div class="meta"><span>'+(own?(i===save.board?'נבחר':'שלכם'):'לרכישה')+'</span>'+(own?'':'<span class="px">'+fmt(b.price)+'</span>')+'</div></div>'; }).join('');
-    document.querySelectorAll('#trackCards .card').forEach(c=>c.onclick=()=>{ const i=+c.dataset.i; if(!unlocked(i)){ return; } trackIdx=i; save.track=i; persist(); track=ST.TRACKS[i]; menuScene(); renderMenuCards(); });
-    document.querySelectorAll('#boardCards .card').forEach(c=>c.onclick=()=>{ const i=+c.dataset.b, b=Rider.BOARDS[i]; if(!save.owned.includes(i)){ if(save.wallet<b.price){ c.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:220}); return; } save.wallet-=b.price; save.owned.push(i); }
+        document.querySelectorAll('#boardCards .card').forEach(c=>c.onclick=()=>{ const i=+c.dataset.b, b=Rider.BOARDS[i]; if(!save.owned.includes(i)){ if(save.wallet<b.price){ c.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:220}); return; } save.wallet-=b.price; save.owned.push(i); }
       save.board=i; persist(); Rider.setBoard(i); renderMenuCards(); });
   }
   function menuScene(){ resetPlayer(); P.hd=World.dcx(0)*0; mode='menu'; }
@@ -301,7 +302,7 @@
   function tick(dt){
     tAcc+=dt; frame++;
     if(mode==='pause') return;
-    if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); World.update(P.s); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); return; }
+    if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); ST.Resort.update(tAcc,P.s+40); World.update(P.s); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); return; }
     if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.vx=Math.sin(P.hd)*7; P.vz=-Math.cos(P.hd)*7; subtitle('גררו לסיבוב · קפיצה בקצה הרמפה · תרגילים באוויר',3600); } }
       updateRider(dt,true); updateCamera(dt); }
     else if(mode==='play'||mode==='finish'){
@@ -314,7 +315,7 @@
       if(P.s<60) tip('steer','גררו ימינה ושמאלה כדי לסוב · החזיקו למעלה כדי להתכופף',4600);
       { const kq=Math.round((P.s-track.rampStart)/track.rampEvery); if(kq>=0){ const r=World.rampAt(kq); if(P.s>r.s-45&&P.s<r.s) tip('ramp','קפיצה! לחצו על הכפתור ממש בקצה הרמפה לקפיצה מושלמת',4800); } }
     }
-    updateSpray(dt); World.update(P.s); World.follow({x:P.x,y:P.y,z:P.z},tAcc);
+    ST.Resort.update(tAcc,P.s); updateSpray(dt); World.update(P.s); World.follow({x:P.x,y:P.y,z:P.z},tAcc);
     World.updateFlakes(tAcc,camera.position,{x:P.vx,y:0,z:P.vz});
     ST.renderer.getPixelRatio(); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900;
     // HUD
@@ -333,7 +334,7 @@
   async function boot(){
     const bar=$('#loadbar'), txt=$('#loadtxt'); const set=(p,t)=>{ bar.style.width=p+'%'; if(t) txt.textContent=t; };
     set(10,'בונים את ההר…'); ST.onResize(); ST.qApply(ST.Q.lv);
-    track=ST.TRACKS[save.track]||ST.TRACKS[0]; trackIdx=ST.TRACKS.indexOf(track); World.setTrack(track); set(35,'מלבישים את הרוכב…');
+    const qt=new URLSearchParams(location.search).get('track'); const qi=ST.TRACKS.findIndex(t=>t.id===qt); if(qi>=0) save.track=qi; else if(!(save.track>=0&&save.track<ST.TRACKS.length)||!unlocked(save.track)) save.track=0; track=ST.TRACKS[save.track]; trackIdx=ST.TRACKS.indexOf(track); World.setTrack(track); set(35,'מלבישים את הרוכב…');
     try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
     set(80,'מחממים את השוק…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted);
     set(100); await new Promise(r=>setTimeout(r,250));

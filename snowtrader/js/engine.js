@@ -58,7 +58,7 @@
       const C=new THREE.EffectComposer(renderer,rt);
       C.addPass(new THREE.RenderPass(scene,camera));
       GFX.bloom=null; if(!GFX.lite){ GFX.bloom=new THREE.UnrealBloomPass(new THREE.Vector2(w/2,h/2),ST.bloomStrength||.55,.55,.82); C.addPass(GFX.bloom); }
-      GFX.grade=new THREE.ShaderPass(GRADE); C.addPass(GFX.grade); gfxSharp();
+      GFX.grade=new THREE.ShaderPass(GRADE); C.addPass(GFX.grade); gfxSharp(); applyGrade();
       GFX.composer=C; GFX.on=true; C.setSize(w,h);
     }catch(e){ console.warn('fx off',e); GFX.failed=true; GFX.on=false; GFX.composer=null; }
   }
@@ -68,6 +68,7 @@
     if(GFX.on&&GFX.composer){ try{ GFX.grade.uniforms.uSeed.value=(GFX.grade.uniforms.uSeed.value+.618)%10; GFX.composer.render(); return; }catch(e){ console.warn('fx off',e); GFX.failed=true; gfxOff(); } }
     renderer.render(scene,camera);
   }
+  function applyGrade(){ const c=ST.gradeCfg; if(!c||!GFX.grade) return; const u=GFX.grade.uniforms; u.uShadow.value.set(...c.shadow); u.uHigh.value.set(...c.high); u.uSat.value=c.sat; u.uContrast.value=c.contrast; u.uVig.value=c.vig; }
   function gradeSet(k,v){ if(GFX.grade) GFX.grade.uniforms[k].value=v; }
 
   /* ---------- quality ladder: as sharp as this device keeps smooth ---------- */
@@ -97,5 +98,5 @@
   function onResize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.fov=w<h?74:62; ST.baseFov=camera.fov; camera.updateProjectionMatrix();
     if(GFX.composer){ GFX.composer.setPixelRatio(renderer.getPixelRatio()); GFX.composer.setSize(w,h); if(GFX.bloom) GFX.bloom.resolution.set(w/2,h/2); gfxSharp(); } }
   addEventListener('resize',onResize);
-  Object.assign(ST,{canvas,renderer,scene,camera,hemi,sun,GFX,render,gradeSet,qApply,qTick,onResize,Q,QL});
+  Object.assign(ST,{applyGrade,canvas,renderer,scene,camera,hemi,sun,GFX,render,gradeSet,qApply,qTick,onResize,Q,QL});
 })(window.ST);

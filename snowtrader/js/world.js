@@ -5,11 +5,15 @@
   const {scene,renderer,camera,sun,hemi}=ST;
 
   ST.TRACKS=[
-    {id:'bull',name:'עמק הבול',en:'BULL VALLEY',blurb:'שקיעה, מדרון נעים וכסף קל',len:1500,slope:.30,halfW:21,bend:[30,11],rampStart:130,rampEvery:112,rampH:[3.9,5.9],redRate:.30,goals:[2500,6000],par:70,
+    {id:'bunny',name:'באני בול',en:'BUNNY BULL',diff:'green',diffName:'ירוק · קל',blurb:'בוקר בהיר, מדרון רחב ונעים. מתחילים כאן.',len:1100,slope:.25,halfW:25,bend:[22,8],rampStart:150,rampEvery:130,rampH:[3.4,5.0],redRate:.12,goals:[1800,4200],par:62,net:true,snowfall:.2,
+      sky:{zen:0x2f6fcf,mid:0x86bdf0,hor:0xe3f0fb,sun:0xfff7ea,sunDir:[-.30,.50,-.80],fog:0xc3d9ee,fogNear:80,fogFar:420,snow:0xf4f8ff,hemiS:0x9cc4ff,hemiG:0xcfdcf2,hemiI:1.0,sunI:1.6,exp:.9,stars:0,mount:[0xffffff,0x6f86a8],neon:0}},
+    {id:'bull',name:'עמק הבול',en:'BULL VALLEY',diff:'blue',diffName:'כחול · בינוני',blurb:'שקיעה, מדרון נעים וכסף קל.',len:1500,slope:.30,halfW:21,bend:[30,11],rampStart:130,rampEvery:112,rampH:[3.9,5.9],redRate:.30,goals:[2500,6000],par:70,net:true,snowfall:.4,
       sky:{zen:0x1d2a78,mid:0xb8509a,hor:0xffa860,sun:0xffd2a2,sunDir:[-.42,.17,-.89],fog:0xe8a9a0,fogNear:55,fogFar:340,snow:0xfaf4ff,hemiS:0x9fb4ff,hemiG:0xd8d2e8,hemiI:.95,sunI:2.0,exp:1.0,stars:0,mount:[0xf2d9e8,0x7e5c8a],neon:0}},
-    {id:'bear',name:'קניון הדוב',en:'BEAR CANYON',blurb:'שעת כחול, קניון צר, נרות אדומים',len:1900,slope:.34,halfW:17,bend:[44,15],rampStart:120,rampEvery:98,rampH:[4.3,6.4],redRate:.46,goals:[4500,10500],par:80,
+    {id:'bear',name:'קניון הדוב',en:'BEAR CANYON',diff:'red',diffName:'אדום · מאתגר',blurb:'שעת כחול, קניון צר, נרות אדומים.',len:1900,slope:.34,halfW:17,bend:[44,15],rampStart:120,rampEvery:98,rampH:[4.3,6.4],redRate:.46,goals:[4500,10500],par:80,net:true,snowfall:.6,
       sky:{zen:0x070f2e,mid:0x2a4f93,hor:0x9ec4f0,sun:0xb8d4ff,sunDir:[.5,.2,-.84],fog:0x8fb2dc,fogNear:40,fogFar:300,snow:0xeaf3ff,hemiS:0x8fb4ff,hemiG:0xcfe0ff,hemiI:.7,sunI:2.0,exp:1.05,stars:.5,mount:[0xdfeaff,0x37507f],neon:0}},
-    {id:'ipo',name:'פסגת ה‑IPO',en:'IPO SUMMIT',blurb:'לילה, ניאון וקפיצות ענק',len:2300,slope:.38,halfW:18,bend:[50,18],rampStart:110,rampEvery:90,rampH:[4.8,7.2],redRate:.5,goals:[8000,19000],par:92,
+    {id:'ridge',name:'רכס הסופה',en:'WHITEOUT RIDGE',diff:'black',diffName:'שחור · מומחים',blurb:'סופת שלג, ראות נמוכה, מדרון תלול.',len:2000,slope:.40,halfW:15,bend:[48,16],rampStart:110,rampEvery:92,rampH:[4.6,6.8],redRate:.5,goals:[6000,14000],par:84,net:false,snowfall:1,
+      sky:{zen:0x56657c,mid:0x8996ab,hor:0xc9d2dd,sun:0xe8eef7,sunDir:[-.2,.35,-.9],fog:0xbfc9d6,fogNear:22,fogFar:200,snow:0xf1f5fb,hemiS:0xb9c6da,hemiG:0xdfe5ee,hemiI:1.15,sunI:.7,exp:1.0,stars:0,mount:[0xe8eef7,0x5a6678],neon:0}},
+    {id:'ipo',name:'פסגת ה‑IPO',en:'IPO SUMMIT',diff:'park',diffName:'פארק · לילה',blurb:'לילה, ניאון וקפיצות ענק.',len:2300,slope:.38,halfW:18,bend:[50,18],rampStart:110,rampEvery:90,rampH:[4.8,7.2],redRate:.5,goals:[8000,19000],par:92,net:true,snowfall:.6,
       sky:{zen:0x030014,mid:0x2b0c5e,hor:0xff2f92,sun:0xff6ad5,sunDir:[-.3,.3,-.9],fog:0x35145f,fogNear:35,fogFar:290,snow:0xcfd0ff,hemiS:0x6a5cff,hemiG:0xff3da0,hemiI:.85,sunI:1.5,exp:1.1,stars:1,mount:[0x7d5cff,0x180a3a],neon:1}}
   ];
 
@@ -32,13 +36,16 @@
       y+=rampProfile(d,r.h)*(1-smooth(r.w-1.5,r.w+1.5,Math.abs(u-r.u))); }
     return y;
   }
-  function groundY(x,z){
+  let sites=[];
+  function baseGround(x,z){
     const s=S(z), c=cx(s), u=x-c, w=halfW(s), a=Math.abs(u)-w;
     let y=fall(s);
     if(a>0) y+=a*a*.05+a*.18;
     y+=vnoise(x*.02,z*.02)*(a>0?3.2:1.5)+vnoise(x*.1,z*.1)*(a>0?.5:.16);
     return y+rampH(u,s);
   }
+  function groundY(x,z){ let y=baseGround(x,z); if(sites.length){ const s=S(z); for(let i=0;i<sites.length;i++){ const t=sites[i], dx=x-(cx(t.s)+t.u), dz=s-t.s, d=Math.hypot(dx,dz); if(d<t.r+9){ const m=1-smooth(t.r-2,t.r+9,d); y=y+(t.y-y)*m; } } } return y; }
+  function setSites(list){ sites=[]; list.forEach(t=>{ const x=cx(t.s)+t.u, z=-t.s; sites.push({s:t.s,u:t.u,r:t.r,y:baseGround(x,z)}); }); }
   const _n=new THREE.Vector3();
   function groundN(x,z,out){ const e=.6, hx=groundY(x+e,z)-groundY(x-e,z), hz=groundY(x,z+e)-groundY(x,z-e); out=out||_n; return out.set(-hx,2*e,-hz).normalize(); }
 
@@ -54,10 +61,12 @@
   const SNOW_UNI={uSparkle:{value:1}};
   function snowPatch(sh){
     Object.assign(sh.uniforms,SNOW_UNI);
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;').replace('#include <begin_vertex>','#include <begin_vertex>\n vWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP; attribute float aGroom; varying float vGroom;').replace('#include <begin_vertex>','#include <begin_vertex>\n vWP=(modelMatrix*vec4(transformed,1.0)).xyz; vGroom=aGroom;');
     sh.fragmentShader=sh.fragmentShader.replace('#include <common>',`#include <common>
-      varying vec3 vWP; uniform float uSparkle;
+      varying vec3 vWP; varying float vGroom; uniform float uSparkle;
       float sh1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }`)
+      .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+      { float dd=length(vViewPosition); float fade=vGroom*smoothstep(70.,6.,dd); float st=sin(vWP.x*30.0+sin(vWP.z*.07)*5.0)*.6+sin(vWP.x*61.0+1.3)*.4; normal=normalize(normal+vec3(st*.11*fade,0.,0.)); diffuseColor.rgb*=1.-.045*st*fade; }`)
       .replace('vec3 outgoingLight =',`{
         vec2 cell=floor(vWP.xz*34.0); float k=sh1(cell);
         vec3 vd=normalize(cameraPosition-vWP);
@@ -131,7 +140,7 @@
   function buildChunk(ci){
     const grp=new THREE.Group(), items=[], s0=ci*L;
     // terrain
-    const pos=new Float32Array(NU*NS*3), col=new Float32Array(NU*NS*3), uv=new Float32Array(NU*NS*2), nor=new Float32Array(NU*NS*3);
+    const pos=new Float32Array(NU*NS*3), col=new Float32Array(NU*NS*3), uv=new Float32Array(NU*NS*2), nor=new Float32Array(NU*NS*3), groom=new Float32Array(NU*NS);
     const snow=ctx.snow, cA=new THREE.Color(), cR=new THREE.Color(0x4a4655), n=new THREE.Vector3();
     for(let j=0;j<NS;j++){ const s=s0+j*(L/(NS-1)); const c=cx(s);
       for(let i=0;i<NU;i++){ const u=-U+i*(2*U/(NU-1)), x=c+u, z=-s, y=groundY(x,z), o=j*NU+i;
@@ -139,10 +148,10 @@
         groundN(x,z,n); const a=Math.abs(u)-halfW(s), steep=smooth(.62,.86,1-n.y), nz=vnoise(x*.05,z*.05)*.04;
         cA.copy(snow).multiplyScalar(.93+nz+n.y*.07); cA.lerp(cR,steep*.75);
         if(a>0) cA.multiplyScalar(1-smooth(0,26,a)*.16);
-        col[o*3]=cA.r; col[o*3+1]=cA.g; col[o*3+2]=cA.b; nor[o*3]=n.x; nor[o*3+1]=n.y; nor[o*3+2]=n.z; } }
+        groom[o]=1-smooth(-4,1.5,a)*1; col[o*3]=cA.r; col[o*3+1]=cA.g; col[o*3+2]=cA.b; nor[o*3]=n.x; nor[o*3+1]=n.y; nor[o*3+2]=n.z; } }
     const idx=new Uint32Array((NU-1)*(NS-1)*6); let k=0;
     for(let j=0;j<NS-1;j++) for(let i=0;i<NU-1;i++){ const a=j*NU+i,b=a+1,c=a+NU,d=c+1; idx[k++]=a; idx[k++]=b; idx[k++]=c; idx[k++]=b; idx[k++]=d; idx[k++]=c; }
-    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.BufferAttribute(nor,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setAttribute('uv',new THREE.BufferAttribute(uv,2)); g.setIndex(new THREE.BufferAttribute(idx,1));
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.BufferAttribute(nor,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setAttribute('uv',new THREE.BufferAttribute(uv,2)); g.setAttribute('aGroom',new THREE.BufferAttribute(groom,1)); g.setIndex(new THREE.BufferAttribute(idx,1));
     g.computeBoundingSphere();
     const mesh=new THREE.Mesh(g,terrainMat); mesh.receiveShadow=true; grp.add(mesh);
 
@@ -150,9 +159,9 @@
     const trees=[], rocks=[];
     for(let n2=0;n2<150;n2++){ const s=s0+hash2(ci,n2*3+1)*L, w=halfW(s), side=hash2(ci,n2*3+2)<.5?-1:1, off=w+6+Math.pow(hash2(ci,n2*3+3),1.4)*(U-w-9), u=side*off;
       const dense=1-smooth(0,28,off-w); if(hash2(ci*7,n2)>.25+dense*.7*0+ (off<w+14?.5:.35)) continue;
-      const x=cx(s)+u, z=-s, y=groundY(x,z); trees.push({x,y:y-.2,z,sc:.5+hash2(ci,n2+500)*.7+(off>w+18?.35:0),r:hash2(ci,n2+900)*6.28}); }
+      if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s, y=groundY(x,z); trees.push({x,y:y-.2,z,sc:.5+hash2(ci,n2+500)*.7+(off>w+18?.35:0),r:hash2(ci,n2+900)*6.28}); }
     for(let n2=0;n2<9;n2++){ const s=s0+hash2(ci,n2*5+700)*L, w=halfW(s), side=hash2(ci,n2*5+701)<.5?-1:1, u=side*(w*.8+hash2(ci,n2*5+702)*14);
-      const x=cx(s)+u, z=-s; rocks.push({x,y:groundY(x,z)-.15,z,sc:.9+hash2(ci,n2+333)*1.8,r:hash2(ci,n2+444)*6.28}); }
+      if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s; rocks.push({x,y:groundY(x,z)-.15,z,sc:.9+hash2(ci,n2+333)*1.8,r:hash2(ci,n2+444)*6.28}); }
     const dummy=new THREE.Object3D();
     if(trees.length){ const im=new THREE.InstancedMesh(GEO.pine,MATS.tree,trees.length); trees.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); dummy.scale.set(t.sc,t.sc*(.9+hash2(i,ci)*.4),t.sc); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
       im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); trees.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+7) items.push({type:'tree',x:t.x,z:t.z,y:t.y,r:.8*t.sc}); }); }
@@ -186,13 +195,14 @@
         const bm=it.type==='green'?MATS.green:MATS.red; } 
       else if(it.type==='rockhaz'){ const m=new THREE.Mesh(GEO.rock,MATS.tree); m.position.set(it.x,it.y-.1,it.z); m.scale.setScalar(it.r*1.1); m.rotation.y=hash2(it.x|0,it.z|0)*6; m.castShadow=true; grp.add(m); }
     });
+    if(ST.Resort) ST.Resort.chunk(ci,grp,items,s0,L);
     world.add(grp); return {group:grp,items,geo:g,idx:ci};
   }
   function addArch(grp,s,l1,l2){ const w=halfW(s)+2, x=cx(s), z=-s, y=groundY(x,z), tex=bannerTex(l1,l2);
     [-1,1].forEach(sd=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(1,15,1),MATS.metal); p.position.set(x+sd*w,groundY(x+sd*w,z)+7,z); p.castShadow=true; grp.add(p); });
     const bw=Math.min(w*2,24), b=new THREE.Mesh(new THREE.PlaneGeometry(bw,bw/4),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,toneMapped:false})); b.position.set(x,y+11.2,z); grp.add(b);
     const bar=new THREE.Mesh(new THREE.BoxGeometry(w*2+1,.6,.8),MATS.metal); bar.position.set(x,y+13.1,z); grp.add(bar); }
-  function disposeChunk(c){ world.remove(c.group); c.group.traverse(o=>{ if(o===c.group) return; if(o.geometry&&o.geometry===c.geo) o.geometry.dispose(); }); }
+  function disposeChunk(c){ if(ST.Resort) ST.Resort.disposeChunk(c.idx); world.remove(c.group); c.group.traverse(o=>{ if(o===c.group) return; if(o.geometry&&o.geometry===c.geo) o.geometry.dispose(); }); }
 
   let lastCi=null;
   function update(playerS,force){
@@ -227,7 +237,7 @@
   const mount=new THREE.Group(); scene.add(mount);
   function buildMountains(palette,sunDir,fogC){
     while(mount.children.length){ const o=mount.children.pop(); o.geometry.dispose(); o.material.dispose(); }
-    const sunV=new THREE.Vector3(...sunDir).normalize(), lo=new THREE.Color(palette[1]), hi=new THREE.Color(palette[0]), fc=new THREE.Color(fogC);
+    const sunV=new THREE.Vector3(...sunDir).normalize(), lo=new THREE.Color(palette[1]).convertSRGBToLinear(), hi=new THREE.Color(palette[0]).convertSRGBToLinear(), fc=new THREE.Color(fogC).convertSRGBToLinear();
     [[820,330,0.5,11],[600,190,0.4,23]].forEach(([R,H,sn,seed],layer)=>{
       const N=240, M=14, pos=[], cols=[], idx=[]; 
       for(let i=0;i<=N;i++){ const a=i/N*Math.PI*2; const ridge=(Math.abs(vnoise(Math.cos(a)*2.2+seed,Math.sin(a)*2.2))*.7+Math.abs(vnoise(Math.cos(a)*6.5+seed,Math.sin(a)*6.5))*.3);
@@ -237,7 +247,7 @@
       const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals();
       const p=g.attributes.position, nr=g.attributes.normal, col=new Float32Array(p.count*3), cc=new THREE.Color();
       for(let i=0;i<p.count;i++){ const y=p.getY(i), snow=smooth(H*.32,H*.62,y+hash2(i%97,3)*20), sh=clamp(.55+.55*(nr.getX(i)*sunV.x+nr.getY(i)*sunV.y+nr.getZ(i)*sunV.z),.3,1.15);
-        cc.copy(lo).lerp(hi,snow).multiplyScalar(sh); const haze=smooth(.4,0,(y+80)/(H*1.4))*0+ (layer===0?.45:.2); cc.lerp(fc,haze+smooth(60,-60,y)*.7); col[i*3]=cc.r; col[i*3+1]=cc.g; col[i*3+2]=cc.b; }
+        cc.copy(lo).lerp(hi,snow); const sc=clamp((sh-.3)/.85,0,1); cc.r*=lerp(.60,1.04,sc); cc.g*=lerp(.72,1.0,sc); cc.b*=lerp(.95,.96,sc); const haze=smooth(.4,0,(y+80)/(H*1.4))*0+ (layer===0?.45:.2); cc.lerp(fc,haze+smooth(60,-60,y)*.7); col[i*3]=cc.r; col[i*3+1]=cc.g; col[i*3+2]=cc.b; }
       g.setAttribute('color',new THREE.BufferAttribute(col,3));
       const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,fog:false,side:THREE.DoubleSide,toneMapped:true})); m.frustumCulled=false; mount.add(m); });
   }
@@ -259,7 +269,8 @@
       flakePos[i*3]=center.x+mx; flakePos[i*3+1]=center.y+my+4; flakePos[i*3+2]=center.z+mz; }
     flakeGeo.attributes.position.needsUpdate=true; }
 
-  function setTrack(tr){
+  const GRADES={bunny:{shadow:[.90,.97,1.12],high:[1.02,1.0,.97],sat:1.12,contrast:1.1,vig:.22},bull:{shadow:[.92,1.0,1.1],high:[1.07,1.0,.9],sat:1.16,contrast:1.12,vig:.34},bear:{shadow:[.9,1.0,1.14],high:[1.0,1.0,1.0],sat:1.14,contrast:1.12,vig:.36},ridge:{shadow:[.95,1.0,1.06],high:[1.0,1.0,1.02],sat:.92,contrast:1.06,vig:.4},ipo:{shadow:[.95,.9,1.2],high:[1.1,.96,1.1],sat:1.25,contrast:1.14,vig:.42}};
+  function setTrack(tr){ ST.gradeCfg=GRADES[tr.id]||GRADES.bull; ST.applyGrade();
     T=tr; cx0=0; cx0=cxRaw(0); const k=T.sky;
     ctx.snow.set(k.snow); ctx.snow.convertSRGBToLinear();
     const u=sky.material.uniforms; u.zen.value.set(k.zen); u.mid.value.set(k.mid); u.hor.value.set(k.hor); u.sunC.value.set(k.sun); u.sunD.value.set(...k.sunDir); u.stars.value=k.stars; u.fogC.value.set(k.fog);
@@ -269,10 +280,12 @@
     ST.bloomStrength=k.neon?.8:.5; if(ST.GFX.bloom) ST.GFX.bloom.strength=ST.bloomStrength;
     SNOW_UNI.uSparkle.value=k.neon?.7:1; MATS.coin.emissiveIntensity=k.neon?1.4:.9;
     buildMountains(k.mount,k.sunDir,k.fog);
+    setSites(ST.Resort?ST.Resort.sites(T):[]); if(ST.Resort) ST.Resort.setTrack(T);
+    flakeMat.uniforms.alpha.value=.5+.4*T.snowfall; flakeGeo.setDrawRange(0,Math.round(FL*(.2+.8*T.snowfall)));
     reset();
   }
   function follow(p,t){ sky.position.copy(camera.position); sky.material.uniforms.time.value=t; mount.position.set(camera.position.x,p.y-30,camera.position.z);
     const sd=T.sky.sunDir; sun.position.set(p.x-sd[0]*0+sd[0]*120,p.y+sd[1]*120+30,p.z+sd[2]*120); sun.target.position.set(p.x,p.y,p.z); sun.target.updateMatrixWorld(); }
 
-  ST.World={get T(){return T;},groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,L,RL,flakes,reset,rampProfile};
+  ST.World={get T(){return T;},baseGround,groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,L,RL,flakes,reset,rampProfile};
 })(window.ST);

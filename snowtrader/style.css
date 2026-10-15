@@ -103,3 +103,23 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
   .total{grid-column:2;grid-row:3;margin:4px 0}.total b{font-size:28px}
   .endbtns{grid-column:2;grid-row:4}
 }
+
+/* trail map */
+.mbody{width:min(640px,100%);margin-inline-end:auto}
+.mapcard{background:rgba(255,255,255,.94);border-radius:18px;border:1px solid rgba(255,255,255,.7);box-shadow:0 18px 60px rgba(8,16,40,.5);overflow:hidden;color:#10131c}
+#trailMap svg{display:block;width:100%;height:min(50vw,40vh)}
+#trailMap .run{transition:opacity .2s}#trailMap .run.lock{opacity:.7}
+#trailMap .march{animation:march 1.1s linear infinite}@keyframes march{to{stroke-dashoffset:-34}}
+#trackInfo{padding:10px 14px 12px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:linear-gradient(180deg,#f4f8ff,#e6eefb)}
+#trackInfo .tn{font-family:var(--display);font-size:26px;letter-spacing:.05em;direction:ltr;line-height:1}
+#trackInfo .tb{font-size:12px;color:#44506a;flex:1 1 180px}
+.chip{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;color:#fff}
+.chip.green{background:#17b862}.chip.blue{background:#2f79ff}.chip.red{background:#e8283f}.chip.black{background:#161922}.chip.park{background:#d63bff}
+.facts{display:flex;gap:6px;flex-wrap:wrap;width:100%}.facts span{background:#fff;border:1px solid #d5e0f2;border-radius:10px;padding:3px 9px;font-size:12px;font-weight:700;color:#1b2540}.facts b{font-family:var(--display);font-weight:400;letter-spacing:.04em;margin-inline-start:4px}
+@media (max-width:760px){.mbody{margin-inline-end:0}}
+@media (max-height:480px){#trailMap svg{height:44vh}}
+.logo.big{font-size:clamp(44px,min(8vw,13vh),96px)!important}
+#boardCards .card{min-width:128px;padding:8px 10px}#boardCards .sw{height:18px;margin-bottom:5px}#boardCards .nm{font-size:14px}
+.mbody .cta{margin-top:2px;font-size:26px;padding:8px 44px 6px;width:100%;transform:none}
+.mbody .cta:active{transform:translateY(4px)}
+#mnote{position:fixed;left:50%;bottom:90px;transform:translate(-50%,20px);background:rgba(10,12,26,.92);border:1px solid rgba(255,255,255,.3);padding:10px 18px;border-radius:12px;font-weight:700;z-index:40;opacity:0;transition:.25s;pointer-events:none}#mnote.show{opacity:1;transform:translate(-50%,0)}
