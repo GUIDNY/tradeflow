@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d1a">
+<title>Snow Trader · מסחר על הלוח</title>
+<meta name="description" content="משחק סנובורד תלת־ממדי: יורדים במסלול, מבצעים תרגילים, אוספים נרות ירוקים ולוקחים רווח.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="speedfx"></div>
+<div id="flash"></div>
+
+<!-- loading -->
+<div id="loading"><div class="logo">SNOW<b>TRADER</b></div><div class="bar"><i id="loadbar"></i></div><div id="loadtxt">טוענים את ההר…</div></div>
+
+<!-- main menu -->
+<div id="menu" hidden>
+  <div class="mtop">
+    <div class="logo big">SNOW<b>TRADER</b><small>הר · לוח · שוק</small></div>
+    <div class="wallet"><span>הכספת</span><b id="walletN">$0</b></div>
+  </div>
+  <div class="mbody">
+    <div class="sect"><h3>בחרו מסלול</h3><div id="trackCards"></div></div>
+    <div class="sect"><h3>הלוח שלכם</h3><div id="boardCards"></div></div>
+  </div>
+  <button id="playBtn" class="cta">יוצאים לדרך</button>
+  <div class="howto"><span>🕹️ גררו כדי לסוב</span><span>⬆️ קפיצה</span><span>🌀 באוויר: סיבוב, סלטה, תפיסה</span></div>
+</div>
+
+<!-- HUD -->
+<div id="hud" hidden>
+  <div class="radar"><canvas id="radar" width="220" height="220"></canvas><div id="radarTxt"></div></div>
+  <div class="money"><div id="moneyN">$0</div><div id="moneyD"></div><div class="spd"><b id="spdN">0</b> קמ״ש</div></div>
+  <div class="prog"><i id="progBar"></i><span id="progTxt">0 מ׳</span></div>
+  <div id="combo" hidden><b id="comboX">x2</b><span>קומבו</span><i id="comboBar"></i></div>
+  <div id="toast"></div>
+  <div id="big"></div>
+  <div id="subtitle"></div>
+  <div id="pause" class="iconbtn" title="השהיה">❚❚</div>
+  <div id="mute" class="iconbtn" title="צליל">🔊</div>
+  <div id="joyzone"><div id="joy"><div id="knob"></div></div></div>
+  <div id="btns"><button id="btnJump" class="act big">קפיצה</button><button id="btnGrab" class="act">תפיסה</button></div>
+  <div id="tip" hidden></div>
+</div>
+
+<!-- pause -->
+<div id="pausemenu" hidden><div class="panel"><h2>הפסקת מסחר</h2><button id="resumeBtn" class="cta">להמשיך</button><button id="restartBtn" class="ghost">התחלה מחדש</button><button id="quitBtn" class="ghost">לתפריט</button></div></div>
+
+<!-- results -->
+<div id="end" hidden><div class="panel result">
+  <div id="endTitle" class="mission">רווח נלקח</div>
+  <div class="stars" id="stars"></div>
+  <canvas id="candles" width="640" height="170"></canvas>
+  <div class="rows" id="endRows"></div>
+  <div class="total"><span>סה״כ לכספת</span><b id="endTotal">$0</b></div>
+  <div class="endbtns"><button id="againBtn" class="cta">עוד ריצה</button><button id="menuBtn" class="ghost">לתפריט</button></div>
+</div></div>
+
+<div id="rotate" hidden>📱↻<br>סובבו את המכשיר לרוחב לחוויה מלאה</div>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/gltf-loader.js"></script>
+<script src="lib/meshopt_decoder.js"></script>
+<script src="lib/post.js"></script>
+<script src="js/util.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/world.js"></script>
+<script src="js/rider.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
