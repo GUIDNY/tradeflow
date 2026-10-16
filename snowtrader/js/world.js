@@ -250,8 +250,9 @@
     g.putImageData(im,0,0); const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t; })();
   const clouds=[0,1].map(i=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(2600,2600),new THREE.MeshBasicMaterial({map:cloudTex.clone(),transparent:true,depthWrite:false,fog:false,opacity:i?.8:.95})); m.material.map.needsUpdate=true; m.material.map.repeat.set(3.5+i,3.5+i); m.rotation.x=-Math.PI/2; m.renderOrder=-6+i; m.frustumCulled=false; scene.add(m); return m; });
   const mount=new THREE.Group(); scene.add(mount);
+  const plumeSprites=[]; const plumeTex2=(()=>{ const c=document.createElement('canvas'); c.width=256; c.height=64; const g=c.getContext('2d'); const gr=g.createRadialGradient(128,32,0,128,32,128); gr.addColorStop(0,'rgba(255,255,255,.9)'); gr.addColorStop(.5,'rgba(255,255,255,.35)'); gr.addColorStop(1,'rgba(255,255,255,0)'); g.save(); g.scale(1,.25); g.translate(0,96); g.fillStyle=gr; g.fillRect(0,-96,256,256); g.restore(); const t=new THREE.CanvasTexture(c); return t; })();
   function buildMountains(palette,sunDir,fogC){
-    while(mount.children.length){ const o=mount.children.pop(); o.geometry.dispose(); o.material.dispose(); }
+    plumeSprites.length=0; while(mount.children.length){ const o=mount.children.pop(); if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }
     const sunV=new THREE.Vector3(...sunDir).normalize(), lo=new THREE.Color(palette[1]).convertSRGBToLinear(), hi=new THREE.Color(palette[0]).convertSRGBToLinear(), fc=new THREE.Color(fogC).convertSRGBToLinear();
     const rockC=new THREE.Color(0x7a6d66).convertSRGBToLinear(), rockD=new THREE.Color(0x3d3a45).convertSRGBToLinear();
     [[860,520,0.5,11],[620,300,0.4,23],[470,150,0.3,41]].forEach(([R,H,sn,seed],layer)=>{
@@ -271,6 +272,7 @@
         cc.r*=lerp(.58,1.05,sc); cc.g*=lerp(.7,1.0,sc); cc.b*=lerp(.95,.97,sc);
         const haze=(layer===0?.36:layer===1?.2:.08)+smooth(60,-80,y)*.7; cc.lerp(fc,clamp(haze,0,1)); col[i*3]=cc.r; col[i*3+1]=cc.g; col[i*3+2]=cc.b; }
       g.setAttribute('color',new THREE.BufferAttribute(col,3));
+      if(layer<2){ const hs=[]; for(let i=0;i<=N;i++) hs.push(pos[(i*(M+1)+M)*3+1]); let cnt=0; for(let i=4;i<N-4&&cnt<(layer?5:7);i++){ if(hs[i]>H*.62&&hs[i]>=hs[i-3]&&hs[i]>=hs[i+3]&&hs[i]>=hs[i-1]&&hs[i]>=hs[i+1]){ const a=i/N*Math.PI*2, r=R-40-60; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:plumeTex2,transparent:true,depthWrite:false,fog:false,opacity:.5,color:0xffffff})); sp.position.set(Math.cos(a)*r*.99,hs[i]+8,Math.sin(a)*r*.99); sp.scale.set(layer?150:260,layer?50:90,1); sp.userData.ph=i; plumeSprites.push(sp); mount.add(sp); cnt++; i+=14; } } }
       const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,fog:false,side:THREE.DoubleSide,toneMapped:true})); m.frustumCulled=false; mount.add(m); });
   }
 
@@ -307,7 +309,8 @@
     flakeMat.uniforms.alpha.value=.5+.4*T.snowfall; flakeGeo.setDrawRange(0,Math.round(FL*(.2+.8*T.snowfall)));
     reset();
   }
-  function follow(p,t){ clouds.forEach((m,i)=>{ m.position.set(camera.position.x,p.y-175+i*52,camera.position.z); m.material.map.offset.set(t*.004*(i?1.6:1),t*.002); });
+  function follow(p,t){ plumeSprites.forEach(sp=>{ const ph=sp.userData.ph; sp.material.opacity=.42+.18*Math.sin(t*.35+ph); sp.scale.x=(sp.scale.y>60?260:150)*(1+.08*Math.sin(t*.2+ph*1.3)); });
+    clouds.forEach((m,i)=>{ m.position.set(camera.position.x,p.y-175+i*52,camera.position.z); m.material.map.offset.set(t*.004*(i?1.6:1),t*.002); });
     sky.position.copy(camera.position); sky.material.uniforms.time.value=t; mount.position.set(camera.position.x,p.y-30,camera.position.z);
     const sd=T.sky.sunDir; sun.position.set(p.x-sd[0]*0+sd[0]*120,p.y+sd[1]*120+30,p.z+sd[2]*120); sun.target.position.set(p.x,p.y,p.z); sun.target.updateMatrixWorld(); }
 

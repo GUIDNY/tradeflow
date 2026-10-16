@@ -7,7 +7,7 @@
 
   /* ---------- save ---------- */
   const KEY='snowtrader.v1';
-  let save={wallet:0,best:{},board:0,owned:[0],runs:0,track:0,muted:false,rider:0};
+  let save={wallet:0,best:{},board:0,owned:[0],runs:0,track:0,muted:false,rider:3};
   try{ Object.assign(save,JSON.parse(localStorage.getItem(KEY)||'{}')); }catch(e){}
   const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} };
 
@@ -337,8 +337,14 @@
     if(mode==='play'||mode==='countdown'||mode==='finish'||mode==='lift') ST.qTick(raw,now);
     tick(dt); ST.render();
   }
+  const _sv=new THREE.Vector3(); const flareEl=document.getElementById('flare'), fl=[...flareEl.children];
+  function updateFlare(){ if(!track||!track.sky||mode==='load'){ flareEl.style.opacity=0; return; } const sd=track.sky.sunDir; _sv.set(sd[0],sd[1],sd[2]).normalize().multiplyScalar(900).add(camera.position); _sv.project(camera);
+    const vis=_sv.z<1&&Math.abs(_sv.x)<1.6&&Math.abs(_sv.y)<1.6&&sd[1]>.05; if(!vis){ flareEl.style.opacity=0; return; }
+    const W=innerWidth,H=innerHeight, sx=(_sv.x*.5+.5)*W, sy=(-_sv.y*.5+.5)*H, cx=W/2, cy=H/2, near=1-Math.min(1,Math.hypot(_sv.x,_sv.y)/1.5);
+    const k=track.id==='ridge'?.25:track.sky.neon?.5:1; flareEl.style.opacity=(.25+.75*near)*k;
+    const pos=[[sx,sy],[sx+(cx-sx)*.55,sy+(cy-sy)*.55],[sx+(cx-sx)*1.0,sy+(cy-sy)*1.0],[sx+(cx-sx)*1.5,sy+(cy-sy)*1.5]]; fl.forEach((e,i)=>{ e.style.left=pos[i][0]+'px'; e.style.top=pos[i][1]+'px'; }); }
   function tick(dt){
-    tAcc+=dt; frame++;
+    tAcc+=dt; frame++; updateFlare();
     if(mode==='pause') return;
     ST.People.update(dt,camera.position.x,camera.position.z);
     if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
@@ -376,7 +382,7 @@
     set(10,'בונים את ההר…'); ST.onResize(); ST.qApply(ST.Q.lv);
     const qt=new URLSearchParams(location.search).get('track'); const qi=ST.TRACKS.findIndex(t=>t.id===qt); if(qi>=0) save.track=qi; else if(!(save.track>=0&&save.track<ST.TRACKS.length)||!unlocked(save.track)) save.track=0; track=ST.TRACKS[save.track]; trackIdx=ST.TRACKS.indexOf(track); World.setTrack(track); set(35,'מלבישים את הרוכב…');
     try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
-    set(80,'מחממים את השוק…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(save.rider>0&&Rider.choices[save.rider]){ ST.People.template(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
+    set(80,'מחממים את השוק…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=3; if(save.rider>0&&Rider.choices[save.rider]){ ST.People.template(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
     set(100); await new Promise(r=>setTimeout(r,250));
     $('#loading').remove(); mode='menu'; toMenu(); P.t=0; ST.People.preload(5);
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ startRun(); }

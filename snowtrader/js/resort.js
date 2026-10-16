@@ -135,6 +135,8 @@
       if(i===0) o=chalet(1.0,'BASE LODGE','SNOW TRADER RESORT'); else if(i===1) o=chalet(.62,'CAFÉ','ESPRESSO · COCOA'); else if(i===2) o=chalet(.6,'FINISH ZONE','TAKE PROFIT'); else if(i===5) o=chalet(.62,'APRÈS SKI','BAR & GRILL'); else if(i===6) o=chalet(.6,'MOUNTAIN CAFÉ','WAFFLES'); else o=station();
       if(i===0||i===1||i===5||i===6){ const tr=terrace(i===0?5:3,i); tr.position.set(0,.1,i===0?5:6); o.add(tr); }
       placeBuilding(grp,t,o,i<3||i>4); if(i<3||i>4) addSmoke(grp,o); guests(ci,i,o); });
+    // spectators at the start gate: a row of guests either side of the line, cheering
+    if(s0===0&&ST.People){ const P=ST.People; for(let k=0;k<12;k++){ const side=k%2?1:-1, ss=3+Math.floor(k/2)*1.9+hash2(k,3)*.8, w=hw(ss), u=side*(w*.62+hash2(k,5)*w*.22), x=W.cx(ss)+u, z=-ss; P.add(ci,{x,z,type:k%3===0?'Idle':'Wave',ry:-side*PI/2+(hash2(k,7)-.5)*.5}); } }
     // cannons
     for(let s=Math.ceil(s0/120)*120+37;s<s0+L;s+=120){ if(s<s0||s>LEN-30) continue; const side=Math.floor(s/120)%2?1:-1, u=side*(hw(s)+7), x=W.cx(s)+u, z=-s, y=W.groundY(x,z); const g=new THREE.Group(); g.position.set(x,y,z);
       cyl(.18,.25,3.4,M.steel,0,1.7,0,g,8); const barrel=cyl(.3,.4,1.6,M.orange,0,3.6,0,g,10); barrel.rotation.z=side*-.9; [0,1,2].forEach(i=>{ const l=box(.1,2.2,.1,M.steel,Math.cos(i*2.1)*.7,1,Math.sin(i*2.1)*.7,g); l.rotation.z=Math.cos(i*2.1)*.35; l.rotation.x=-Math.sin(i*2.1)*.35; });

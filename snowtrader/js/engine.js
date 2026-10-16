@@ -34,6 +34,7 @@
         vec2 d0=vUv-.5; float r0=length(d0);
         vec2 uv=vUv; float ca=uSpeed*0.0035*r0; uv-=d0*uSpeed*0.012*r0;           // speed: gentle radial stretch + aberration
         vec3 c0=vec3(texture2D(tDiffuse,uv+d0*ca).r,texture2D(tDiffuse,uv).g,texture2D(tDiffuse,uv-d0*ca).b);
+        if(uSpeed>.04){ vec3 acc=c0; float wsum=1.; vec2 st=-d0*uSpeed*.05*smoothstep(.12,.7,r0*2.); for(int i=1;i<=6;i++){ float f=float(i)/6.; acc+=texture2D(tDiffuse,uv+st*f).rgb*(1.-f*.6); wsum+=1.-f*.6; } c0=acc/wsum; }   // radial motion blur toward the screen edges
         vec3 a=texture2D(tDiffuse,uv+vec2(uPx.x,0.)).rgb,b=texture2D(tDiffuse,uv-vec2(uPx.x,0.)).rgb,u=texture2D(tDiffuse,uv+vec2(0.,uPx.y)).rgb,w=texture2D(tDiffuse,uv-vec2(0.,uPx.y)).rgb;
         vec3 mn=min(c0,min(min(a,b),min(u,w))),mx=max(c0,max(max(a,b),max(u,w)));
         vec3 sh=clamp(c0+(c0*4.-(a+b+u+w))*uSharp*.25,mn,mx);

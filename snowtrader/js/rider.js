@@ -97,7 +97,7 @@
     if(name===R.current) return; const prev=R.current;
     if(name==='hero'){ const hm=R.heroModel; const B={}; hm.traverse(o=>{ if(o.isBone) B[o.name]=o; }); adopt(hm,key=>B[key],1.0,Math.PI/2); R.mats=R.heroMats; R.current='hero'; R.dress(); return; }
     const T=await ST.People.template(name), m=THREE.SkeletonUtils.clone(T.scene);
-    m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; } });
+    m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; } }); ST.People.dressOutfit(m,R.look.jacket,R.look.pants);
     const find=n=>{ let b=null; m.traverse(o=>{ if(!b&&o.name==='mixamorig'+n) b=o; }); return b; };
     adopt(m,key=>find(MXMAP[key]),T.k,Math.PI/2); R.mats={}; R.current=name; };
   R.dress=function(){ if(R.current!=='hero'&&R.current) return; const k=R.look, M=R.mats; const set=(n,c)=>{ if(M[n]) M[n].color.setHex(c).convertSRGBToLinear(); };
@@ -156,6 +156,6 @@
   };
 
   /* shared trail ribbon, spray + landing puff */
-  R.setLook=function(o){ Object.assign(R.look,o); R.dress(); if(R.helm) R.helm.material.color.setHex(R.look.helmet); };
+  R.setLook=function(o){ Object.assign(R.look,o); R.dress(); if(R.current!=='hero'&&R.model) ST.People.dressOutfit(R.model,R.look.jacket,R.look.pants); if(R.helm) R.helm.material.color.setHex(R.look.helmet); };
   ST.Rider=R;
 })(window.ST);
