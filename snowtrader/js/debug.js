@@ -30,7 +30,7 @@
   function pump(dt){ if(!queue.length) return; const s=queue[0]; I.joy.x=s.x||0; I.joy.y=s.y||0; I.jump=!!s.j; I.grab=!!s.g; qT+=dt; if(qT>=s.t){ qT=0; queue.shift(); if(!queue.length){ I.joy.x=I.joy.y=0; I.jump=I.grab=false; } } }
   const tests={'◀ carve':[{x:-1,t:1.1}],'carve ▶':[{x:1,t:1.1}],'S-turns':[{x:1,t:.9},{x:-1,t:.9},{x:1,t:.9},{x:-1,t:.9}],'tuck':[{y:-1,t:1.5}],'brake':[{y:1,t:1.4}],
     'ollie':[{j:1,t:.35},{t:.1}],'360 indy':[{j:1,t:.4},{t:.05},{x:1,g:1,t:.7},{x:1,t:.3}],'tail grab':[{j:1,t:.4},{t:.05},{y:.6,g:1,t:.15},{g:1,t:.6}],
-    'fall':[{t:.01,fn:()=>ST.Physics.startFall(ST.debug.P,'test',[])}],'switch':[{t:.01,fn:()=>{ ST.debug.P.sw=!ST.debug.P.sw; }}],'cam':[{t:.01,fn:()=>ST.debug.cycleCam()}],'skeleton':[{t:.01,fn:toggleSkel}],'IK pts':[{t:.01,fn:()=>{ ikOn=!ikOn; }}]};
+    'nose press':[{y:-1,g:1,t:1.2}],'tail press':[{y:1,g:1,t:1.2}],'butter 180':[{y:-1,g:1,t:.25},{y:-1,g:1,x:1,t:.98},{t:.2}],'fall':[{t:.01,fn:()=>ST.Physics.startFall(ST.debug.P,'test',[])}],'switch':[{t:.01,fn:()=>{ ST.debug.P.sw=!ST.debug.P.sw; }}],'cam':[{t:.01,fn:()=>ST.debug.cycleCam()}],'skeleton':[{t:.01,fn:toggleSkel}],'IK pts':[{t:.01,fn:()=>{ ikOn=!ikOn; }}]};
   Object.keys(tests).forEach(n=>{ const b=document.createElement('button'); b.textContent=n; b.style.cssText='font:12px system-ui;padding:6px 8px;border-radius:7px;border:1px solid #58c;background:#0d1a33;color:#dff;opacity:.9';
     b.onclick=()=>{ const st=tests[n]; st.forEach(s=>s.fn&&s.fn()); run(st.filter(s=>!s.fn)); }; bar.appendChild(b); });
 
@@ -44,7 +44,7 @@
     if(++n%6) return;
     const P=ST.debug.P, g=P.gc||{}, fs=frames.slice().sort((a,b)=>a-b), med=fs[fs.length>>1]||16, worst=fs[fs.length-1]||16, mem=performance.memory?(performance.memory.usedJSHeapSize/1048576).toFixed(0)+' MB':'n/a';
     const S=R.S||{}, sv=k=>S[k]?S[k].x.toFixed(0):'-', ik=R.ik||{}, er=ik.err||{}, rc=ik.reach||{};
-    const clear=g.h!==undefined?(P.y-g.h):0;
+    const clear=g.yC!==undefined?(P.y+(P.vOff||0)-g.h):0;   // the drawn board's base over its supports
     box.textContent=
 `FPS ${(1000/med).toFixed(0)}  frame ${med.toFixed(1)} ms (worst ${worst.toFixed(0)})  render ${renderMs.toFixed(1)} ms
 draw calls ${calls}  triangles ${(tris/1000).toFixed(0)}k  geo ${info.memory.geometries} tex ${info.memory.textures}  heap ${mem}
@@ -56,6 +56,7 @@ board heading ${d0(P.hd)}°  travel ${d0(P.vh||0)}°  slip ${d0(P.slip||0)}°  y
 edge angle ${d0(P.edge||0)}°  body lean ${d0(P.body||0)}°  angulation ${d0((P.edge||0)-(P.body||0))}°  fore/aft ${d0(P.fa||0)}°
 ground pitch ${d0(g.pitch||0)}° roll ${d0(g.roll||0)}°  board-snow gap ${(clear*100).toFixed(1)} cm  dip ${((g.gap||0)*100).toFixed(1)} cm
 skid ${(P.skid||0).toFixed(2)} brake ${(P.brakeK||0).toFixed(2)} charge ${(P.charge||0).toFixed(2)} tuck ${(P.tuck||0).toFixed(2)} skate ${(P.skateK||0).toFixed(2)}${P.fall?'  FALL '+P.fall.ph+' '+P.fall.t.toFixed(2):''}
+${P.grind?'jib: '+P.grind.style+' on '+P.grind.r.name+'  '+P.grind.time.toFixed(2)+' s  speed '+P.grind.v.toFixed(1)+' m/s  balance '+P.grind.bal.toFixed(2)+'  press '+P.grind.press.toFixed(2):P.butter?'butter: '+(P.butter.phys>0?'nose':'tail')+'  turned '+Math.round(P.butter.spin*DEG)+'°  '+P.butter.t.toFixed(2)+' s':'jib: -'}  ${P.wallAir?'(pipe air)':''}
 — IK —
 ${ik.on?'ON':'off'}  ${ik.state||''}
 foot error L ${er.L!==undefined?(er.L*1000).toFixed(1):'-'} mm  R ${er.R!==undefined?(er.R*1000).toFixed(1):'-'} mm   leg reach L ${rc.L!==undefined?rc.L.toFixed(2):'-'} R ${rc.R!==undefined?rc.R.toFixed(2):'-'}

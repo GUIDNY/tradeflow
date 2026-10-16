@@ -13,7 +13,7 @@
       sky:{zen:0x070f2e,mid:0x2a4f93,hor:0x9ec4f0,sun:0xb8d4ff,sunDir:[.5,.2,-.84],fog:0x8fb2dc,fogNear:40,fogFar:300,snow:0xeaf3ff,hemiS:0x8fb4ff,hemiG:0xcfe0ff,hemiI:.7,sunI:2.0,exp:1.05,stars:.5,mount:[0xdfeaff,0x37507f],neon:0}},
     {id:'ridge',name:'רכס הסופה',en:'WHITEOUT RIDGE',diff:'black',diffName:'שחור · מומחים',blurb:'סופת שלג, ראות נמוכה, מדרון תלול.',len:1400,vref:24,drag:.0104,slope:.40,halfW:15,bend:[48,16],rampStart:125,rampEvery:140,rampH:[1.4,2.0],jump:{Hm:5,face:34,b:.25,Tb:18},redRate:.5,goals:[6000,14000],par:108,net:false,snowfall:1,
       sky:{zen:0x56657c,mid:0x8996ab,hor:0xc9d2dd,sun:0xe8eef7,sunDir:[-.2,.35,-.9],fog:0xbfc9d6,fogNear:22,fogFar:200,snow:0xf1f5fb,hemiS:0xb9c6da,hemiG:0xdfe5ee,hemiI:1.15,sunI:.7,exp:1.0,stars:0,mount:[0xe8eef7,0x5a6678],neon:0}},
-    {id:'ipo',name:'פארק הפסגה',en:'SUMMIT PARK',diff:'park',diffName:'פארק · לילה',blurb:'לילה, ניאון וקפיצות ענק.',len:1500,vref:19,drag:.01565,slope:.38,halfW:18,bend:[50,18],rampStart:120,rampEvery:120,rampH:[1.6,2.4],jump:{Hm:5,face:34,b:.25,Tb:14},redRate:.5,goals:[8000,19000],par:128,net:true,snowfall:.6,
+    {id:'ipo',name:'פארק הפסגה',en:'SUMMIT PARK',diff:'park',diffName:'פארק · לילה',blurb:'סנופארק: שלושה מסלולי קפיצות, קופסאות ומעקות, חצי צינור ורבע צינור.',len:1500,vref:15,drag:.01565,slope:.26,halfW:28,bend:[12,4],park:true,rampStart:120,rampEvery:120,rampH:[1.6,2.4],jump:{Hm:5,face:34,b:.25,Tb:14},redRate:.5,goals:[8000,19000],par:128,net:true,snowfall:.6,
       sky:{zen:0x030014,mid:0x2b0c5e,hor:0xff2f92,sun:0xff6ad5,sunDir:[-.3,.3,-.9],fog:0x35145f,fogNear:35,fogFar:290,snow:0xcfd0ff,hemiS:0x6a5cff,hemiG:0xff3da0,hemiI:.85,sunI:1.5,exp:1.1,stars:1,mount:[0x7d5cff,0x180a3a],neon:1}}
   ];
   ST.LAB={id:'lab',name:'מעבדת בדיקות',en:'TEST LAB',diff:'green',diffName:'בדיקות',blurb:'מדרון רחב וריק לבדיקת הרוכב והפיזיקה.',len:900,vref:11,slope:.2,halfW:32,bend:[10,4],rampStart:170,rampEvery:150,rampH:[.8,1.2],jump:{Hm:3,face:26,b:.1,Tb:6},redRate:0,goals:[1000,3000],par:120,net:false,snowfall:.1,noItems:true,
@@ -34,25 +34,31 @@
      are added on top of the run's own fall line. */
   const G_W=9.81, BUILD=30, rampCache=new Map();
   function rampAt(k){ let r=rampCache.get(k); if(r) return r;
-    const J=T.jump||{Hm:3,face:28,b:.15,Tb:12}, s=T.rampStart+k*T.rampEvery+(hash2(k,11)-.5)*20, h=lerp(T.rampH[0],T.rampH[1],hash2(k,37)), S=T.slope;
+    const X=T.jumpList?T.jumpList[k]:null; if(T.jumpList&&!X) return null;
+    const J=Object.assign({},T.jump||{Hm:3,face:28,b:.15,Tb:12},X||{}), s=X?X.s:T.rampStart+k*T.rampEvery+(hash2(k,11)-.5)*20, h=X?X.h:lerp(T.rampH[0],T.rampH[1],hash2(k,37)), S=T.slope;
     const L=Math.min(16,1.45*h/J.b), b=1.45*h/L;                         // the kicker rises h over L, reaching slope b over the fall line at its lip
-    const Hm=J.Hm*(.9+hash2(k,53)*.2), e=Math.max(.06,Math.tan(J.face*Math.PI/180)-S), LL=Hm/e;
-    r={k,s,u:(hash2(k,23)-.5)*halfW(s)*.9,h,w:4.6+hash2(k,41)*1.8,L,Hm,Tb:J.Tb,LL,e,lip:Math.atan(b-S),kick:b,v:(T.vref||14)*.85,face:J.face};
+    const Hm=X?J.Hm:J.Hm*(.9+hash2(k,53)*.2), e=Math.max(.06,Math.tan(J.face*Math.PI/180)-S), LL=Hm>0?Hm/e:0;
+    r={k,s,u:X?X.u:(hash2(k,23)-.5)*halfW(s)*.9,h,w:X&&X.w?X.w:4.6+hash2(k,41)*1.8,L,Hm,Tb:J.Tb,LL,e,lip:Math.atan(b-S),kick:b,v:(J.v||T.vref||14)*.85,face:J.face,gap:J.gap||0,name:J.name||''};
     rampCache.set(k,r); return r; }
+  /* every jump whose feature (build-up to the end of its landing) overlaps [sA,sB] */
+  function forRamps(sA,sB,fn){
+    if(T.jumpList){ for(let k=0;k<T.jumpList.length;k++){ const r=rampAt(k); if(r.s-BUILD<=sB&&r.s+r.L+r.Tb+r.LL+8>=sA) fn(r,k); } return; }
+    if(!T.rampEvery) return; const k0=Math.floor((sA-T.rampStart)/T.rampEvery)-1, k1=Math.ceil((sB-T.rampStart)/T.rampEvery)+1;
+    for(let k=Math.max(0,k0);k<=k1;k++){ const r=rampAt(k); if(r.s-BUILD<=sB&&r.s+r.L+r.Tb+r.LL+8>=sA) fn(r,k); } }
   /* the table and its landing: flat over the fall line, then a straight face at the landing angle, knuckle and runout rounded */
   const sr=(u,rad)=>(u+Math.sqrt(u*u+rad*rad))/2;
   function tableProfile(d,r){ if(d<-BUILD||d>r.L+r.Tb+r.LL+8) return 0; if(d<=0) return r.Hm*smooth(-BUILD,0,d);
-    const K=r.L+r.Tb, R0=3; return Math.max(0,r.Hm-r.e*(sr(d-K,R0)-sr(d-K-r.LL,R0))+(d<K+R0?-r.e*R0/2*0:0)); }
+    const K=r.L+r.Tb, R0=3; let y=Math.max(0,r.Hm-r.e*(sr(d-K,R0)-sr(d-K-r.LL,R0)));
+    if(r.gap&&d>r.L+1.5&&d<K-1){ const u=(d-r.L-1.5)/(K-1-r.L-1.5); y-=r.gap*Math.pow(Math.sin(Math.PI*u),.35); }   // the gap between takeoff and landing
+    return y; }
   function kickProfile(d,r){ if(d<=0) return 0; if(d<r.L) return r.h*Math.pow(d/r.L,1.45); const B=Math.max(1.2,r.h*.9); return d<r.L+B?r.h*(1-smooth(r.L,r.L+B,d)):0; }
   function rampProfile(d,r){ return tableProfile(d,r)+kickProfile(d,r); }      // height over the fall line, d metres past the start of the kicker
   function rampH(u,s){   // the table's sides fall away at ~30 degrees at most (2.6 m out per metre of height)
-    const k0=Math.round((s-T.rampStart)/T.rampEvery); let y=0;
-    for(let k=k0-1;k<=k0+1;k++){ if(k<0) continue; const r=rampAt(k), d=s-r.s; if(d<-BUILD||d>r.L+r.Tb+r.LL+8) continue;
-      const du=Math.abs(u-r.u); y+=tableProfile(d,r)*(1-smooth(r.w+.5,r.w+.5+2.6*r.Hm,du))+kickProfile(d,r)*(1-smooth(r.w-1.5,r.w+1.5,du)); }
-    return y; }
+    let tab=0, kick=0;   // tables side by side do not stack: the higher one wins
+    forRamps(s,s,r=>{ const d=s-r.s, du=Math.abs(u-r.u); tab=Math.max(tab,tableProfile(d,r)*(1-smooth(r.w+.5,r.w+.5+2.6*Math.max(1,r.Hm),du))); kick+=kickProfile(d,r)*(1-smooth(r.w-1.5,r.w+1.5,du)); });
+    return tab+kick; }
   /* the kicker whose lip is just ahead (for the pop window), or null */
-  function lipNear(s,x,ahead,behind){ const k0=Math.round((s-T.rampStart)/T.rampEvery); for(let k=k0-1;k<=k0+1;k++){ if(k<0) continue; const r=rampAt(k), d=s-r.s;
-      if(d>r.L-(ahead||1.6)&&d<r.L+(behind||.4)&&Math.abs(cx(s)+r.u-x)<r.w) return {r,d}; } return null; }
+  function lipNear(s,x,ahead,behind){ let hit=null; forRamps(s,s,r=>{ const d=s-r.s; if(!hit&&d>r.L-(ahead||1.6)&&d<r.L+(behind||.4)&&Math.abs(cx(s)+r.u-x)<r.w) hit={r,d}; }); return hit; }
   /* the lip speeds that land cleanly on this jump with an ordinary pop (2.4 m/s): found once by flying the jump at each speed */
   function jumpWindow(r){ if(r.win) return r.win; const S=T.slope, tl=Math.tan(r.lip); let lo=null, hi=null;
     for(let v=4;v<=32;v+=.5){ const vy=v*tl+2.4; let t=0, x=0, y=0, gy=0;
@@ -69,8 +75,8 @@
     const s=S(z), c=cx(s), u=x-c, w=halfW(s), a=Math.abs(u)-w;
     let y=fall(s);
     if(a>0) y+=a*a*.05+a*.18;
-    y+=vnoise(x*.02,z*.02)*(a>0?3.2:1.5)+vnoise(x*.1,z*.1)*(a>0?.5:.16);
-    return y+rampH(u,s);
+    y+=vnoise(x*.02,z*.02)*(a>0?3.2:1.5)*(T.park&&a<0?.35:1)+vnoise(x*.1,z*.1)*(a>0?.5:.16)*(T.park&&a<0?.3:1);   // a park is groomed smoother
+    return y+rampH(u,s)+(ST.Park?ST.Park.terrain(s,u):0);
   }
   function groundY(x,z){ let y=baseGround(x,z); if(sites.length){ const s=S(z); for(let i=0;i<sites.length;i++){ const t=sites[i], dx=x-(cx(t.s)+t.u), dz=s-t.s, d=Math.hypot(dx,dz); if(d<t.r+9){ const m=1-smooth(t.r-2,t.r+9,d); y=y+(t.y-y)*m; } } } return y; }
   function setSites(list){ sites=[]; list.forEach(t=>{ const x=cx(t.s)+t.u, z=-t.s; sites.push({s:t.s,u:t.u,r:t.r,y:baseGround(x,z)}); }); }
@@ -218,7 +224,7 @@
     // pickups and hazards: one pattern per 24 m cell
     const cellL=24, c0=Math.floor(s0/cellL);
     for(let cc=c0;cc<c0+L/cellL;cc++){ const s=cc*cellL; if(s<70||s>T.len-40) continue;
-      let near=false; const k0=Math.round((s-T.rampStart)/T.rampEvery); for(let kk=k0-1;kk<=k0+1;kk++){ if(kk<0) continue; const r=rampAt(kk); if(s>r.s-34&&s<r.s+r.L+r.Tb+r.LL+10) near=true; }
+      let near=!!(ST.Park&&ST.Park.busy(s)); forRamps(s-4,s+2,()=>{ near=true; });
       const w=halfW(s), roll=hash2(cc,77); if(near||T.noItems) continue;
       const put=(type,sOff,u,extra)=>{ const ss=s+sOff, x=cx(ss)+clamp(u,-w+2.2,w-2.2), z=-ss; items.push(Object.assign({type,x,z,y:groundY(x,z)},extra||{})); };
       if(roll<.20){ const ph=hash2(cc,5)*6.28; for(let i=0;i<8;i++) put('coin',i*2.6,Math.sin(ph+i*.55)*w*.45,{air:.9}); }
@@ -227,8 +233,8 @@
       else if(roll<.80){ const u0=(hash2(cc,13)>.5?1:-1)*w*.55; put('rockhaz',2,u0,{r:1.5}); if(hash2(cc,14)>.5) put('coin',-2,-u0*.4,{air:.9}); if(hash2(cc,15)>.55) put('coin',3,-u0*.4,{air:.9}); }
     }
     // coins floating over every kicker (the line a clean jump flies)
-    if(!T.noItems){ const k0=Math.floor((s0-T.rampStart)/T.rampEvery)-1; for(let kk=Math.max(0,k0);kk<=k0+3;kk++){ const r=rampAt(kk); if(r.s+r.L<s0||r.s+r.L>=s0+L) continue;
-        flightLine(r,7).forEach(p=>{ const ss=r.s+p.d, x=cx(ss)+r.u, z=-ss; items.push({type:'coin',x,z,y:groundY(x,z),air:p.above+.9,big:true}); }); } }
+    if(!T.noItems) forRamps(s0,s0+L,r=>{ if(r.s+r.L<s0||r.s+r.L>=s0+L) return;
+        flightLine(r,7).forEach(p=>{ const ss=r.s+p.d, x=cx(ss)+r.u, z=-ss; items.push({type:'coin',x,z,y:groundY(x,z),air:p.above+.9,big:true}); }); });
     // gates and boards
     if(s0<=10&&s0+L>10){ addArch(grp,10,'SNOW RUSH','קו הזינוק · יאללה לרדת'); }
     if(s0<=T.len&&s0+L>T.len){ addArch(grp,T.len,'FINISH','קו הסיום · עוד ריצה?'); items.push({type:'finish',x:cx(T.len),z:-T.len,y:groundY(cx(T.len),-T.len),r:30}); }
@@ -371,6 +377,7 @@
 
   function setTrack(tr){ ST.gradeCfg=GRADES[tr.id]||GRADES.bull; ST.applyGrade();
     T=tr; cx0=0; cx0=cxRaw(0); rampCache.clear(); const k=T.sky;
+    if(ST.Park){ const PL=ST.Park.layoutFor(T.id); if(PL&&PL.jumps) T.jumpList=PL.jumps; ST.Park.setTrack(T); }
     ctx.snow.set(k.snow); ctx.snow.convertSRGBToLinear();
     const u=sky.material.uniforms; u.zen.value.set(k.zen); u.mid.value.set(k.mid); u.hor.value.set(k.hor); u.sunC.value.set(k.sun); u.sunD.value.set(...k.sunDir); u.stars.value=k.stars; u.fogC.value.set(k.fog);
     [u.zen,u.mid,u.hor,u.sunC,u.fogC].forEach(c=>c.value.convertSRGBToLinear());
@@ -383,11 +390,12 @@
     setSites(ST.Resort?ST.Resort.sites(T):[]); if(ST.Resort) ST.Resort.setTrack(T);
     flakeMat.uniforms.alpha.value=.5+.4*T.snowfall; flakeGeo.setDrawRange(0,Math.round(FL*(.2+.8*T.snowfall)));
     sky.material.uniforms.uHas.value=0; reset(); ensureSky(tr);
+    if(ST.Park) ST.Park.build(T);
   }
   function follow(p,t){ plumeSprites.forEach(sp=>{ const ph=sp.userData.ph; sp.material.opacity=.42+.18*Math.sin(t*.35+ph); sp.scale.x=(sp.scale.y>60?260:150)*(1+.08*Math.sin(t*.2+ph*1.3)); });
     clouds.forEach((m,i)=>{ m.position.set(camera.position.x,p.y-175+i*52,camera.position.z); m.material.map.offset.set(t*.004*(i?1.6:1),t*.002); });
     sky.position.copy(camera.position); sky.material.uniforms.time.value=t; mount.position.set(camera.position.x,p.y-30,camera.position.z);
     const sd=T.sky.sunDir; sun.position.set(p.x-sd[0]*0+sd[0]*120,p.y+sd[1]*120+30,p.z+sd[2]*120); sun.target.position.set(p.x,p.y,p.z); sun.target.updateMatrixWorld(); }
 
-  ST.World={loadAssets,ensureSky,get T(){return T;},baseGround,groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,lipNear,flightLine,jumpWindow,updateCoins,L,BUILD,flakes,reset,rampProfile};
+  ST.World={loadAssets,ensureSky,get T(){return T;},baseGround,groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,forRamps,lipNear,flightLine,jumpWindow,updateCoins,L,BUILD,flakes,reset,rampProfile};
 })(window.ST);

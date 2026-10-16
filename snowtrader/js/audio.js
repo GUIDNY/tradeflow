@@ -11,7 +11,13 @@
     wind=ctx.createBufferSource(); wind.buffer=noiseBuf; wind.loop=true; windF=ctx.createBiquadFilter(); windF.type='bandpass'; windF.frequency.value=500; windF.Q.value=.6; windG=ctx.createGain(); windG.gain.value=0; wind.connect(windF); windF.connect(windG); windG.connect(master); wind.start();
     const c=ctx.createBufferSource(); c.buffer=noiseBuf; c.loop=true; const cf=ctx.createBiquadFilter(); cf.type='highpass'; cf.frequency.value=2600; carveG=ctx.createGain(); carveG.gain.value=0; c.connect(cf); cf.connect(carveG); carveG.connect(master); c.start();
     musicG=ctx.createGain(); musicG.gain.value=.0; musicG.connect(master);
+    // a jib under the board: noise through a narrow band (a steel rail rings, a plastic box hisses lower and duller)
+    const gs=ctx.createBufferSource(); gs.buffer=noiseBuf; gs.loop=true; grindF=ctx.createBiquadFilter(); grindF.type='bandpass'; grindF.frequency.value=3200; grindF.Q.value=6;
+    grindG=ctx.createGain(); grindG.gain.value=0; gs.connect(grindF); grindF.connect(grindG); grindG.connect(master); gs.start();
   };
+  let grindF=null, grindG=null;
+  A.grind=function(level,kind){ if(!ctx||!grindG) return; const t=ctx.currentTime, rail=kind==='rail';
+    grindG.gain.setTargetAtTime(level*(rail?.32:.22),t,.03); if(level>0){ grindF.frequency.setTargetAtTime(rail?2600+level*1400:700+level*500,t,.05); grindF.Q.setTargetAtTime(rail?7:1.4,t,.05); } };
   A.setMuted=function(m){ muted=m; if(master) master.gain.setTargetAtTime(m?0:.9,ctx.currentTime,.05); };
   A.isMuted=()=>muted;
   A.update=function(speed,carve,air){ if(!ctx) return; const t=ctx.currentTime, k=Math.min(speed/36,1);

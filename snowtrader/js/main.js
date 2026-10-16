@@ -151,16 +151,35 @@
     const loss=Math.round(Math.max(120,P.money*.12)); addMoney(-loss,'WIPEOUT'); bigText('WIPEOUT','wasted'); flash('#ff1a30',.55);
     puff(1.2); for(let i=0;i<40;i++) emit(P.x,P.y+.5,P.z,(Math.random()-.5)*9,Math.random()*7,(Math.random()-.5)*9,.8,1.2);
   }
+  /* a trick that scores: combo, multiplier, best trick, toast */
+  function score(name,pts,sketchy){ if(sketchy){ pts*=.5; name+=' · SKETCHY'; }
+    P.combo++; P.comboT=6; const m=mult(), gain=Math.round(pts*m); P.tricks++; if(!P.best||gain>P.best.gain) P.best={name,gain};
+    addMoney(gain,'x'+m); toast(name,'+'+fmt(gain)+(m>1?'  ·  x'+m:''),sketchy); Audio.trick(Math.min(P.combo,6)); }
+  /* jibs: a slide on a box or a rail scores by how long it lasted, harder for rails, boardslides and presses */
+  function onGrindEnd(e){ balEl.classList.remove('on'); if(e.fell||e.time<.2) return;
+    const rail=e.kind==='rail', what=e.press?(e.press>0?'NOSE PRESS':'TAIL PRESS'):e.style;
+    let pts=(rail?70:50)+Math.min(e.time,4)*(rail?110:80); if(e.style==='BOARDSLIDE') pts*=1.3; if(e.press) pts*=1.25;
+    score((e.sw?'SWITCH ':'')+what+' · '+e.name,pts,false); }
+  function onButter(e){ if(e.time<.35) return; const half=Math.abs(e.half), end=e.phys>0?'NOSE':'TAIL';
+    score(half?end+' BUTTER '+half*180:end+' PRESS',40+Math.min(e.time,3)*35+half*110,!e.clean); }
   function onEvent(e){
     if(e.type==='land') onLand(e);
     else if(e.type==='takeoff'){ if(e.pop) Audio.jump(); if(e.lip) toast('PERFECT POP','',false); }
     else if(e.type==='fall') onFall(e);
+    else if(e.type==='grindStart'){ balEl.classList.add('on'); balName.textContent=e.style+' · '+e.name; Audio.land(.25); }
+    else if(e.type==='grindEnd') onGrindEnd(e);
+    else if(e.type==='butter') onButter(e);
   }
+  /* the balance meter on a jib: the needle is the lean, push the stick the other way to bring it back */
+  const balEl=document.createElement('div'); balEl.id='balance'; balEl.innerHTML='<b></b><div class="track"><i></i></div>'; el.hud.appendChild(balEl);
+  const balName=balEl.querySelector('b'), balNeedle=balEl.querySelector('i');
+  function balanceHud(){ const G=P.grind; if(!G) return; const b=clamp(G.bal,-1.1,1.1); balNeedle.style.left=(50+b*45)+'%'; balEl.classList.toggle('warn',Math.abs(b)>.65); }
 
   /* ---------- the player: physics (js/physics.js) at a fixed 120 Hz, effects from its state ---------- */
   const Physics=ST.Physics, FIXED=1/120, EV=[]; let acc=0, stepN=0;
   const ctl={steer:0,fwd:0,flip:0,jump:false,grab:false,brake:false};
-  function readControls(){ const sx=steerX(), iy=steerY(); ctl.steer=sx; ctl.fwd=-iy; ctl.flip=iy; ctl.jump=!!input.jump; ctl.grab=!!input.grab; ctl.brake=iy>.45; return ctl; }
+  // stick back brakes; with grab held it presses the tail instead (stick forward + grab presses the nose)
+  function readControls(){ const sx=steerX(), iy=steerY(); ctl.steer=sx; ctl.fwd=-iy; ctl.flip=iy; ctl.jump=!!input.jump; ctl.grab=!!input.grab; ctl.brake=iy>.45&&!ctl.grab; return ctl; }
   function runPhysics(dt){ acc+=dt; let n=0; while(acc>=FIXED&&n<12){ acc-=FIXED; n++; physicsStep(FIXED); } if(n>=12) acc=0; }
   function physicsStep(h){
     readControls(); EV.length=0;
@@ -173,7 +192,7 @@
     stepN++; const sp=P.speed;
     if(P.comboT>0){ P.comboT-=h; if(P.comboT<=0) P.combo=0; }
     P.shake=Math.max(0,P.shake-h*1.4);
-    if(!P.grounded){ P._lastAir=true; return; }
+    if(!P.grounded||P.grind){ P._lastAir=true; return; }   // no snow thrown or track left in the air or on a jib
     const dx=Math.sin(P.hd), dz=-Math.cos(P.hd), rx=Math.cos(P.hd), rz=Math.sin(P.hd);
     // snow spray: thrown outward from the edge that is cutting (a carve), a sheet of it in a skid or a stop
     if(sp>2&&!(P.fall&&P.fall.ph!=='lose'&&P.fall.ph!=='down')){ const carve=Math.abs(P.edge), k=clamp(P.skid*1.7+carve*.8+(P.tuck>.5?.15:0),0,2.6)*(h*60); const n=Math.floor(k)+(Math.random()<k%1?1:0), side=-(Math.sign(P.edge)||Math.sign(P.slip)||1);
@@ -233,6 +252,8 @@
     if(F) return F.ph==='lose'?'loss of balance':F.ph==='down'?'falling':F.ph==='slide'?'sliding (fallen)':F.ph==='getup'?'getting up':'recovery';
     if(mode==='menu'||mode==='countdown') return 'standing / neutral';
     if(!P.grounded) return P.grabbed?'trick: '+P.grabName+' grab':(Math.abs(P.wsp)>2||Math.abs(P.wfl)>2)?'trick: rotation':P.airT<.15?'takeoff':'airborne';
+    if(P.grind){ const G=P.grind; return (Math.abs(G.press)>.5?(G.press*(P.sw?-1:1)>0?'nose press':'tail press'):G.style.toLowerCase())+' on '+G.r.name.toLowerCase(); }
+    if(P.butter) return Math.abs(P.sp)>.3?'butter (spinning on the '+(P.butter.phys>0?'nose':'tail')+')':(P.butter.phys>0?'nose':'tail')+' press';
     if(P.landT<.4) return P.landOut==='stumble'?'landing (sketchy)':'landing compression';
     if(P.stumble>0) return 'recovery';
     if(P.charging) return 'jump preparation (loading)';
@@ -243,16 +264,25 @@
     const e=Math.abs(P.edge); if(e>.75) return 'deep carving'; if(e>.25) return 'carving';
     return P.speed<1.5?'standing / neutral':'athletic stance'; }
   function updateRider(dt,menu){
-    const R=Rider, g=P.gc, F=P.fall, air=!P.grounded&&!F;
-    R.root.position.set(P.x,P.y,P.z); R.root.rotation.set(0,-P.hd,0);
+    const R=Rider, g=P.gc, F=P.fall, air=!P.grounded&&!F, bt=!!P.butter;
+    // a butter turns the board flat on the snow about its pressed end: that turn belongs to the board's heading, not to an air spin
+    // the physics follows the snow under the middle of the board; where the snow is hollow under it (a transition) the board rests
+    // on its ends a little higher: drawn there, eased in and out so leaving or meeting a curved wall does not jump
+    P.vOff=damp(P.vOff||0,P.grounded&&!F&&!P.grind&&g?g.gap:0,25,dt);
+    R.root.position.set(P.x,P.y+P.vOff,P.z); R.root.rotation.set(0,-(P.hd+(bt?P.sp:0)),0);
     // the board on the snow: pitch and roll from the contact samples; in the air the rider brings it round to meet the landing
-    const pp=popPitch(); _e.set((air?P.airPitch:(g?g.pitch:0))+pp,0,air?0:(g?g.roll:0),'YXZ'); _qb.setFromEuler(_e);
-    R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*(air?10:35))); R.tilt.position.set(0,.7*Math.sin(Math.abs(pp)),0);   // the ollie pivots on the tail
+    // a press tips the board onto one end (the other end lifts off), an ollie snaps the tail down: both pivot on the end that goes down
+    const pp=popPitch(), pr=-(P.press||0)*(P.pressK||0)*.17;
+    // off a pipe wall the rider stands up over the lip and leans back into the wall coming down: the roll follows the wall below
+    // while the board is close to it
+    const airRoll=P.wallAir&&g?g.roll*(1-smooth(0,1.2,P.y-g.h)):0;
+    _e.set((air?P.airPitch:(g?g.pitch:0))+pp+pr,0,air?airRoll:(g?g.roll:0),'YXZ'); _qb.setFromEuler(_e);
+    R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*(air?10:35))); R.tilt.position.set(0,.7*Math.sin(Math.abs(pp+pr)),0);
     // the edge: the board rolls onto it, pivoting on the edge in the snow (not on its centre line, which would sink the other edge)
     const edge=P.edge||0, hw=.13, sg=Math.sign(edge); R.rollG.rotation.z=-edge; R.rollG.position.set(sg*hw*(1-Math.cos(edge)),hw*Math.abs(Math.sin(edge)),0);
     R.edge=edge; R.body=P.body||0; P.lean=clamp((P.body||0)/.6,-1,1);
     // spins, flips, riding switch (the whole rider and board turned round: the right foot leads)
-    R.trick.rotation.order='YXZ'; R.trick.rotation.y=-(P.sp+(P.sw?PI:0)); R.trick.rotation.x=P.fl;
+    R.trick.rotation.order='YXZ'; R.trick.rotation.y=-((bt?0:P.sp)+(P.sw?PI:0)); R.trick.rotation.x=P.fl;
     // pose parameters: every one is a physical quantity or a phase, rider.js turns them into joint angles
     const p=R.P, sp=P.speed, vr=track.vref||16, bell=(t,d)=>t<d?Math.sin(PI*t/d):0;
     p.t=P.t; p.menu=!!menu; p.dir=P.sw?-1:1;
@@ -265,7 +295,9 @@
     p.brake=P.brakeK; p.skid=P.skid;
     p.absorb=damp(p.absorb,clamp(P.landAbs*bell(P.landT,.42)+(P.grounded&&!F?clamp(P.ayF/40,-.2,.3):0),-.2,1),18,dt);
     p.ext=damp(p.ext,Math.max(P.popKind&&P.popKind!=='drop'?bell(P.popT,.3):0,air&&P.airT<.2?.4*(1-P.airT/.2):0),18,dt);
-    p.rough=damp(p.rough,P.grounded&&!F?clamp(sp/(vr*1.2),0,1)*(1-P.tuck*.4):0,4,dt);
+    p.rough=damp(p.rough,P.grounded&&!F?clamp(sp/(vr*1.2),0,1)*(1-P.tuck*.4)*(P.grind?.2:1):0,4,dt);
+    // presses (canonical: + = the leading end) and the balance on a jib
+    p.press=damp(p.press||0,(P.press||0)*(P.pressK||0),10,dt); p.jib=damp(p.jib||0,P.grind?1:0,9,dt); p.bal=P.grind?P.grind.bal:damp(p.bal||0,0,6,dt);
     p.wobble=damp(p.wobble,(F&&F.ph==='lose'?1:0)+(P.stumble>0?.7:0),10,dt);
     p.skate=P.skateK; if(P.skate) p.skatePh=P.skate.ph;
     p.popKind=P.popKind; p.popT=P.popT; p.airT=P.airT;
@@ -281,13 +313,13 @@
   /* ---------- jump speed: approaching a kicker, say whether this speed will land on the landing (real parks mark this) ---------- */
   const jh=document.createElement('div'); jh.id='jumpHint'; el.hud.appendChild(jh); let jhState='';
   function jumpHint(){ let txt='', cls='';
-    if(mode==='play'&&P.grounded&&!P.fall){ const T=track, k0=Math.round((P.s-T.rampStart)/T.rampEvery);
-      for(let k=k0;k<=k0+1&&!txt;k++){ if(k<0) continue; const r=World.rampAt(k), d=r.s+r.L-P.s; if(d<8||d>75) continue; if(Math.abs(World.cx(r.s)+r.u-P.x)>r.w+4) continue;
-        const w=World.jumpWindow(r); if(!w.hi) continue;
+    if(mode==='play'&&P.grounded&&!P.fall){ const T=track;
+      World.forRamps(P.s,P.s+75,r=>{ if(txt) return; const d=r.s+r.L-P.s; if(d<8||d>75) return; if(Math.abs(World.cx(r.s)+r.u-P.x)>r.w+4) return;
+        const w=World.jumpWindow(r); if(!w.hi) return;
         // the speed left at the lip after climbing the table and the kicker (energy, with ~15% lost to friction and drag)
         const v2=P.speed*P.speed+2*9.81*((T.slope*d)-(r.Hm+r.h))*.85, vl=Math.sqrt(Math.max(0,v2));
         if(vl>w.hi+.5){ txt='מהר מדי לקיקר — בלמו'; cls='bad'; } else if(vl<w.lo-.5){ txt='איטי מדי לקיקר'; cls='slow'; } else { txt='מהירות טובה לקיקר ✓'; cls='ok'; }
-        txt+=' · '+Math.round(vl*3.6)+' קמ״ש בשפה · טווח \u2066'+Math.round(w.lo*3.6)+'–'+Math.round(w.hi*3.6)+'\u2069'; } }   // LTR isolate: the range reads lo–hi in Hebrew too
+        txt+=' · '+Math.round(vl*3.6)+' קמ״ש בשפה · טווח \u2066'+Math.round(w.lo*3.6)+'–'+Math.round(w.hi*3.6)+'\u2069'; }); }   // LTR isolate: the range reads lo–hi in Hebrew too
     const st=txt+cls; if(st!==jhState){ jhState=st; jh.textContent=txt; jh.className=cls; jh.style.opacity=txt?1:0; } }
 
   /* ---------- end of run ---------- */
@@ -327,7 +359,8 @@
     edgeL.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])); for(let i=edgeR.length-1;i>=0;i--) g.lineTo(edgeR[i][0],edgeR[i][1]); g.closePath(); g.fill();
     g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2; [edgeL,edgeR].forEach(E=>{ g.beginPath(); E.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])); g.stroke(); });
     // kickers
-    for(let kq=Math.max(0,Math.round((P.s-track.rampStart)/track.rampEvery)-1);kq<Math.round((P.s-track.rampStart)/track.rampEvery)+3;kq++){ const r=World.rampAt(kq); if(r.s<P.s-20||r.s>P.s+150) continue; const p=map(World.cx(r.s)+r.u,-r.s); g.fillStyle='#ffc83a'; g.fillRect(p[0]-7,p[1]-3,14,6); }
+    World.forRamps(P.s-20,P.s+150,r=>{ if(r.s<P.s-20||r.s>P.s+150) return; const p=map(World.cx(r.s)+r.u,-r.s); g.fillStyle='#ffc83a'; g.fillRect(p[0]-7,p[1]-3,14,6); });
+    if(ST.Park) ST.Park.radar(P.s,map,g);
     World.nearItems(P.s,it=>{ if(it.dead) return; const col=it.type==='green'?'#16e08a':it.type==='red'?'#ff3b57':it.type==='coin'?'#ffd34a':it.type==='rockhaz'?'#9aa3b8':null; if(!col) return; const p=map(it.x,it.z); if(Math.hypot(p[0]-C,p[1]-C)>C) return; g.fillStyle=col; g.beginPath(); g.arc(p[0],p[1],it.type==='coin'?2:3.5,0,PI*2); g.fill(); });
     const fp=map(World.cx(track.len),-track.len); g.fillStyle='#fff'; g.fillRect(fp[0]-18,fp[1]-2,36,4);
     g.restore(); g.fillStyle='#fff'; g.strokeStyle='#000'; g.lineWidth=2; g.beginPath(); g.moveTo(C,C-9+22); g.lineTo(C+8,C+9+22); g.lineTo(C,C+4+22); g.lineTo(C-8,C+9+22); g.closePath(); g.fill(); g.stroke();
@@ -348,7 +381,7 @@
         document.querySelectorAll('#boardCards .card').forEach(c=>c.onclick=()=>{ const i=+c.dataset.b, b=Rider.BOARDS[i]; if(!save.owned.includes(i)){ if(save.wallet<b.price){ c.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:220}); return; } save.wallet-=b.price; save.owned.push(i); }
       save.board=i; persist(); Rider.setBoard(i); renderMenuCards(); });
   }
-  function menuScene(){ resetPlayer(); P.hd=0; ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.h; mode='menu'; }
+  function menuScene(){ resetPlayer(); P.hd=0; ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.yC; mode='menu'; }
   function toMenu(){ mode='menu'; el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.menu.hidden=false; Audio.music(false); menuScene(); renderMenuCards(); gr('uDesat',0); }
   function togglePause(){ if(mode==='play'){ mode='pause'; el.pause.hidden=false; } else if(mode==='pause'){ mode='play'; el.pause.hidden=true; last=performance.now(); } }
   $('#playBtn').onclick=startRun; $('#againBtn').onclick=startRun; $('#menuBtn').onclick=toMenu; $('#pause').onclick=togglePause; $('#resumeBtn').onclick=togglePause; $('#restartBtn').onclick=startRun; $('#quitBtn').onclick=toMenu;
@@ -384,7 +417,12 @@
       if(P.s>=P.histS+8){ P.histS=P.s; P.history.push({s:P.s,m:P.money,v:P.speed*3.6}); }
       updateRider(dt,false); updateCamera(dt);
       if(P.s<60) tip('steer','גררו ימינה ושמאלה כדי לפנות · למטה = בלימה בהחלקה · למעלה = כפיפה למהירות',5200);
-      { const kq=Math.round((P.s-track.rampStart)/track.rampEvery); if(kq>=0){ const r=World.rampAt(kq); if(P.s>r.s-45&&P.s<r.s) tip('ramp','החזיקו קפיצה כדי לטעון, ושחררו ממש בקצה הקיקר לקפיצה מושלמת',5200); } }
+      { let rr=null; World.forRamps(P.s,P.s+45,r=>{ if(P.s>r.s-45&&P.s<r.s) rr=r; }); if(rr){ tip('ramp','החזיקו קפיצה כדי לטעון, ושחררו ממש בקצה הקיקר לקפיצה מושלמת',5200); } }
+      // the park: how to ride what is coming up
+      if(ST.Park&&ST.Park.rails.length){
+        if(ST.Park.rails.some(r=>r.sA-P.s>4&&r.sA-P.s<40)) tip('jib','מעקה או קופסה לפניכם: עלו ישר על הרמפה · גררו נגד המחוג כדי לשמור על איזון · קפצו באוויר וסובבו רבע סיבוב לבורדסלייד',6000);
+        if(ST.Park.pipes.some(pp=>pp.s0-P.s>0&&pp.s0-P.s<45)) tip('pipe','חצי צינור: גלשו אל הקיר באלכסון כדי לעוף מעל השפה · סיבוב באוויר = 180',6000);
+        if(P.s>40&&P.speed>4) tip('press','על השלג: תפיסה + קדימה = לחיצה על האף (אחורה = הזנב) · היגוי תוך כדי = באטר עם סיבוב',6000); }
     }
     ST.Resort.update(tAcc,P.s); updateSpray(dt); World.update(P.s); World.follow({x:P.x,y:P.y,z:P.z},tAcc);
     World.updateFlakes(tAcc,camera.position,{x:P.vx,y:0,z:P.vz});
@@ -396,10 +434,10 @@
     { const vk=P.speed/(track.vref||24); el.speedfx.style.opacity=clamp((vk-.9)/.5,0,1)*.85; }
     if(frame%2===0) drawRadar(); el.radarTxt.textContent=Math.round(P.s)+' / '+track.len;
     if(subT>0){ subT-=dt*1000; if(subT<=0) el.sub.style.opacity=0; }
-    jumpHint(); coinFade();
+    jumpHint(); coinFade(); balanceHud(); if(!P.grind&&balEl.classList.contains('on')) balEl.classList.remove('on');
     if(flashK>0){ flashK=Math.max(0,flashK-dt*1.8); el.flash.style.opacity=flashK; }
     gr('uSpeed',clamp((P.speed/(track.vref||24)-.85)/.6,0,1)); if(P.fall&&P.fall.ph!=='recover'&&P.fall.ph!=='getup') gr('uDesat',damp(ST.GFX.grade?ST.GFX.grade.uniforms.uDesat.value:0,.85,6,dt)); else if(ST.GFX.grade&&ST.GFX.grade.uniforms.uDesat.value>0) gr('uDesat',damp(ST.GFX.grade.uniforms.uDesat.value,0,5,dt));
-    Audio.update(P.speed*(24/(track.vref||24)),Math.abs(P.lean)+P.tuck*.5,!P.grounded);
+    Audio.update(P.speed*(24/(track.vref||24)),P.grind?0:Math.abs(P.lean)+P.tuck*.5,!P.grounded); Audio.grind(P.grind&&mode==='play'?clamp(P.grind.v/7,.25,1):0,P.grind?P.grind.r.kind:'');
   }
 
   /* ---------- boot ---------- */
@@ -407,7 +445,8 @@
     const bar=$('#loadbar'), txt=$('#loadtxt'); const set=(p,t)=>{ bar.style.width=p+'%'; if(t) txt.textContent=t; };
     set(10,'בונים את ההר…'); ST.onResize(); ST.qApply(ST.Q.lv); await World.loadAssets();
     const qt=new URLSearchParams(location.search).get('track'); const qi=ST.TRACKS.findIndex(t=>t.id===qt); if(qi>=0) save.track=qi; else if(!(save.track>=0&&save.track<ST.TRACKS.length)||!unlocked(save.track)) save.track=0; track=ST.TRACKS[save.track]; trackIdx=ST.TRACKS.indexOf(track);
-    if(qt==='lab'&&ST.LAB){ track=ST.LAB; trackIdx=-1; }          // the hidden test slope (not on the trail map, not saved) World.setTrack(track); await World.ensureSky(track); set(35,'מלבישים את הרוכב…');
+    if(qt==='lab'&&ST.LAB){ track=ST.LAB; trackIdx=-1; }          // the hidden test slope (not on the trail map, not saved)
+    World.setTrack(track); await World.ensureSky(track); set(35,'מלבישים את הרוכב…');
     try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
     set(80,'מחממים את הלוח…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=3; if(save.rider>0&&Rider.choices[save.rider]){ ST.People.template(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
     set(100); await new Promise(r=>setTimeout(r,250));

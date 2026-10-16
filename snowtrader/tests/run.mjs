@@ -63,7 +63,7 @@ await test('feet',async()=>{ const r=await page.evaluate(()=>{ T.start('lab'); T
   return {ok:r.frames>300&&r.worstMm<10&&r.worstIkMm<2,detail:JSON.stringify(r)}; });
 
 await test('ground',async()=>{ const r=await page.evaluate(()=>{ T.start('bunny'); const P=ST.debug.P, W=ST.World; let pen=0, flo=0, n=0;
-    const each=()=>{ if(!P.grounded||P.fall) return; const g=P.gc, fx=Math.sin(P.hd), fz=-Math.cos(P.hd), y=P.y;
+    const each=()=>{ if(!P.grounded||P.fall) return; const g=P.gc, fx=Math.sin(P.hd), fz=-Math.cos(P.hd), y=P.y+(P.vOff||0);   // where the board is drawn
       // the board's base line from tail to nose must not sink into the snow, and must touch it somewhere
       let minGap=1e9; for(let i=-4;i<=4;i++){ const t=i/4*.7, gy=W.groundY(P.x+fx*t,P.z+fz*t), by=y+g.gf*t; minGap=Math.min(minGap,by-gy); }
       pen=Math.max(pen,-minGap); flo=Math.max(flo,minGap); n++; };
@@ -93,10 +93,15 @@ await test('town',async()=>{ const r=await page.evaluate(()=>{ ST.debug.setTrack
   return {ok:r.signs>0&&r.peopleRegistered>0,detail:JSON.stringify(r)+' (resort around the start; the full town is Phase 3)'}; });
 
 await test('tracks',async()=>{ const all=[]; for(const id of ['bunny','bull','bear','ridge','ipo']){ const r=await page.evaluate((id)=>{ const D=ST.debug, W=ST.World, I=D.input, P=D.P; T.start(id); const Tr=D.track(); let t=0;
-      while(D.mode==='play'&&t<300){ const s=P.s; let target=W.cx(s+14); const k0=Math.round((s-Tr.rampStart)/Tr.rampEvery); for(let k=k0;k<=k0+1;k++){ if(k<0) continue; const r=W.rampAt(k); if(r.s>s-2&&r.s<s+60) target=W.cx(r.s+r.L)+r.u; }
+      while(D.mode==='play'&&t<300){ const s=P.s, u=P.x-W.cx(s); let target=W.cx(s+14), best=1e9;
+        // aim for the nearest kicker ahead (in the park: the one in the lane the rider is in), and do what the speed hint on screen
+        // says: brake when the speed left at the lip would carry the rider past the landing (the same estimate as main.js jumpHint)
+        let ramp=null; W.forRamps(s,s+60,r=>{ if(r.s>s-2&&r.s<s+60&&Math.abs(r.u-u)<best){ best=Math.abs(r.u-u); target=W.cx(r.s+r.L)+r.u; ramp=r; } });
+        let brake=false; if(ramp&&P.grounded){ const d=ramp.s+ramp.L-s, w=W.jumpWindow(ramp); if(d>8&&d<75&&w.hi){ const vl=Math.sqrt(Math.max(0,P.speed*P.speed+2*9.81*(Tr.slope*d-(ramp.Hm+ramp.h))*.85)); brake=vl>w.hi+.5; } }
+        I.joy.y=brake?1:0;
         const err=ST.Physics.wrap(Math.atan2(target-P.x,14)-P.hd); I.joy.x=P.grounded?Math.max(-1,Math.min(1,err*2.5)):0; const lip=W.lipNear(s,P.x,4,0); I.jump=!!(lip&&lip.d<lip.r.L-1)&&P.grounded;
         D.tick(1/30); t+=1/30; }
-      I.joy.x=0; I.jump=false; return {id,finished:D.mode==='finish'||D.mode==='end',time:+t.toFixed(0),par:Tr.par,wipes:P.wipes}; },id); all.push(r); }
+      I.joy.x=I.joy.y=0; I.jump=false; return {id,finished:D.mode==='finish'||D.mode==='end',time:+t.toFixed(0),par:Tr.par,wipes:P.wipes,why:(P.wipeLog||[]).join(' ')}; },id); all.push(r); }
   return {ok:all.every(r=>r.finished&&r.wipes<=3),detail:JSON.stringify(all)}; });
 
 await test('lowfps',async()=>{ const r=await page.evaluate(()=>{ const run=(dt)=>{ T.start('lab'); const P=ST.debug.P; let nan=false, under=0; const n=Math.round(14/dt);
@@ -106,7 +111,41 @@ await test('lowfps',async()=>{ const r=await page.evaluate(()=>{ const run=(dt)=
     return {d30:+Math.hypot(a.x-b.x,a.z-b.z).toFixed(2),d12:+Math.hypot(a.x-c.x,a.z-c.z).toFixed(2),nan:a.nan||b.nan||c.nan,underCm:+(Math.max(a.under,b.under,c.under)*100).toFixed(1)}; });
   return {ok:!r.nan&&r.d30<1.5&&r.d12<3&&r.underCm<3,detail:JSON.stringify(r)+' (same inputs at 144, 30 and 12 fps)'}; });
 
-await test('grind',async()=>({ok:true,detail:'SKIPPED: rails and grinds arrive with the snowpark (Phase 2)'}));
+/* the park: ride onto the box and the rail in the test lab (no input once lined up, apart from keeping the line) */
+async function rideJib(name,u,v){ return page.evaluate(([name,u,v])=>{ const D=ST.debug, W=ST.World, P=D.P, I=D.input; T.start('lab');
+    const r=ST.Park.rails.find(q=>q.name===name), s0=r.sA-14; P.x=W.cx(s0)+u; P.z=-s0; P.hd=Math.atan2(W.dcx(s0),1); ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.h; T.speed(v);
+    const evs=[]; const orig=ST.Physics.step; ST.Physics.step=function(p,c,dt,ev){ orig(p,c,dt,ev); ev.forEach(e=>evs.push(Object.assign({t:+p.t.toFixed(2)},e))); };
+    let snapCm=0, onTopCm=0, n=0, k=0, fallAfter=false;
+    for(;k<420;k++){ const s=P.s, err=(W.cx(s)+u)-P.x; I.joy.x=P.grind?0:Math.max(-1,Math.min(1,err*1.5)); D.tick(1/60);
+      if(P.grind){ const at=ST.Park.at(r,P.grind.t).p; if(P.grind.time>.12) onTopCm=Math.max(onTopCm,Math.abs(P.y-at.y)*100); n++; }
+      if(P.fall) fallAfter=true; }
+    ST.Physics.step=orig; I.joy.x=0;
+    const st=evs.find(e=>e.type==='grindStart'), en=evs.find(e=>e.type==='grindEnd');
+    return {start:st?st.style+' '+st.name:null,secondsOnJib:en?+en.time.toFixed(2):null,fellOff:en?en.fell:null,fallAfter,framesOnJib:n,baseOffTopAfter120msCm:+onTopCm.toFixed(1)}; },[name,u,v]); }
+await test('grind',async()=>{ const box=await rideJib('RIDE-ON BOX',-8,7), rail=await rideJib('RAIL',8,7.5);
+  const ok=j=>j.start&&j.secondsOnJib>.5&&j.fellOff===false&&!j.fallAfter&&j.baseOffTopAfter120msCm<2;
+  return {ok:ok(box)&&ok(rail),detail:JSON.stringify({box,rail})}; });
+
+/* a butter: grab + stick forward presses the nose, steering spins the board on it; let go after half a turn */
+await test('butter',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug, P=D.P, R=ST.Rider; T.start('lab'); T.speed(8); T.hold(30,{});
+    const evs=[]; const orig=ST.Physics.step; ST.Physics.step=function(p,c,dt,ev){ orig(p,c,dt,ev); ev.forEach(e=>evs.push(e)); };
+    let footDrop=0; T.hold(20,{y:-1,g:1},0,()=>{ const a=R.bones.FootL.getWorldPosition(new THREE.Vector3()).y, b=R.bones.FootR.getWorldPosition(new THREE.Vector3()).y; footDrop=Math.max(footDrop,b-a); });
+    T.hold(59,{y:-1,g:1,x:1}); T.hold(60,{}); ST.Physics.step=orig;
+    const b=evs.find(e=>e.type==='butter'); return {butter:b?{half:b.half,deg:Math.round(b.spin*57.3),clean:b.clean,s:+b.time.toFixed(2)}:null,frontFootLowerCm:+(footDrop*100).toFixed(1),fell:!!P.fall,sw:P.sw}; });
+  return {ok:!!r.butter&&Math.abs(r.butter.half)===1&&r.butter.clean&&r.frontFootLowerCm>5&&!r.fell,detail:JSON.stringify(r)}; });
+
+/* the halfpipe: ride across the flat into a wall with no input; the rider must go up it, leave the lip going up, come back down
+   into the pipe onto the wall and ride away, and the walls must never add energy (speed along the snow plus height) */
+await test('pipe',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug, W=ST.World, P=D.P; T.start('lab'); const pp=ST.Park.pipes[0], s0=pp.s0+30;
+    P.x=W.cx(s0)+pp.uc-3; P.z=-s0; const along=Math.atan2(W.dcx(s0),1), a=along+.85; P.hd=a; ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.h; P.vx=Math.sin(a)*15; P.vz=-Math.cos(a)*15; P.vy=0; P.fresh=true;
+    const floor=W.groundY(W.cx(s0)+pp.uc,-s0), sw0=P.sw; let top=-9, Emax=-1e9, E0=null, landed=null, airT=0, gain=0;
+    const evs=[]; const orig=ST.Physics.step; ST.Physics.step=function(p,c,dt,ev){ orig(p,c,dt,ev); ev.forEach(e=>{ if(e.type==='land'&&!landed&&e.air>.3) landed=e; });
+      const v3=p.grounded?Math.hypot(p.vx,p.vz,p.vyT==null?p.vy:p.vyT):Math.hypot(p.vx,p.vy,p.vz), E=.5*v3*v3+9.81*p.y; if(E0===null) E0=E; gain=Math.max(gain,E-E0); E0=Math.min(E0,E); };
+    for(let k=0;k<300&&!landed;k++){ D.tick(1/60); const fl=W.groundY(W.cx(P.s)+pp.uc,P.z); top=Math.max(top,P.y-fl); if(!P.grounded) airT=Math.max(airT,P.airT); }
+    for(let k=0;k<40;k++) D.tick(1/60);
+    ST.Physics.step=orig;
+    return {heightAboveFloorM:+top.toFixed(2),wallH:pp.H,air:+airT.toFixed(2),landing:landed?landed.out:null,impact:landed?+landed.imp.toFixed(1):null,ridingAfter:P.grounded&&P.speed>3,fell:!!P.fall,maxEnergyGainJkg:+gain.toFixed(2)}; });
+  return {ok:r.heightAboveFloorM>r.wallH+.3&&r.landing==='clean'&&!r.fell&&r.ridingAfter&&r.maxEnergyGainJkg<1.5,detail:JSON.stringify(r)}; });
 
 await browser.close(); server.close();
 const failed=results.filter(r=>!r.ok);

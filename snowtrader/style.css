@@ -151,3 +151,12 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 #jumpHint{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);padding:6px 12px;border-radius:10px;font:700 13px Rubik,sans-serif;color:#fff;background:rgba(10,14,30,.6);opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
 #jumpHint.ok{background:rgba(22,170,100,.78)} #jumpHint.bad{background:rgba(220,40,60,.85)} #jumpHint.slow{background:rgba(230,150,20,.85)}
 @media (max-width:700px){ #jumpHint{bottom:96px;font-size:11px} }
+/* balance on a jib: the needle is the rider's lean */
+#balance{position:absolute;left:50%;top:30%;transform:translateX(-50%);width:min(300px,62vw);text-align:center;direction:ltr;opacity:0;transition:opacity .15s;pointer-events:none}
+#balance.on{opacity:1}
+#balance b{display:block;font-family:var(--display);font-weight:400;font-size:20px;letter-spacing:.08em;color:#fff;-webkit-text-stroke:1px #000;paint-order:stroke fill;text-shadow:0 2px 0 #000;margin-bottom:6px}
+#balance .track{position:relative;height:12px;border-radius:7px;background:linear-gradient(90deg,#ff3b57 0,#ffc83a 18%,#16e08a 38%,#16e08a 62%,#ffc83a 82%,#ff3b57 100%);box-shadow:0 0 0 2px rgba(0,0,0,.55)}
+#balance i{position:absolute;top:-5px;left:50%;width:6px;height:22px;margin-left:-3px;border-radius:3px;background:#fff;box-shadow:0 0 0 2px #000}
+#balance.warn i{background:#ff3b57;animation:balw .25s infinite alternate}
+@keyframes balw{to{transform:scaleY(1.25)}}
+#hud.lifting #balance{display:none}

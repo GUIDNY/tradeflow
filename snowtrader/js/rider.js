@@ -157,7 +157,7 @@
      joints answer the same input at different speeds instead of moving as one block.
      Angles are in degrees, in the figure's own frame: +Z where it faces (the toe edge), +X its left (the nose when regular), +Y up. */
   R.P={t:0,dir:1,menu:false,sit:0,swing:0,look:0,crouch:.2,charge:0,tuck:0,air:0,grab:0,grabName:'',spinW:0,flipW:0,body:0,edge:0,fa:0,om:0,slip:0,speed:0,
-    brake:0,skid:0,absorb:0,ext:0,rough:0,wobble:0,skate:0,skatePh:0,popKind:'',popT:9,airT:0,ground:0,getup:0,fallPh:''};
+    brake:0,skid:0,absorb:0,ext:0,rough:0,wobble:0,skate:0,skatePh:0,popKind:'',popT:9,airT:0,ground:0,getup:0,fallPh:'',press:0,jib:0,bal:0};
   const AH=.205, BIND=.28, PAIRS=[['ShoulderL','ShoulderR'],['UpperArmL','UpperArmR'],['LowerArmL','LowerArmR'],['WristL','WristR'],['UpperLegL','UpperLegR'],['LowerLegL','LowerLegR'],['FootL','FootR']];
   const UPPER=['Hips','Abdomen','Torso','Chest','Neck','Head','ShoulderL','UpperArmL','LowerArmL','WristL','ShoulderR','UpperArmR','LowerArmR','WristR'];
   const smooth01=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
@@ -193,8 +193,11 @@
       const def=R._grabDef||0;
       let kn=28+P.crouch*45+ch*55+P.absorb*42-P.ext*28+a*(tk*55+g*(55+def*160)+flipK*25)+br*18+P.skate*8+eAbs*.75+(toeE<0?eAbs*.35:0)+(1-a)*tk*20;
       kn=clamp(kn,4,145);
-      const kF=S('kF',kn*1.03+buzz+(toeE>0?3:0),8.5,.5), kB=S('kB',kn*.98-buzz*.7+Math.abs(omC)*4+(toeE<0?3:0),12,.62);
-      const fold=S('fold',kn*.2+tk*(1-a)*55+tk*a*10+g*(70+def*120)+ch*22+bump*60,9,.7);
+      // a press loads one leg: the knee over the pressed end folds, the other straightens as its end of the board lifts.
+      // On a jib the knees stay soft and the body sways with the balance (balC: + toward the toes).
+      const pr=P.press||0, prL=Math.max(0,pr), prT=Math.max(0,-pr), jb=P.jib||0, balC=dir*(P.bal||0)*jb;
+      const kF=S('kF',kn*1.03+buzz+(toeE>0?3:0)+prL*32-prT*16+jb*6,8.5,.5), kB=S('kB',kn*.98-buzz*.7+Math.abs(omC)*4+(toeE<0?3:0)+prT*32-prL*16+jb*6,12,.62);
+      const fold=S('fold',kn*.2+tk*(1-a)*55+tk*a*10+g*(70+def*120)+ch*22+bump*60+Math.abs(pr)*10,9,.7);
       // where the travel is, seen from the figure (it faces the toe edge, the nose is to its left): eyes and shoulders go there
       const look=clamp(90+slipC-omC*16+(P.menu?Math.sin(P.t*.5)*14:0),-20,115);
       const twist=dir*(-P.spinW*4.2);                                                           // spinning: the shoulders lead the rotation
@@ -221,16 +224,19 @@
       let hF=mix([.25,-.33,.13+carveZ],[[P.menu?1:0,[.1,-.46,.07]],[a,[.4,-.1,.06]],[tkG,[.1,-.28,.38]],[br,[.43,-.2,.1]],[ch,[.18,-.4,-.2]],[P.ext,[.28,-.04,.3]],[P.skate,[.35,-.25,.2]]]);
       let hB=mix([-.24,-.38,.06+carveZ],[[P.menu?1:0,[-.1,-.46,.06]],[a,[-.4,-.1,0]],[tkG,[-.08,-.28,.36]],[br,[-.4,-.22,.05]],[ch,[-.16,-.4,-.22]],[P.ext,[-.26,-.04,.28]],[P.skate,[-.3,-.3,-.05]]]);
       hF[1]+=heelUp; hB[1]+=heelUp; for(let i=0;i<3;i++){ hF[i]+=wavF[i]*wob; hB[i]+=wavB[i]*wob; }
+      // on a jib the arms go out along the board for balance and swing against the lean; a press reaches toward the pressed end
+      if(jb>.01){ hF=mix(hF,[[jb,[.52,-.1,.02]]]); hB=mix(hB,[[jb,[-.52,-.13,0]]]); hF[2]-=balC*.2; hB[2]-=balC*.2; hF[1]+=balC*.1; hB[1]-=balC*.1; }
+      hF[0]+=prL*.1-prT*.12; hB[0]+=prL*.12-prT*.1; hF[1]+=prT*.1; hB[1]+=prL*.1;
       // spinning: the arms lead the rotation; turning: the front hand reaches into the turn a little
       hF[2]+=clamp(-twist/90,-.3,.3); hB[2]-=clamp(-twist/90,-.3,.3); hF[2]+=clamp(omC*.05,-.1,.1);
       R._hands={F:hF.map((v,i)=>S('hF'+i,v,9-i,.55)),B:hB.map((v,i)=>S('hB'+i,v,8-i,.55))};
       // the lean of the whole upper body relative to the board: angulation across it, the weight fore and aft along it
-      R._lean={pitch:S('lamRel',lamRel*live,12,.75),roll:-dir*S('faL',P.fa*DEG*.9*live,8,.7)};
+      R._lean={pitch:S('lamRel',lamRel*live,12,.75),roll:-dir*S('faL',(P.fa*DEG*.9+pr*8)*live,8,.7)};
       R._legs={kF,kB,sitW,bump,gu,live};
       // pelvis targets in the board frame (x toward the toes, z along the board, front foot at -z when regular)
       const ecx=.12*Math.tanh(toeE/9);                                                         // the edge carrying the weight
       const px=S('px',(-.05-P.crouch*.05+ecx+.85*Math.sin(lamRel/DEG*live))*live+sitW*-.42+bump*.12,10,.75);
-      const pz=S('pz',-dir*(.35*P.fa+.06*P.skate)*live,9,.75);
+      const pz=S('pz',-dir*(.35*P.fa+.06*P.skate+.14*pr)*live,9,.75);                         // a press moves the hips over the pressed end
       R._pelvis={px,pz};
     }
     // mirror for switch: swap left and right, negate yaw and roll (the bind pose is left-right symmetric)
