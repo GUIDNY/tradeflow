@@ -109,7 +109,7 @@
   /* ---------- any Mixamo-rigged character as the rider ---------- */
   const MXMAP={Hips:'Hips',Abdomen:'Spine',Torso:'Spine1',Chest:'Spine2',Neck:'Neck',Head:'Head',ShoulderL:'LeftShoulder',UpperArmL:'LeftArm',LowerArmL:'LeftForeArm',WristL:'LeftHand',ShoulderR:'RightShoulder',UpperArmR:'RightArm',LowerArmR:'RightForeArm',WristR:'RightHand',
     UpperLegL:'LeftUpLeg',LowerLegL:'LeftLeg',FootL:'LeftFoot',UpperLegR:'RightUpLeg',LowerLegR:'RightLeg',FootR:'RightFoot'};
-  R.droop=0; R.choices=['hero'].concat(ST.People?ST.People.names:[]); R.current='hero';
+  R.droop=0; R.choices=['hero'].concat(ST.People?ST.People.names:[]).concat(ST.Assets?Object.keys(ST.Assets.characters):[]); R.current='hero'; R.spec=null;
   function adopt(model,boneFor,k,rotY){
     if(R.model&&R.model.parent) R.model.parent.remove(R.model);
     if(R.gear&&R.gear.parent) R.gear.parent.remove(R.gear);
@@ -120,9 +120,36 @@
     // how far the arms hang in the bind pose (T-pose 0, A-pose ~45): the pose subtracts it
     const a=R.bones.UpperArmL, f=R.bones.LowerArmL; let dr=0; if(a&&f){ const pa=a.getWorldPosition(new THREE.Vector3()), pf=f.getWorldPosition(new THREE.Vector3()); const d=pf.sub(pa); dr=Math.asin(clamp(-d.y/Math.max(d.length(),1e-6),-1,1))*180/Math.PI; } R.droop=dr;
     measureLimbs(); model.rotation.y=rotY; R.addGear(); R.S={}; R.pose({}); }
+  /* a character from the asset registry (js/assets.js): any rig whose bones the registry can name, scaled to its spec height */
+  const charCache={};
+  R.isAsset=name=>!!(ST.Assets&&ST.Assets.characters[name]);
+  R.loadAsset=function(name){ if(charCache[name]) return charCache[name];
+    const spec=ST.Assets.characters[name];
+    return charCache[name]=loadGLTF(spec.url).then(gl=>{ const m=gl.scene; poseToBind(m);
+      m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; (Array.isArray(o.material)?o.material:[o.material]).forEach(mt=>{ if(mt.map) mt.map.anisotropy=4; }); } });
+      const map=ST.Assets.RIGS[spec.rig].map, B={}; m.traverse(o=>{ if(o.isBone) B[o.name]=o; }); const boneFor=k=>B[map[k]]||null;
+      // height from the skeleton (a compressed skinned mesh keeps its scale in the skin matrices, so its bounding box says
+      // nothing): the highest bone (the head's end) to the ankles, plus the ankle's height above the sole
+      m.updateMatrixWorld(true); const v=new THREE.Vector3(); let top=-1e9; m.traverse(o=>{ if(o.isBone) top=Math.max(top,o.getWorldPosition(v).y); });
+      const fy=Math.min(boneFor('FootL').getWorldPosition(v).y,boneFor('FootR').getWorldPosition(v).y), k=spec.height/Math.max(.1,top-fy+.09);
+      if(spec.tint) tintable(m);
+      return {spec,scene:m,boneFor,k,check:ST.Assets.check(name,m,boneFor)}; }); };
+  /* A baked texture can still take the run's colours where the model marks a region (vertex colour, red = trousers; written when
+     the asset is prepared, from the bind pose: below the jacket hem, not the boots). The texture's own light and dark (folds,
+     seams) is kept and only its colour is replaced; very dark texels (boots, zips) are left as they are, and so is the
+     jacket's yellow where its hem hangs over the trousers (redder than any trouser texel). */
+  function tintable(m){ m.traverse(o=>{ if(!o.isMesh||!o.geometry.attributes.color) return; const g=o.geometry; g.setAttribute('aTint',g.attributes.color); g.deleteAttribute('color');
+    const mt=o.material; mt.vertexColors=false; const col=mt.userData.pants=new THREE.Color(R.look.pants).convertSRGBToLinear();
+    mt.onBeforeCompile=sh=>{ sh.uniforms.uPants={value:col};
+      sh.vertexShader='attribute vec4 aTint;\nvarying float vTint;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vTint=aTint.r;');
+      sh.fragmentShader='uniform vec3 uPants;\nvarying float vTint;\n'+sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n { float tl=dot(diffuseColor.rgb,vec3(.299,.587,.114)); float tk=vTint*smoothstep(.015,.05,tl)*(1.-smoothstep(.08,.16,diffuseColor.r-diffuseColor.g)); diffuseColor.rgb=mix(diffuseColor.rgb,uPants*clamp(tl/.17,0.,1.7),tk); }'); };
+    mt.customProgramCacheKey=()=>'st-tint'; mt.needsUpdate=true; }); }
+  R.preload=name=>name==='hero'?Promise.resolve():R.isAsset(name)?R.loadAsset(name):ST.People.template(name);
   R.swap=async function(name){
     if(name===R.current) return; const prev=R.current;
-    if(name==='hero'){ const hm=R.heroModel; const B={}; hm.traverse(o=>{ if(o.isBone) B[o.name]=o; }); adopt(hm,key=>B[key],1.0,Math.PI/2); R.mats=R.heroMats; R.current='hero'; R.dress(); return; }
+    if(name==='hero'){ R.spec=null; const hm=R.heroModel; const B={}; hm.traverse(o=>{ if(o.isBone) B[o.name]=o; }); adopt(hm,key=>B[key],1.0,Math.PI/2); R.mats=R.heroMats; R.current='hero'; R.dress(); return; }
+    if(R.isAsset(name)){ const A=await R.loadAsset(name); R.spec=A.spec; adopt(A.scene,A.boneFor,A.k,A.spec.facing==='-Z'?-Math.PI/2:Math.PI/2); R.mats={}; R.current=name; R.assetCheck=A.check; return; }
+    R.spec=null;
     const T=await ST.People.template(name), m=THREE.SkeletonUtils.clone(T.scene);
     m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; } }); ST.People.dressOutfit(m,R.look.jacket,R.look.pants);
     const find=n=>{ let b=null; m.traverse(o=>{ if(!b&&o.name==='mixamorig'+n) b=o; }); return b; };
@@ -131,6 +158,7 @@
     set('Skin',k.skin); set('Skin2',k.skin); set('Hair',k.hair); set('Hair2',k.hair); set('Top',k.jacket); set('Top2',0x1a1c22); set('Accent',0xffffff); set('Pants',k.pants); set('Shoe',0x22242b); set('Sole',0xeeeeee);
     if(M.Top){ M.Top.roughness=.55; M.Top.metalness=.05; } };
   R.addGear=function(){
+    if(R.spec&&R.spec.gear===false){ R.helm=null; R.lens=null; return; }   // the model brings its own helmet, goggles and gloves
     const head=R.bones.Head; if(!head) return;
     const hp=head.getWorldPosition(new THREE.Vector3()), mp=R.model.getWorldPosition(new THREE.Vector3());
     const gear=new THREE.Group();
@@ -310,6 +338,7 @@
     const spread=16-(R.droop||0); rot('UpperArmL',-28,-6,-spread); rot('UpperArmR',-28,6,spread); rot('LowerArmL',-58,0,-spread*.3); rot('LowerArmR',-58,0,spread*.3); }
 
   /* shared trail ribbon, spray + landing puff */
-  R.setLook=function(o){ Object.assign(R.look,o); R.dress(); if(R.current!=='hero'&&R.model) ST.People.dressOutfit(R.model,R.look.jacket,R.look.pants); if(R.helm) R.helm.material.color.setHex(R.look.helmet); };
+  R.setLook=function(o){ Object.assign(R.look,o); R.dress(); if(R.current!=='hero'&&R.model&&!(R.spec&&R.spec.outfit==='baked')) ST.People.dressOutfit(R.model,R.look.jacket,R.look.pants); if(R.helm) R.helm.material.color.setHex(R.look.helmet);
+    if(R.spec&&R.spec.tint&&R.model) R.model.traverse(x=>{ if(x.material&&x.material.userData.pants) x.material.userData.pants.setHex(R.look.pants).convertSRGBToLinear(); }); };
   ST.Rider=R;
 })(window.ST);

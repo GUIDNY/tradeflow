@@ -8,7 +8,8 @@
   const KEY='snowtrader.v1';
   let save={wallet:0,best:{},board:0,owned:[0],runs:0,track:0,muted:false,rider:3};
   try{ Object.assign(save,JSON.parse(localStorage.getItem(KEY)||'{}')); }catch(e){}
-  if(save.ver!==2){ save.ver=2; save.rider=3; }   // v2: the Mixamo rider is the default, overriding the old saved choice (the original figure)
+  // v3: the Meshy rider (textured ski kit, own helmet and gloves) is the default; the old riders stay selectable in the menu
+  if(save.ver!==3){ save.ver=3; const mi=ST.Rider.choices.indexOf('meshy_rider'); save.rider=mi>=0?mi:3; }
   const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} };
 
   /* ---------- state ---------- */
@@ -367,7 +368,7 @@
   }
 
   /* ---------- menu ---------- */
-  function renderRiders(){ const row=$('#riderRow'); row.innerHTML=Rider.choices.map((n,i)=>'<button data-i="'+i+'" class="'+(i===(save.rider||0)?'sel':'')+'">'+(i+1)+'</button>').join('');
+  function renderRiders(){ const row=$('#riderRow'); row.innerHTML=Rider.choices.map((n,i)=>'<button data-i="'+i+'" class="'+(i===(save.rider||0)?'sel':'')+'">'+(Rider.isAsset(n)?ST.Assets.characters[n].label:(i+1))+'</button>').join('');
     row.querySelectorAll('button').forEach(b=>b.onclick=async()=>{ const i=+b.dataset.i; if(i===save.rider&&Rider.current===Rider.choices[i]) return; const st=$('#riderState'); st.textContent='טוענים…'; try{ await Rider.swap(Rider.choices[i]); save.rider=i; persist(); applyLook(); }catch(e){ console.warn(e); st.textContent='שגיאה'; setTimeout(()=>st.textContent='',1500); return; } st.textContent=''; renderRiders(); }); }
   function menuNote(t){ let n=document.getElementById('mnote'); if(!n){ n=document.createElement('div'); n.id='mnote'; document.body.appendChild(n); } n.textContent=t; n.className='show'; clearTimeout(menuNote.h); menuNote.h=setTimeout(()=>n.className='',2400); }
   function stars(n){ return '★'.repeat(n)+'☆'.repeat(3-n); }
@@ -448,7 +449,7 @@
     if(qt==='lab'&&ST.LAB){ track=ST.LAB; trackIdx=-1; }          // the hidden test slope (not on the trail map, not saved)
     World.setTrack(track); await World.ensureSky(track); set(35,'מלבישים את הרוכב…');
     try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
-    set(80,'מחממים את הלוח…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=3; if(save.rider>0&&Rider.choices[save.rider]){ ST.People.template(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
+    set(80,'מחממים את הלוח…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=Math.max(0,Rider.choices.indexOf('meshy_rider')); if(save.rider>0&&Rider.choices[save.rider]){ Rider.preload(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
     set(100); await new Promise(r=>setTimeout(r,250));
     $('#loading').remove(); mode='menu'; toMenu(); P.t=0; ST.People.preload(5);
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ startRun(); }
