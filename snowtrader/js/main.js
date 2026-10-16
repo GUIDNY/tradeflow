@@ -80,7 +80,7 @@
     tr.pts.length=0; rebuildTrail(); runT=0; World.update(0,true);
     Rider.setBoard(save.board); applyLook();
   }
-  function applyLook(){ const k=track.id; Rider.setLook({jacket:k==='bull'?0xff3d6e:k==='bear'?0x2f8bff:0xffd34a,helmet:k==='ipo'?0x1b1033:0x15161c});
+  function applyLook(){ const k=track.id; Rider.setLook({jacket:k==='bull'?0xffc21a:k==='bear'?0x2f8bff:k==='ipo'?0xff3dd8:0xffc21a,pants:k==='ipo'?0x1b1033:0x1fa35a,helmet:0x0d0e12});
     if(Rider.lens){ Rider.lens.material.color.setHex(k==='bear'?0x6fd0ff:k==='ipo'?0xff4fd8:0xff7a2e); Rider.lens.material.emissive.setHex(k==='bear'?0x2f9fff:k==='ipo'?0xff2fb8:0xff5a1e); } }
   /* ---------- the ride up: a chairlift time-lapse before every run (rope speed ~5 m/s, shown x12) ---------- */
   const lift={t:0,T:14,s0:0,s1:0,cam:new THREE.Vector3(),look:new THREE.Vector3(),on:false,fact:-1};

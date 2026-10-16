@@ -57,7 +57,7 @@
       rt.samples=4; rt.depthTexture=new THREE.DepthTexture(); rt.depthTexture.type=THREE.UnsignedIntType;
       const C=new THREE.EffectComposer(renderer,rt);
       C.addPass(new THREE.RenderPass(scene,camera));
-      GFX.bloom=null; if(!GFX.lite){ GFX.bloom=new THREE.UnrealBloomPass(new THREE.Vector2(w/2,h/2),ST.bloomStrength||.55,.55,.82); C.addPass(GFX.bloom); }
+      GFX.bloom=null; if(!GFX.lite){ GFX.bloom=new THREE.UnrealBloomPass(new THREE.Vector2(w/2,h/2),ST.bloomStrength||.4,.5,.9); C.addPass(GFX.bloom); }
       GFX.grade=new THREE.ShaderPass(GRADE); C.addPass(GFX.grade); gfxSharp(); applyGrade();
       GFX.composer=C; GFX.on=true; C.setSize(w,h);
     }catch(e){ console.warn('fx off',e); GFX.failed=true; GFX.on=false; GFX.composer=null; }

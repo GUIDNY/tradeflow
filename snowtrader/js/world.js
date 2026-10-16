@@ -245,16 +245,23 @@
   function buildMountains(palette,sunDir,fogC){
     while(mount.children.length){ const o=mount.children.pop(); o.geometry.dispose(); o.material.dispose(); }
     const sunV=new THREE.Vector3(...sunDir).normalize(), lo=new THREE.Color(palette[1]).convertSRGBToLinear(), hi=new THREE.Color(palette[0]).convertSRGBToLinear(), fc=new THREE.Color(fogC).convertSRGBToLinear();
-    [[820,330,0.5,11],[600,190,0.4,23]].forEach(([R,H,sn,seed],layer)=>{
-      const N=240, M=14, pos=[], cols=[], idx=[]; 
-      for(let i=0;i<=N;i++){ const a=i/N*Math.PI*2; const ridge=(Math.abs(vnoise(Math.cos(a)*2.2+seed,Math.sin(a)*2.2))*.7+Math.abs(vnoise(Math.cos(a)*6.5+seed,Math.sin(a)*6.5))*.3);
-        const hh=H*(.28+ridge*.9);
-        for(let j=0;j<=M;j++){ const t=j/M, r=R-t*30, y=-80+t*(hh+80); pos.push(Math.cos(a)*r,y,Math.sin(a)*r); } }
+    const rockC=new THREE.Color(0x7a6d66).convertSRGBToLinear(), rockD=new THREE.Color(0x3d3a45).convertSRGBToLinear();
+    [[860,520,0.5,11],[620,300,0.4,23],[470,150,0.3,41]].forEach(([R,H,sn,seed],layer)=>{
+      const N=300, M=18, pos=[], idx=[];
+      for(let i=0;i<=N;i++){ const a=i/N*Math.PI*2; const rid=(f,s)=>1-Math.abs(vnoise(Math.cos(a)*f+s,Math.sin(a)*f));   // ridged noise: sharp crests
+        const ridge=Math.pow(rid(1.8,seed),2.4)*.6+Math.pow(rid(5,seed+3),2.8)*.3+Math.pow(rid(13,seed+7),3)*.1;
+        const hh=H*(.12+ridge*1.2);
+        for(let j=0;j<=M;j++){ const t=j/M, r=R-t*40-Math.pow(t,3)*60, y=-90+t*(hh+90); pos.push(Math.cos(a)*r,y,Math.sin(a)*r); } }
       for(let i=0;i<N;i++) for(let j=0;j<M;j++){ const a=i*(M+1)+j,b=a+1,c=a+(M+1),d=c+1; idx.push(a,c,b,b,c,d); }
       const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals();
       const p=g.attributes.position, nr=g.attributes.normal, col=new Float32Array(p.count*3), cc=new THREE.Color();
-      for(let i=0;i<p.count;i++){ const y=p.getY(i), snow=smooth(H*.32,H*.62,y+hash2(i%97,3)*20), sh=clamp(.55+.55*(nr.getX(i)*sunV.x+nr.getY(i)*sunV.y+nr.getZ(i)*sunV.z),.3,1.15);
-        cc.copy(lo).lerp(hi,snow); const sc=clamp((sh-.3)/.85,0,1); cc.r*=lerp(.60,1.04,sc); cc.g*=lerp(.72,1.0,sc); cc.b*=lerp(.95,.96,sc); const haze=smooth(.4,0,(y+80)/(H*1.4))*0+ (layer===0?.45:.2); cc.lerp(fc,haze+smooth(60,-60,y)*.7); col[i*3]=cc.r; col[i*3+1]=cc.g; col[i*3+2]=cc.b; }
+      for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i), ang=Math.atan2(z,x);
+        // snow settles on the high, gentle parts; cliffs and gullies stay bare rock
+        const patch=vnoise(ang*38+layer*5,y*.03)*.5+vnoise(ang*110,y*.09)*.25+.5, hf=smooth(H*.18,H*.55,y), snow=smooth(.46,.76,patch*.62+hf*.42);
+        cc.copy(rockC).lerp(rockD,smooth(.4,.9,vnoise(ang*70,y*.05)*.5+.5)); cc.lerp(hi,snow);
+        const sh=clamp(.5+.6*(nr.getX(i)*sunV.x+nr.getY(i)*sunV.y+nr.getZ(i)*sunV.z),.28,1.1), sc=clamp((sh-.28)/.82,0,1);
+        cc.r*=lerp(.58,1.05,sc); cc.g*=lerp(.7,1.0,sc); cc.b*=lerp(.95,.97,sc);
+        const haze=(layer===0?.36:layer===1?.2:.08)+smooth(60,-80,y)*.7; cc.lerp(fc,clamp(haze,0,1)); col[i*3]=cc.r; col[i*3+1]=cc.g; col[i*3+2]=cc.b; }
       g.setAttribute('color',new THREE.BufferAttribute(col,3));
       const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,fog:false,side:THREE.DoubleSide,toneMapped:true})); m.frustumCulled=false; mount.add(m); });
   }
@@ -284,7 +291,7 @@
     [u.zen,u.mid,u.hor,u.sunC,u.fogC].forEach(c=>c.value.convertSRGBToLinear());
     scene.fog=new THREE.Fog(k.fog,k.fogNear,k.fogFar); scene.fog.color.convertSRGBToLinear(); scene.background=null;
     hemi.color.set(k.hemiS); hemi.groundColor.set(k.hemiG); hemi.intensity=k.hemiI; sun.color.set(k.sun); sun.intensity=k.sunI; ST.renderer.toneMappingExposure=k.exp;
-    ST.bloomStrength=k.neon?.8:.5; if(ST.GFX.bloom) ST.GFX.bloom.strength=ST.bloomStrength;
+    ST.bloomStrength=k.neon?.75:.26; if(ST.GFX.bloom) ST.GFX.bloom.strength=ST.bloomStrength;
     SNOW_UNI.uSparkle.value=k.neon?.7:1; MATS.coin.emissiveIntensity=k.neon?1.4:.9;
     buildMountains(k.mount,k.sunDir,k.fog);
     setSites(ST.Resort?ST.Resort.sites(T):[]); if(ST.Resort) ST.Resort.setTrack(T);

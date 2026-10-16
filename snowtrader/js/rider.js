@@ -15,7 +15,7 @@
 
   /* ---------- the board ---------- */
   const BOARDS=[
-    {id:'rookie',name:'Rookie',price:0,top:['#16e08a','#0b6e5a'],edge:0x10131a,glow:0x16e08a},
+    {id:'rookie',name:'Pro White',price:0,top:['#f6f9ff','#c9d6ee'],stripe:true,edge:0x10131a,glow:0xff3d4f},
     {id:'bull',name:'Bull Run',price:900,top:['#ffb020','#ff3d6e'],edge:0x2a1020,glow:0xffb020},
     {id:'bear',name:'Bear Market',price:2600,top:['#38b6ff','#2a3cff'],edge:0x0b1630,glow:0x38b6ff},
     {id:'ipo',name:'IPO Gold',price:6500,top:['#fff2a8','#c98a00'],edge:0x3a2600,glow:0xffd34a}];
@@ -23,7 +23,8 @@
   function boardTex(b){ const c=document.createElement('canvas'); c.width=256; c.height=1024; const g=c.getContext('2d');
     const gr=g.createLinearGradient(0,0,0,1024); gr.addColorStop(0,b.top[0]); gr.addColorStop(1,b.top[1]); g.fillStyle=gr; g.fillRect(0,0,256,1024);
     g.globalAlpha=.22; g.fillStyle='#000'; for(let i=0;i<9;i++){ g.fillRect(60+(i%2)*80,120+i*100,30,70+(i*37)%50); } g.globalAlpha=1;
-    g.fillStyle='rgba(255,255,255,.9)'; for(let i=0;i<5;i++){ const h=60+((i*53)%90), x=36+i*42; g.fillRect(x+9,300-h/2-14+0,4,h+28); g.fillRect(x,300-h/2,22,h); }
+    if(b.stripe){ g.save(); g.translate(128,512); g.rotate(-.5); g.fillStyle='#e8283f'; g.fillRect(-260,-70,520,46); g.fillStyle='#1f6bff'; g.fillRect(-260,-14,520,30); g.fillStyle='#0f1218'; g.fillRect(-260,28,520,16); g.restore(); }
+    g.fillStyle=b.stripe?'rgba(20,24,40,.85)':'rgba(255,255,255,.9)'; for(let i=0;i<5;i++){ const h=60+((i*53)%90), x=36+i*42; g.fillRect(x+9,300-h/2-14+0,4,h+28); g.fillRect(x,300-h/2,22,h); }
     g.strokeStyle='rgba(255,255,255,.85)'; g.lineWidth=10; g.strokeRect(10,10,236,1004);
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; return t; }
   function makeBoard(b){
@@ -106,10 +107,12 @@
     const head=R.bones.Head; if(!head) return;
     const hp=head.getWorldPosition(new THREE.Vector3()), mp=R.model.getWorldPosition(new THREE.Vector3());
     const gear=new THREE.Group();
-    const helm=new THREE.Mesh(new THREE.SphereGeometry(.152,24,16,0,Math.PI*2,0,Math.PI*.62),new THREE.MeshStandardMaterial({color:R.look.helmet,roughness:.3,metalness:.25})); helm.scale.set(1,.98,1.12); helm.position.set(0,.105,-.015); helm.castShadow=true; gear.add(helm); R.helm=helm;
+    const helm=new THREE.Mesh(new THREE.SphereGeometry(.156,24,16,0,Math.PI*2,0,Math.PI*.6),new THREE.MeshStandardMaterial({color:R.look.helmet,roughness:.92,metalness:0})); helm.scale.set(1,.98,1.12); helm.position.set(0,.105,-.015); helm.castShadow=true; gear.add(helm); R.helm=helm;
     const strap=new THREE.Mesh(new THREE.TorusGeometry(.148,.016,8,28),new THREE.MeshStandardMaterial({color:0x0c0d11,roughness:.6})); strap.rotation.x=Math.PI/2; strap.position.set(0,.115,.0); strap.scale.set(1,1.1,1); gear.add(strap);
     const lens=new THREE.Mesh(new THREE.BoxGeometry(.2,.082,.06),new THREE.MeshStandardMaterial({color:0xff7a2e,roughness:.12,metalness:.9,emissive:0xff5a1e,emissiveIntensity:.5})); lens.position.set(0,.108,.125); lens.geometry.translate(0,0,0); gear.add(lens); R.lens=lens;
     const frame=new THREE.Mesh(new THREE.BoxGeometry(.225,.1,.05),new THREE.MeshStandardMaterial({color:0x101218,roughness:.5})); frame.position.set(0,.108,.118); gear.add(frame);
+    // black mitts on both wrists, like the reference
+    ['WristL','WristR'].forEach(k=>{ const wb=R.bones[k]; if(!wb) return; const wp=wb.getWorldPosition(new THREE.Vector3()); const glove=new THREE.Mesh(new THREE.BoxGeometry(.11,.1,.17),new THREE.MeshStandardMaterial({color:0x0e1015,roughness:.7})); glove.castShadow=true; scene.add(glove); glove.position.copy(wp); R.model.updateMatrixWorld(true); wb.attach(glove); R.glovePieces=(R.glovePieces||[]).concat(glove); });
     gear.position.copy(hp.clone().sub(mp)).multiplyScalar(0); R.gear=gear;
     // gear is authored in the head's local frame: bone-local = world-up/forward only if the bone is bound upright; attach keeps the world pose
     rig.add(gear); gear.position.copy(rig.worldToLocal(hp.clone())); gear.rotation.set(0,R.model.rotation.y,0); gear.updateMatrixWorld(true); head.attach(gear);
