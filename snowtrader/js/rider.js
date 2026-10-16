@@ -4,11 +4,12 @@
 (function(ST){
   const {clamp,lerp,damp}=ST; const {scene,renderer}=ST;
   const RAD=Math.PI/180;
+  let R_rollG=null;
   const root=new THREE.Group();            // position + heading
   const tilt=new THREE.Group();            // follows the ground normal, rolls into carves
   const trick=new THREE.Group();           // spin / flip in the air
   const rig=new THREE.Group();             // lets the whole body crouch
-  root.add(tilt); tilt.scale.setScalar(1.2); tilt.add(trick); trick.add(rig); scene.add(root);
+  const rollG=new THREE.Group(); R_rollG=rollG; root.add(tilt); tilt.scale.setScalar(1.0); tilt.add(rollG); rollG.add(trick); trick.add(rig); scene.add(root);
 
   const R={root,tilt,trick,rig,model:null,bones:{},bind:{},order:[],ready:false,sole:0,
     look:{jacket:0xff3d6e,pants:0x23283a,helmet:0x15161c,board:0,skin:0xd9a07a,hair:0x2b1b10}};
@@ -19,7 +20,7 @@
     {id:'bull',name:'Bull Run',price:900,top:['#ffb020','#ff3d6e'],edge:0x2a1020,glow:0xffb020},
     {id:'bear',name:'Bear Market',price:2600,top:['#38b6ff','#2a3cff'],edge:0x0b1630,glow:0x38b6ff},
     {id:'ipo',name:'IPO Gold',price:6500,top:['#fff2a8','#c98a00'],edge:0x3a2600,glow:0xffd34a}];
-  R.BOARDS=BOARDS;
+  R.BOARDS=BOARDS; R.rollG=R_rollG;
   function boardTex(b){ const c=document.createElement('canvas'); c.width=256; c.height=1024; const g=c.getContext('2d');
     const gr=g.createLinearGradient(0,0,0,1024); gr.addColorStop(0,b.top[0]); gr.addColorStop(1,b.top[1]); g.fillStyle=gr; g.fillRect(0,0,256,1024);
     g.globalAlpha=.22; g.fillStyle='#000'; for(let i=0;i<9;i++){ g.fillRect(60+(i%2)*80,120+i*100,30,70+(i*37)%50); } g.globalAlpha=1;
@@ -27,19 +28,38 @@
     g.fillStyle=b.stripe?'rgba(20,24,40,.85)':'rgba(255,255,255,.9)'; for(let i=0;i<5;i++){ const h=60+((i*53)%90), x=36+i*42; g.fillRect(x+9,300-h/2-14+0,4,h+28); g.fillRect(x,300-h/2,22,h); }
     g.strokeStyle='rgba(255,255,255,.85)'; g.lineWidth=10; g.strokeRect(10,10,236,1004);
     const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; return t; }
+  /* A freestyle board at real size: 156 cm, 29 cm at the tips, 25 cm at the waist (sidecut), 1.8 cm thick, rounded tips that kick
+     up, a touch of camber, a steel edge all round, a sintered base, and two bindings (highback, ankle and toe straps) set
+     56 cm apart with the front foot turned out 20 degrees and the rear 8 degrees. */
   function makeBoard(b){
-    const grp=new THREE.Group(), Lh=.8, W=.155, sh=new THREE.Shape();
-    sh.moveTo(-W,-Lh+.1); sh.quadraticCurveTo(-W,-Lh,0,-Lh-.12); sh.quadraticCurveTo(W,-Lh,W,-Lh+.1); sh.lineTo(W,Lh-.1); sh.quadraticCurveTo(W,Lh,0,Lh+.12); sh.quadraticCurveTo(-W,Lh,-W,Lh-.1); sh.lineTo(-W,-Lh+.1);
-    const geo=new THREE.ExtrudeGeometry(sh,{depth:.045,bevelEnabled:true,bevelThickness:.018,bevelSize:.016,bevelSegments:2,curveSegments:10}); geo.rotateX(-Math.PI/2); geo.translate(0,.012,0);
-    // upturned tips
-    const p=geo.attributes.position; for(let i=0;i<p.count;i++){ const z=Math.abs(p.getZ(i)); if(z>Lh-.32){ const t=(z-(Lh-.32))/.44; p.setY(i,p.getY(i)+t*t*.2); } } geo.computeVertexNormals();
-    const top=new THREE.MeshStandardMaterial({map:boardTex(b),roughness:.35,metalness:.15}), edge=new THREE.MeshStandardMaterial({color:b.edge,roughness:.5,metalness:.5,emissive:b.glow,emissiveIntensity:ST.World&&ST.World.T&&ST.World.T.id==='ipo'?.9:.18});
-    const m=new THREE.Mesh(geo,[edge,top].length?top:top); m.castShadow=true; grp.add(m);
-    const under=new THREE.Mesh(geo,edge); under.scale.set(1.02,.55,1.0); under.position.y=-.012; grp.add(under);
-    const bm=new THREE.MeshStandardMaterial({color:0x14161d,roughness:.5,metalness:.4});
-    [-.3,.3].forEach(z=>{ const bnd=new THREE.Mesh(new THREE.BoxGeometry(.25,.07,.14),bm); bnd.position.set(0,.1,z); bnd.castShadow=true; grp.add(bnd);
-      const st=new THREE.Mesh(new THREE.BoxGeometry(.29,.035,.1),new THREE.MeshStandardMaterial({color:b.glow,roughness:.4,emissive:b.glow,emissiveIntensity:.35})); st.position.set(0,.14,z); grp.add(st); });
-    grp.userData.edge=edge; return grp;
+    const grp=new THREE.Group(), L=1.56, wt=.29, ww=.25, cap=.15;
+    const hw=z=>{ const t=2*z/L; let w=.5*(ww+(wt-ww)*t*t); const e=Math.abs(z)-(L/2-cap); if(e>0) w*=Math.sqrt(Math.max(0,1-(e/cap)*(e/cap)*.96)); return w; };
+    const outline=()=>{ const pts=[]; const N=64; for(let i=0;i<=N;i++){ const z=-L/2+L*i/N; pts.push([hw(z),z]); } for(let i=N;i>=0;i--){ const z=-L/2+L*i/N; pts.push([-hw(z),z]); } return pts; };
+    const sh=new THREE.Shape(); outline().forEach(([x,z],i)=>i?sh.lineTo(x,-z):sh.moveTo(x,-z));
+    const prof=(geo,lift)=>{ const p=geo.attributes.position; for(let i=0;i<p.count;i++){ const z=p.getZ(i), az=Math.abs(z); let y=p.getY(i); y+=(1-Math.pow(z/(L/2),2))*.008;     // camber
+        if(az>.5){ const t=(az-.5)/(L/2-.5); y+=t*t*.075; } p.setY(i,y+lift); }
+      // texture coordinates in board space: u across, v along
+      const uv=new Float32Array(p.count*2); for(let i=0;i<p.count;i++){ uv[i*2]=p.getX(i)/.3+.5; uv[i*2+1]=p.getZ(i)/L+.5; } geo.setAttribute('uv',new THREE.BufferAttribute(uv,2)); geo.computeVertexNormals(); };
+    const body=new THREE.ExtrudeGeometry(sh,{depth:.012,bevelEnabled:true,bevelThickness:.003,bevelSize:.004,bevelSegments:2,curveSegments:12}); body.rotateX(-Math.PI/2); prof(body,.014);
+    const baseG=new THREE.ExtrudeGeometry(sh,{depth:.004,bevelEnabled:false,curveSegments:12}); baseG.rotateX(-Math.PI/2); prof(baseG,.0);
+    const edgeG=new THREE.ExtrudeGeometry(sh,{depth:.01,bevelEnabled:true,bevelThickness:.002,bevelSize:.0045,bevelSegments:1,curveSegments:12}); edgeG.rotateX(-Math.PI/2); prof(edgeG,.003);
+    const top=new THREE.MeshStandardMaterial({map:boardTex(b),roughness:.28,metalness:.05}), steel=new THREE.MeshStandardMaterial({color:0xc4c9d2,roughness:.3,metalness:.95}), base=new THREE.MeshStandardMaterial({color:0x14161b,roughness:.75});
+    const eMesh=new THREE.Mesh(edgeG,steel); eMesh.castShadow=true; grp.add(eMesh);
+    const bMesh=new THREE.Mesh(baseG,base); bMesh.position.y=-.002; grp.add(bMesh);
+    const tMesh=new THREE.Mesh(body,top); tMesh.position.y=.004; tMesh.castShadow=true; grp.add(tMesh);
+    // bindings
+    const plastic=new THREE.MeshStandardMaterial({color:0x15171d,roughness:.55,metalness:.1}), accent=new THREE.MeshStandardMaterial({color:b.glow,roughness:.45,emissive:b.glow,emissiveIntensity:.18}), strap=new THREE.MeshStandardMaterial({color:0x23262e,roughness:.8});
+    const binding=(z,yaw)=>{ const g=new THREE.Group(); g.position.set(0,.03,z); g.rotation.y=yaw*Math.PI/180;
+      const plate=new THREE.Mesh(new THREE.CylinderGeometry(.095,.1,.014,24),plastic); plate.position.y=.007; g.add(plate);
+      const hl=new THREE.Mesh(new THREE.BoxGeometry(.016,.15,.16),plastic); hl.position.set(-.1,.075,0); hl.rotation.z=-.22; g.add(hl);           // highback behind the heel
+      const hr=new THREE.Mesh(new THREE.BoxGeometry(.016,.15,.16),plastic); hr.position.set(.1,.075,0); hr.rotation.z=.22; g.add(hr);
+      const bk=new THREE.Mesh(new THREE.BoxGeometry(.2,.16,.016),plastic); bk.position.set(0,.09,-.085); bk.rotation.x=.2; g.add(bk);
+      const ank=new THREE.Mesh(new THREE.BoxGeometry(.21,.034,.07),strap); ank.position.set(0,.085,.03); g.add(ank);
+      const toe=new THREE.Mesh(new THREE.BoxGeometry(.2,.03,.06),strap); toe.position.set(0,.05,.16); g.add(toe);
+      const bu=new THREE.Mesh(new THREE.BoxGeometry(.04,.036,.072),accent); bu.position.set(.105,.085,.03); g.add(bu);
+      g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); return g; };
+    grp.add(binding(-.28,20),binding(.28,-8));
+    grp.userData.edge=steel; return grp;
   }
   let boardObj=null;
   R.setBoard=function(i){ if(boardObj){ trick.remove(boardObj); } boardObj=makeBoard(BOARDS[i]||BOARDS[0]); boardObj.position.y=-.9; trick.add(boardObj); R.boardIndex=i; };
@@ -141,7 +161,7 @@
     rot('LowerLegR',mx(back*.94,-8-sw),         mx(2,-5), 0);
     rot('FootL',0,mx(20,0),0); rot('FootR',0,mx(-8,0),0);                // soles flat on the bindings, front foot +20 (ducked rear foot -8)
     // trunk: pelvis open to the nose, shoulders more, eyes down the hill; leans into the turn and folds forward as the knees bend
-    const fold=kn*.22+tk*14+g*16;
+    const fold=kn*.16+tk*12+g*14;
     rot('Hips',   mx(2+toe*5-heel*3,-6),                    mx(hipYaw,0),               ln*6);
     rot('Abdomen',mx(8+fold*.45+toe*3,-4),                  mx(18+yawU*.7,0),           ln*-5);
     rot('Torso',  mx(10+fold*.4+toe*3-heel*3,-4),           mx(32+yawU,0),              ln*-4);
@@ -164,7 +184,7 @@
     let low=1e9; ['FootL','FootR'].forEach(kk=>{ if(R.bones[kk]){ R.bones[kk].getWorldPosition(_v); R.model.parent.worldToLocal(_v); low=Math.min(low,_v.y); } });
     if(low<1e8) R.model.position.y=.205-low;
     // angulation: the board rolls onto its edge further than the body leans; the hips push inside the turn
-    const roll=-ln*R.rollMax; rig.rotation.z=-roll*.5*(1-k); rig.position.x=ln*(.07+.1*Math.abs(ln))*(1-k);
+    const roll=-ln*R.rollMax; rig.rotation.z=-roll*.58*(1-k); rig.position.x=ln*(.04+.06*Math.abs(ln))*(1-k);
     if(boardObj) boardObj.rotation.y=-tw*.012*(1-k);   // in a spin the board follows the shoulders a beat later
   };
 

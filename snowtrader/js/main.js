@@ -170,7 +170,7 @@
       const gy=World.groundY(P.x,P.z); P.vy-=G*dt; P.y+=P.vy*dt; if(P.y<gy){ P.y=gy; P.vy=P.vy<-3?-P.vy*.35:0; P.grounded=true; }
       P.fl+=P.wfl*dt; P.sp+=P.wfl*.35*dt; P.s=-P.z; if(P.tumble<=0) respawn(); return; }
     if(P.grounded){
-      const vr=track.vref||24, turn=lerp(2.7,1.5,clamp(speed/(vr*1.4),0,1));
+      const vr=track.vref||24, turn=lerp(2.2,1.15,clamp(speed/(vr*1.4),0,1));
       P.tuck=damp(P.tuck,iy<-.35?1:0,10,dt);
       if(P.stun<=0) P.hd+=sx*turn*dt;
       if(Math.abs(sx)<.1) P.hd=lerpAngle(P.hd,trackAng,1-Math.exp(-dt*.8));
@@ -234,7 +234,7 @@
     camHd=lerpAngle(camHd,P.hd,1-Math.exp(-dt*(air?1.2:3.1)));
     const heroOn=air&&P.airT>.4&&P.tumble<=0; heroK=damp(heroK,heroOn?1:0,heroOn?2.2:3.5,dt); if(heroOn&&!heroSide) heroSide=Math.random()<.5?-1:1; if(!heroOn&&heroK<.02) heroSide=0;
     const camA=camHd+(heroSide||1)*heroK*.85, fx=Math.sin(camA), fz=-Math.cos(camA);
-    const vq=clamp(sp/((track.vref||24)*1.3),0,1), dist=(lerp(5.4,7.4,vq)+(air?.7:0))*(1-.28*heroK), h=(lerp(2.1,2.9,vq)+(air?.8:0)+P.tuck*-.3)*(1-.35*heroK);
+    const vq=clamp(sp/((track.vref||24)*1.3),0,1), dist=(lerp(4.7,6.6,vq)+(air?.7:0))*(1-.28*heroK), h=(lerp(1.9,2.6,vq)+(air?.8:0)+P.tuck*-.3)*(1-.35*heroK);
     const tx=P.x-fx*dist, tz=P.z-fz*dist; let ty=P.y+h;
     const gy=World.groundY(tx,tz)+1.3; if(ty<gy) ty=gy;
     _f.set(tx,ty,tz); if(camSnap){ camPos.copy(_f); camSnap=false; } else { const k=1-Math.exp(-dt*(air?6:11)); camPos.lerp(_f,k); }
@@ -251,11 +251,11 @@
   /* ---------- rider visuals ---------- */
   const _qa=new THREE.Quaternion(), _qb=new THREE.Quaternion(), _up=new THREE.Vector3(0,1,0), _ln=new THREE.Vector3(), _e=new THREE.Euler();
   function updateRider(dt,menu){
-    const R=Rider; R.root.position.set(P.x,P.y,P.z); R.root.rotation.y=-P.hd; R.rollMax=lerp(.3,.78,clamp(P.speed/((track.vref||24)*1.25),0,1));
+    const R=Rider; R.root.position.set(P.x,P.y,P.z); R.root.rotation.y=-P.hd; R.rollMax=lerp(.2,.56,clamp(P.speed/((track.vref||24)*1.25),0,1));   // board edge angle: 11 to 32 degrees
     if(P.grounded&&P.tumble<=0){ World.groundN(P.x,P.z,_n); _ln.copy(_n); _ln.applyAxisAngle(_up,P.hd);  // into the board's own frame (heading undone)
       _ln.set(_n.x*Math.cos(-P.hd)+_n.z*Math.sin(-P.hd)*0,0,0); const c=Math.cos(P.hd), s=Math.sin(P.hd); const lx=_n.x*c+_n.z*s, lz=-_n.x*s+_n.z*c; _ln.set(lx,_n.y,lz).normalize();
-      _qb.setFromUnitVectors(_up,_ln); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*14)); R.tilt.rotation.z+=0; _e.set(0,0,-P.lean*R.rollMax); _qa.setFromEuler(_e); R.tilt.quaternion.multiply(_qa); }
-    else { _qb.identity(); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*6)); _e.set(clamp(-P.vy*.012,-.3,.35),0,0); }
+      _qb.setFromUnitVectors(_up,_ln); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*14)); R.rollG.rotation.z=-P.lean*R.rollMax; }
+    else { _qb.identity(); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*6)); R.rollG.rotation.z*=Math.exp(-dt*5); }
     R.trick.rotation.order='YXZ'; R.trick.rotation.y=-P.sp; R.trick.rotation.x=P.fl;
     const air=!P.grounded&&P.tumble<=0; const tgt={crouch:menu?.25:P.grounded?clamp(.16+.2*clamp(P.speed/36,0,1)+P.tuck*.65+(P.jumpBuf>0?.3:0),0,1):(.58),
       air:air?1:0,grab:air&&P.grabbed?1:0,lean:P.lean,tuck:P.grounded?P.tuck*.7:(P.grabbed?0:.35),twist:air?clamp(P.wsp*-4,-30,30):0};
