@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d1a">
-<title>Snow Trader · מסחר על הלוח</title>
-<meta name="description" content="משחק סנובורד תלת־ממדי: יורדים במסלול, מבצעים תרגילים, אוספים נרות ירוקים ולוקחים רווח.">
+<title>Snow Rush · סנובורד</title>
+<meta name="description" content="משחק סנובורד תלת־ממדי: יורדים במסלול, מבצעים תרגילים, אוספים גבישים וצוברים ניקוד.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -22,8 +22,8 @@
 <!-- main menu -->
 <div id="menu" hidden>
   <div class="mtop">
-    <div class="logo big">SNOW<b>TRADER</b><small>הר · לוח · שוק</small></div>
-    <div class="wallet"><span>הכספת</span><b id="walletN">$0</b></div>
+    <div class="logo big">SNOW<b>RUSH</b><small>הר · לוח · מהירות</small></div>
+    <div class="wallet"><span>ניקוד כולל</span><b id="walletN">0</b></div>
   </div>
   <div class="mbody">
     <div class="mapcard"><div id="trailMap"></div><div id="trackInfo"></div></div>
@@ -37,7 +37,7 @@
 <!-- HUD -->
 <div id="hud" hidden>
   <div class="radar"><canvas id="radar" width="220" height="220"></canvas><div id="radarTxt"></div></div>
-  <div class="money"><div id="moneyN">$0</div><div id="moneyD"></div><div class="spd"><b id="spdN">0</b> קמ״ש</div></div>
+  <div class="money"><div id="moneyN">0</div><div id="moneyD"></div><div class="spd"><b id="spdN">0</b> קמ״ש</div></div>
   <div class="prog"><i id="progBar"></i><span id="progTxt">0 מ׳</span></div>
   <div id="combo" hidden><b id="comboX">x2</b><span>קומבו</span><i id="comboBar"></i></div>
   <div id="toast"></div>
@@ -52,15 +52,15 @@
 </div>
 
 <!-- pause -->
-<div id="pausemenu" hidden><div class="panel"><h2>הפסקת מסחר</h2><button id="resumeBtn" class="cta">להמשיך</button><button id="restartBtn" class="ghost">התחלה מחדש</button><button id="quitBtn" class="ghost">לתפריט</button></div></div>
+<div id="pausemenu" hidden><div class="panel"><h2>הפסקה</h2><button id="resumeBtn" class="cta">להמשיך</button><button id="restartBtn" class="ghost">התחלה מחדש</button><button id="quitBtn" class="ghost">לתפריט</button></div></div>
 
 <!-- results -->
 <div id="end" hidden><div class="panel result">
-  <div id="endTitle" class="mission">רווח נלקח</div>
+  <div id="endTitle" class="mission">ריצה מושלמת</div>
   <div class="stars" id="stars"></div>
-  <canvas id="candles" width="640" height="170"></canvas>
+  <canvas id="profile" width="640" height="170"></canvas>
   <div class="rows" id="endRows"></div>
-  <div class="total"><span>סה״כ לכספת</span><b id="endTotal">$0</b></div>
+  <div class="total"><span>ניקוד ריצה</span><b id="endTotal">0</b></div>
   <div class="endbtns"><button id="againBtn" class="cta">עוד ריצה</button><button id="menuBtn" class="ghost">לתפריט</button></div>
 </div></div>
 

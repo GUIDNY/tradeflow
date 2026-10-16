@@ -1,19 +1,19 @@
-/* Snow Trader: the mountain. A track is a function of distance s (forward = -Z): a centre line, a width, a fall and
+/* Snow Rush: the mountain. A track is a function of distance s (forward = -Z): a centre line, a width, a fall and
    a row of kickers, all closed-form, so the ground can be asked for anywhere (physics) and meshed in chunks (render). */
 (function(ST){
   const {clamp,lerp,smooth,hash2,vnoise}=ST;
   const {scene,renderer,camera,sun,hemi}=ST;
 
   ST.TRACKS=[
-    {id:'bunny',name:'באני בול',en:'BUNNY BULL',diff:'green',diffName:'ירוק · קל',blurb:'בוקר בהיר, מדרון רחב ונעים. מתחילים כאן.',len:800,vref:12,drag:.0234,slope:.25,halfW:25,bend:[22,8],rampStart:150,rampEvery:130,rampH:[3.4,5.0],redRate:.12,goals:[1800,4200],par:85,net:true,snowfall:.2,
+    {id:'bunny',name:'גבעת הארנב',en:'BUNNY HILL',diff:'green',diffName:'ירוק · קל',blurb:'בוקר בהיר, מדרון רחב ונעים. מתחילים כאן.',len:800,vref:12,drag:.0234,slope:.25,halfW:25,bend:[22,8],rampStart:150,rampEvery:130,rampH:[3.4,5.0],redRate:.12,goals:[1800,4200],par:85,net:true,snowfall:.2,
       sky:{zen:0x2f6fcf,mid:0x86bdf0,hor:0xe3f0fb,sun:0xfff7ea,sunDir:[-.30,.50,-.80],fog:0xc3d9ee,fogNear:80,fogFar:420,snow:0xf4f8ff,hemiS:0x9cc4ff,hemiG:0xcfdcf2,hemiI:1.0,sunI:1.6,exp:.9,stars:0,mount:[0xffffff,0x6f86a8],neon:0}},
-    {id:'bull',name:'עמק הבול',en:'BULL VALLEY',diff:'blue',diffName:'כחול · בינוני',blurb:'שקיעה, מדרון נעים וכסף קל.',len:1050,vref:16,drag:.0166,slope:.30,halfW:21,bend:[30,11],rampStart:130,rampEvery:112,rampH:[3.9,5.9],redRate:.30,goals:[2500,6000],par:90,net:true,snowfall:.4,
+    {id:'bull',name:'עמק השקיעה',en:'SUNSET VALLEY',diff:'blue',diffName:'כחול · בינוני',blurb:'שקיעה, מדרון נעים וקל לקחת.',len:1050,vref:16,drag:.0166,slope:.30,halfW:21,bend:[30,11],rampStart:130,rampEvery:112,rampH:[3.9,5.9],redRate:.30,goals:[2500,6000],par:90,net:true,snowfall:.4,
       sky:{zen:0x1d2a78,mid:0xb8509a,hor:0xffa860,sun:0xffd2a2,sunDir:[-.42,.17,-.89],fog:0xe8a9a0,fogNear:55,fogFar:340,snow:0xfaf4ff,hemiS:0x9fb4ff,hemiG:0xd8d2e8,hemiI:.95,sunI:2.0,exp:1.0,stars:0,mount:[0xf2d9e8,0x7e5c8a],neon:0}},
-    {id:'bear',name:'קניון הדוב',en:'BEAR CANYON',diff:'red',diffName:'אדום · מאתגר',blurb:'שעת כחול, קניון צר, נרות אדומים.',len:1300,vref:20,drag:.0124,slope:.34,halfW:17,bend:[44,15],rampStart:120,rampEvery:98,rampH:[4.3,6.4],redRate:.46,goals:[4500,10500],par:110,net:true,snowfall:.6,
+    {id:'bear',name:'הקניון הכחול',en:'BLUE CANYON',diff:'red',diffName:'אדום · מאתגר',blurb:'שעת כחול, קניון צר וקוצי קרח.',len:1300,vref:20,drag:.0124,slope:.34,halfW:17,bend:[44,15],rampStart:120,rampEvery:98,rampH:[4.3,6.4],redRate:.46,goals:[4500,10500],par:110,net:true,snowfall:.6,
       sky:{zen:0x070f2e,mid:0x2a4f93,hor:0x9ec4f0,sun:0xb8d4ff,sunDir:[.5,.2,-.84],fog:0x8fb2dc,fogNear:40,fogFar:300,snow:0xeaf3ff,hemiS:0x8fb4ff,hemiG:0xcfe0ff,hemiI:.7,sunI:2.0,exp:1.05,stars:.5,mount:[0xdfeaff,0x37507f],neon:0}},
     {id:'ridge',name:'רכס הסופה',en:'WHITEOUT RIDGE',diff:'black',diffName:'שחור · מומחים',blurb:'סופת שלג, ראות נמוכה, מדרון תלול.',len:1400,vref:24,drag:.0104,slope:.40,halfW:15,bend:[48,16],rampStart:110,rampEvery:92,rampH:[4.6,6.8],redRate:.5,goals:[6000,14000],par:100,net:false,snowfall:1,
       sky:{zen:0x56657c,mid:0x8996ab,hor:0xc9d2dd,sun:0xe8eef7,sunDir:[-.2,.35,-.9],fog:0xbfc9d6,fogNear:22,fogFar:200,snow:0xf1f5fb,hemiS:0xb9c6da,hemiG:0xdfe5ee,hemiI:1.15,sunI:.7,exp:1.0,stars:0,mount:[0xe8eef7,0x5a6678],neon:0}},
-    {id:'ipo',name:'פסגת ה‑IPO',en:'IPO SUMMIT',diff:'park',diffName:'פארק · לילה',blurb:'לילה, ניאון וקפיצות ענק.',len:1500,vref:19,drag:.01565,slope:.38,halfW:18,bend:[50,18],rampStart:110,rampEvery:90,rampH:[4.8,7.2],redRate:.5,goals:[8000,19000],par:120,net:true,snowfall:.6,
+    {id:'ipo',name:'פארק הפסגה',en:'SUMMIT PARK',diff:'park',diffName:'פארק · לילה',blurb:'לילה, ניאון וקפיצות ענק.',len:1500,vref:19,drag:.01565,slope:.38,halfW:18,bend:[50,18],rampStart:110,rampEvery:90,rampH:[4.8,7.2],redRate:.5,goals:[8000,19000],par:120,net:true,snowfall:.6,
       sky:{zen:0x030014,mid:0x2b0c5e,hor:0xff2f92,sun:0xff6ad5,sunDir:[-.3,.3,-.9],fog:0x35145f,fogNear:35,fogFar:290,snow:0xcfd0ff,hemiS:0x6a5cff,hemiG:0xff3da0,hemiI:.85,sunI:1.5,exp:1.1,stars:1,mount:[0x7d5cff,0x180a3a],neon:1}}
   ];
 
@@ -112,25 +112,27 @@
   const GEO={pine:pineGeo(),fir:firGeo(),rock:rockGeo()};
   const MATS={tree:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,metalness:0}),
     coin:new THREE.MeshStandardMaterial({color:0xffc83a,metalness:.9,roughness:.25,emissive:0xff9d00,emissiveIntensity:.9}),
-    green:new THREE.MeshStandardMaterial({color:0x13d672,roughness:.35,metalness:.1,emissive:0x07ff7d,emissiveIntensity:1.5}),
-    red:new THREE.MeshStandardMaterial({color:0xe3243f,roughness:.35,metalness:.1,emissive:0xff1c3c,emissiveIntensity:1.5}),
-    wickG:new THREE.MeshBasicMaterial({color:0xb8ffd8}), wickR:new THREE.MeshBasicMaterial({color:0xffc2cb}),
+    green:new THREE.MeshStandardMaterial({color:0x2fd6ff,roughness:.2,metalness:.1,emissive:0x1ab8ff,emissiveIntensity:1.4}),
+    red:new THREE.MeshStandardMaterial({color:0xff5a1e,roughness:.35,metalness:.1,emissive:0xff3a10,emissiveIntensity:1.2}),
+    wickG:new THREE.MeshBasicMaterial({color:0xd8f6ff}), wickR:new THREE.MeshBasicMaterial({color:0xffd2b8}),
     metal:new THREE.MeshStandardMaterial({color:0x2a2f3a,metalness:.7,roughness:.35})};
   const coinGeo=new THREE.CylinderGeometry(.62,.62,.14,24); coinGeo.rotateZ(Math.PI/2);
   const candleGeoCache={};
-  function candleGeo(h){ const k=Math.round(h*4); if(candleGeoCache[k]) return candleGeoCache[k]; const b=new THREE.BoxGeometry(1.15,h,1.15); b.translate(0,h/2,0);
-    const w=new THREE.BoxGeometry(.12,h+2.2,.12); w.translate(0,(h+2.2)/2-1.1,0); return candleGeoCache[k]={b,w}; }
+  function candleGeo(h,red){ const k=Math.round(h*4)+(red?1000:0); if(candleGeoCache[k]) return candleGeoCache[k];   // green: an ice crystal to collect; red: an ice spike to avoid
+    const b=red?new THREE.ConeGeometry(.75,h,6):new THREE.OctahedronGeometry(1,0); if(!red) b.scale(.75,h/2,.75); b.translate(0,h/2,0);
+    const w=new THREE.CylinderGeometry(.35,.6,.25,6); w.translate(0,.1,0); return candleGeoCache[k]={b,w}; }
 
   /* billboards: glowing ticker panels */
   const BB=[]; function makeBoards(){
-    const syms=['BTC','ETH','TSLA','NVDA','AAPL','GOLD','OIL','SPX'];
-    for(let i=0;i<6;i++){ const c=document.createElement('canvas'); c.width=512; c.height=256; const g=c.getContext('2d'); const up=i%3!==2;
-      const gr=g.createLinearGradient(0,0,0,256); gr.addColorStop(0,'#0a0f1f'); gr.addColorStop(1,up?'#052a1c':'#2a0712'); g.fillStyle=gr; g.fillRect(0,0,512,256);
-      g.strokeStyle='rgba(255,255,255,.07)'; g.lineWidth=1; for(let y=0;y<256;y+=32){ g.beginPath(); g.moveTo(0,y); g.lineTo(512,y); g.stroke(); }
-      let y=170; for(let x=170;x<500;x+=16){ const o=y, d=(hash2(i*13+x,5)-(up?.38:.62))*22; y=clamp(y+d,40,215); const col=d>=0?'#18e27a':'#ff3b57'; g.strokeStyle=col; g.fillStyle=col; g.beginPath(); g.moveTo(x+5,Math.min(o,y)-8); g.lineTo(x+5,Math.max(o,y)+8); g.stroke(); g.fillRect(x,Math.min(o,y),10,Math.max(4,Math.abs(y-o))); }
-      g.fillStyle='#fff'; g.font='900 56px "Arial Black",Impact,sans-serif'; g.textAlign='left'; g.fillText(syms[(i*3)%8],18,72);
-      g.fillStyle=up?'#18e27a':'#ff3b57'; g.font='900 40px "Arial Black",sans-serif'; g.fillText((up?'▲ +':'▼ −')+(1+hash2(i,2)*7).toFixed(2)+'%',18,124);
-      g.strokeStyle=up?'#18e27a':'#ff3b57'; g.lineWidth=6; g.strokeRect(3,3,506,250);
+    const words=['CARVE','FRESH POWDER','BIG AIR','SEND IT','ALPINE','FLOW'], subs=['אלפיני · גולשים בסטייל','אבק שלג טרי','קפיצה גדולה','יאללה לרדת','פסגות ושקט','זורמים עם ההר'];
+    for(let i=0;i<6;i++){ const c=document.createElement('canvas'); c.width=512; c.height=256; const g=c.getContext('2d');
+      const gr=g.createLinearGradient(0,0,0,256); gr.addColorStop(0,'#0a1b3a'); gr.addColorStop(1,i%2?'#12486e':'#2b1b4f'); g.fillStyle=gr; g.fillRect(0,0,512,256);
+      // a mountain range behind the words
+      g.fillStyle='rgba(255,255,255,.14)'; g.beginPath(); g.moveTo(0,256); let px=0; while(px<=512){ g.lineTo(px,150+hash2(i*7+px,3)*70-(px>120&&px<400?40:0)); px+=48; } g.lineTo(512,256); g.closePath(); g.fill();
+      g.fillStyle='rgba(255,255,255,.28)'; g.beginPath(); g.moveTo(300,256); g.lineTo(400,120); g.lineTo(500,256); g.closePath(); g.fill();
+      g.fillStyle='#fff'; g.font='900 '+(words[i].length>8?44:64)+'px "Arial Black",Impact,sans-serif'; g.textAlign='left'; g.fillText(words[i],18,84);
+      g.fillStyle='#ffd24a'; g.font='800 32px "Arial Black",sans-serif'; g.fillText(subs[i],18,136);
+      g.strokeStyle='#8fd8ff'; g.lineWidth=6; g.strokeRect(3,3,506,250);
       const t=new THREE.CanvasTexture(c); t.anisotropy=4; t.encoding=THREE.sRGBEncoding; BB.push(t); }
   }
   makeBoards();
@@ -200,15 +202,15 @@
     { const k0=Math.floor((s0-T.rampStart)/T.rampEvery)-1; for(let kk=Math.max(0,k0);kk<=k0+3;kk++){ const r=rampAt(kk); if(r.s+RL<s0||r.s+RL>=s0+L) continue;
         for(let i=0;i<7;i++){ const ss=r.s+RL+3+i*4.2, x=cx(ss)+r.u, z=-ss, tt=i/6; items.push({type:'coin',x,z,y:groundY(x,z),air:2.6+Math.sin(tt*Math.PI)*3.6,big:true}); } } }
     // gates and boards
-    if(s0<=10&&s0+L>10){ addArch(grp,10,'SNOW TRADER','פתיחת המסחר · יאללה לרדת'); }
-    if(s0<=T.len&&s0+L>T.len){ addArch(grp,T.len,'FINISH','סגירת פוזיציה · לקחת רווח'); items.push({type:'finish',x:cx(T.len),z:-T.len,y:groundY(cx(T.len),-T.len),r:30}); }
+    if(s0<=10&&s0+L>10){ addArch(grp,10,'SNOW RUSH','קו הזינוק · יאללה לרדת'); }
+    if(s0<=T.len&&s0+L>T.len){ addArch(grp,T.len,'FINISH','קו הסיום · עוד ריצה?'); items.push({type:'finish',x:cx(T.len),z:-T.len,y:groundY(cx(T.len),-T.len),r:30}); }
     for(let bs=Math.ceil((s0-60)/170)*170+90; bs<s0+L+60; bs+=170){ if(bs<s0||bs>=s0+L||bs>T.len) continue; const side=Math.floor(bs/170)%2?1:-1, u=side*(halfW(bs)+4.5), x=cx(bs)+u, z=-bs, y=groundY(x,z);
       const m=new THREE.Mesh(new THREE.PlaneGeometry(14,7),new THREE.MeshBasicMaterial({map:BB[Math.floor(bs/170)%BB.length],toneMapped:false}));
       const post=new THREE.Mesh(new THREE.BoxGeometry(.5,9,.5),MATS.metal); const pg=new THREE.Group(); pg.position.set(x,y,z); post.position.set(0,4,-.4); m.position.set(0,8.4,0); pg.lookAt(cx(bs),y+8.4,-bs); pg.rotation.set(0,pg.rotation.y,0); pg.add(post,m); const post2=post.clone(); post2.position.x=4.5; const post3=post.clone(); post3.position.x=-4.5; pg.add(post2,post3); grp.add(pg); }
     // item meshes
     items.forEach(it=>{
       if(it.type==='coin'){ const m=new THREE.Mesh(coinGeo,MATS.coin); it.y+=it.air||1; m.position.set(it.x,it.y,it.z); m.scale.setScalar(it.big?1.7:1.35); m.castShadow=true; it.mesh=m; it.r=1.7; grp.add(m); }
-      else if(it.type==='green'||it.type==='red'){ const G=candleGeo(it.h), gm=new THREE.Group(); const b=new THREE.Mesh(G.b,it.type==='green'?MATS.green:MATS.red), w=new THREE.Mesh(G.w,it.type==='green'?MATS.wickG:MATS.wickR); b.castShadow=true; gm.add(b,w); gm.position.set(it.x,it.y,it.z); it.mesh=gm; it.r=it.type==='green'?2.1:1.35; grp.add(gm);
+      else if(it.type==='green'||it.type==='red'){ const G=candleGeo(it.h,it.type==='red'), gm=new THREE.Group(); const b=new THREE.Mesh(G.b,it.type==='green'?MATS.green:MATS.red), w=new THREE.Mesh(G.w,it.type==='green'?MATS.wickG:MATS.wickR); b.castShadow=true; gm.add(b,w); gm.position.set(it.x,it.y,it.z); it.mesh=gm; it.r=it.type==='green'?2.1:1.35; grp.add(gm);
         const bm=it.type==='green'?MATS.green:MATS.red; } 
       else if(it.type==='rockhaz'){ const A=ASSET.rocks.length?ASSET.rocks[hash2(it.x|0,it.z|0)<.5?0:1]:null; const m=new THREE.Mesh(A?A.geo:GEO.rock,A?A.mat:MATS.tree); m.position.set(it.x,it.y-.1,it.z); m.scale.setScalar(A?it.r*2.4:it.r*1.1); m.rotation.y=hash2(it.x|0,it.z|0)*6; m.castShadow=true; m.receiveShadow=true; grp.add(m); }
     });

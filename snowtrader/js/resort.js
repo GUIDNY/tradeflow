@@ -1,4 +1,4 @@
-/* Snow Trader: the ski resort around the run. Lodge and huts on cut terraces, a chairlift (pylons, cable, moving
+/* Snow Rush: the ski resort around the run. Lodge and huts on cut terraces, a chairlift (pylons, cable, moving
    chairs with riders), orange safety netting, trail-marker poles, snow cannons with plumes and ambient skiers.
    Static pieces are built per chunk (World.buildChunk calls Resort.chunk); moving pieces live in Resort.update. */
 (function(ST){

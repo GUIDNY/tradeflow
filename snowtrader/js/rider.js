@@ -1,4 +1,4 @@
-/* Snow Trader: the rider. The hero figure of the mall game (Mixamo-named skeleton, one skinned body, wardrobe nodes)
+/* Snow Rush: the rider. The hero figure of the mall game (Mixamo-named skeleton, one skinned body, wardrobe nodes)
    is dressed for the mountain and posed procedurally: every bone is driven in WORLD axes from the pose the skin was
    bound in, so a pose is a handful of readable angles instead of a clip. */
 (function(ST){
@@ -17,9 +17,9 @@
   /* ---------- the board ---------- */
   const BOARDS=[
     {id:'rookie',name:'Pro White',price:0,top:['#f6f9ff','#c9d6ee'],stripe:true,edge:0x10131a,glow:0xff3d4f},
-    {id:'bull',name:'Bull Run',price:900,top:['#ffb020','#ff3d6e'],edge:0x2a1020,glow:0xffb020},
-    {id:'bear',name:'Bear Market',price:2600,top:['#38b6ff','#2a3cff'],edge:0x0b1630,glow:0x38b6ff},
-    {id:'ipo',name:'IPO Gold',price:6500,top:['#fff2a8','#c98a00'],edge:0x3a2600,glow:0xffd34a}];
+    {id:'bull',name:'Sunrise',price:900,top:['#ffb020','#ff3d6e'],edge:0x2a1020,glow:0xffb020},
+    {id:'bear',name:'Glacier',price:2600,top:['#38b6ff','#2a3cff'],edge:0x0b1630,glow:0x38b6ff},
+    {id:'ipo',name:'Gold Edition',price:6500,top:['#fff2a8','#c98a00'],edge:0x3a2600,glow:0xffd34a}];
   R.BOARDS=BOARDS; R.rollG=R_rollG;
   function boardTex(b){ const c=document.createElement('canvas'); c.width=256; c.height=1024; const g=c.getContext('2d');
     const gr=g.createLinearGradient(0,0,0,1024); gr.addColorStop(0,b.top[0]); gr.addColorStop(1,b.top[1]); g.fillStyle=gr; g.fillRect(0,0,256,1024);

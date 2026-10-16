@@ -1,4 +1,4 @@
-/* Snow Trader: game flow, physics, tricks, camera, HUD. */
+/* Snow Rush: game flow, physics, tricks, camera, HUD. */
 (function(ST){
   const {clamp,lerp,smooth,damp,lerpAngle,fmt,$,hash2}=ST;
   const {scene,camera,sun,World,Rider,Audio}=ST;
@@ -77,7 +77,7 @@
   function resetPlayer(){
     World.setTrack(track); const T=track;
     P.s=0; P.x=World.cx(0); P.z=0; P.y=World.groundY(P.x,P.z); P.hd=0; P.vx=P.vz=P.vy=P.vyg=0; P.grounded=true; P.sp=P.fl=P.wsp=P.wfl=0; P.airT=0; P.grabT=0; P.money=0; P.shown=0; P.combo=0; P.comboT=0; P.tricks=0; P.best=null; P.coins=0; P.greens=0; P.reds=0; P.wipes=0;
-    P.stun=0; P.invuln=0; P.tumble=0; P.t=0; P.history=[{s:0,m:0}]; P.histS=0; P.finished=false; P.fin=0; P.boost=0; P.crouch=.2; P.lean=0; P.tuck=0; P.shake=0; P.popT=0; P.jumpBuf=0;
+    P.stun=0; P.invuln=0; P.tumble=0; P.t=0; P.history=[{s:0,m:0,v:0}]; P.histS=0; P.finished=false; P.fin=0; P.boost=0; P.crouch=.2; P.lean=0; P.tuck=0; P.shake=0; P.popT=0; P.jumpBuf=0;
     tr.pts.length=0; rebuildTrail(); runT=0; World.update(0,true);
     Rider.setBoard(save.board); applyLook();
   }
@@ -148,7 +148,7 @@
   function puff(p){ const n=Math.round(10+p*22); for(let i=0;i<n;i++){ const a=Math.random()*PI*2, s=2+Math.random()*5*p; emit(P.x+Math.cos(a)*.4,P.y+.2,P.z+Math.sin(a)*.4,Math.cos(a)*s,1.5+Math.random()*3*p,Math.sin(a)*s,.45+Math.random()*.5,.7+Math.random()*.4); } }
   function wipeout(why){
     if(P.tumble>0||P.invuln>0) return; P.wipeLog=(P.wipeLog||[]); P.wipeLog.push((why||'?')+'@'+Math.round(P.s)); P.tumble=1.5; P.wipes++; P.combo=0; P.comboT=0; P.shake=1; Audio.wipe();
-    const loss=Math.round(Math.max(120,P.money*.12)); addMoney(-loss,'STOP LOSS'); bigText('WIPEOUT','wasted'); flash('#ff1a30',.55);
+    const loss=Math.round(Math.max(120,P.money*.12)); addMoney(-loss,'WIPEOUT'); bigText('WIPEOUT','wasted'); flash('#ff1a30',.55);
     puff(1.2); for(let i=0;i<40;i++) emit(P.x,P.y+.5,P.z,(Math.random()-.5)*9,Math.random()*7,(Math.random()-.5)*9,.8,1.2);
     P.wfl=(Math.random()<.5?-1:1)*11; P.vx*=.5; P.vz*=.5;
   }
@@ -217,8 +217,8 @@
     World.nearItems(P.s,it=>{ if(it.dead) return;
       const dx=it.x-px, dz=it.z-pz, d2=dx*dx+dz*dz;
       if(it.type==='coin'){ it.mesh.rotation.y+=dt*3.4; if(d2<it.r*it.r&&Math.abs(it.y-(py+1))<2.4){ it.dead=true; it.mesh.visible=false; P.coins++; addMoney(it.big?25:10); P.shown+=0; Audio.coin(Math.min(P.coins%12,11)); for(let i=0;i<5;i++) emit(it.x,it.y,it.z,(Math.random()-.5)*4,Math.random()*3,(Math.random()-.5)*4,.4,.5); } }
-      else if(it.type==='green'){ it.mesh.position.y=it.y+Math.sin(P.t*2+it.x)*.12; if(d2<it.r*it.r&&py<it.y+it.h+1.5){ it.dead=true; it.mesh.visible=false; P.greens++; const v=Math.round(80+it.h*30); addMoney(v,'BULL'); toast('BULLISH',' +'+fmt(v)); Audio.green(); P.boost+=2.2; for(let i=0;i<16;i++) emit(it.x,it.y+it.h/2,it.z,(Math.random()-.5)*6,Math.random()*5,(Math.random()-.5)*6,.55,.8); } }
-      else if(it.type==='red'){ if(P.invuln<=0&&d2<it.r*it.r&&py<it.y+it.h+.3){ it.dead=true; it.mesh.visible=false; P.reds++; const v=Math.round(110+it.h*25); addMoney(-v,'BEAR TRAP'); toast('BEARISH','−'+fmt(v),true); Audio.red(); P.shake=.7; P.stun=.35; P.vx*=.62; P.vz*=.62; P.combo=0; flash('#ff2244',.3); for(let i=0;i<22;i++) emit(it.x,it.y+1,it.z,(Math.random()-.5)*8,Math.random()*6,(Math.random()-.5)*8,.6,.8); } }
+      else if(it.type==='green'){ it.mesh.position.y=it.y+Math.sin(P.t*2+it.x)*.12; if(d2<it.r*it.r&&py<it.y+it.h+1.5){ it.dead=true; it.mesh.visible=false; P.greens++; const v=Math.round(80+it.h*30); addMoney(v,'CRYSTAL'); toast('CRYSTAL',' +'+fmt(v)); Audio.green(); P.boost+=2.2; for(let i=0;i<16;i++) emit(it.x,it.y+it.h/2,it.z,(Math.random()-.5)*6,Math.random()*5,(Math.random()-.5)*6,.55,.8); } }
+      else if(it.type==='red'){ if(P.invuln<=0&&d2<it.r*it.r&&py<it.y+it.h+.3){ it.dead=true; it.mesh.visible=false; P.reds++; const v=Math.round(110+it.h*25); addMoney(-v,'ICE SPIKE'); toast('OUCH','−'+fmt(v),true); Audio.red(); P.shake=.7; P.stun=.35; P.vx*=.62; P.vz*=.62; P.combo=0; flash('#ff2244',.3); for(let i=0;i<22;i++) emit(it.x,it.y+1,it.z,(Math.random()-.5)*8,Math.random()*6,(Math.random()-.5)*8,.6,.8); } }
       else if(it.type==='rockhaz'||it.type==='rock'){ if(P.invuln<=0&&d2<(it.r+.35)*(it.r+.35)&&py<it.y+1.6){ it.dead=true; wipeout('rock'); } }
       else if(it.type==='tree'){ if(P.invuln<=0&&d2<(it.r+.3)*(it.r+.3)&&py<it.y+4){ it.dead=true; wipeout('tree'); } }
       else if(it.type==='finish'&&!P.finished&&P.s>=track.len-.5){ P.finished=true; finishRun(); }
@@ -279,7 +279,7 @@
 
   /* ---------- end of run ---------- */
   function finishRun(){
-    mode='finish'; P.fin=0; Audio.win(); bigText('FINISH','gold'); flash('#ffffff',.35); subtitle('סוגרים פוזיציה…',1800);
+    mode='finish'; P.fin=0; Audio.win(); bigText('FINISH','gold'); flash('#ffffff',.35); subtitle('חוצים את קו הסיום…',1800);
     setTimeout(()=>showResults(),2300);
   }
   function showResults(){
@@ -287,19 +287,20 @@
     const stars=1+(total>=T.goals[0]?1:0)+(total>=T.goals[1]?1:0);
     const prev=save.best[T.id]||{profit:0,stars:0}; const record=total>prev.profit;
     save.wallet+=Math.max(0,total); save.runs++; save.best[T.id]={profit:Math.max(prev.profit,total),stars:Math.max(prev.stars,stars)}; persist();
-    mode='end'; el.hud.hidden=true; el.end.hidden=false; $('#endTitle').textContent=total>=T.goals[0]?'רווח נלקח':'סגרנו בקושי'; $('#endTitle').className='mission'+(total<=0?' bad':'');
+    mode='end'; el.hud.hidden=true; el.end.hidden=false; $('#endTitle').textContent=total>=T.goals[0]?'ריצה מושלמת':'סיימנו את הריצה'; $('#endTitle').className='mission'+(total<=0?' bad':'');
     $('#stars').innerHTML=[1,2,3].map(i=>'<span class="'+(i<=stars?'':'off')+'">★</span>').join('');
-    const rows=[['זמן',runT.toFixed(1)+' שנ׳ (יעד '+T.par+')'],['מטבעות',P.coins+' × $10+'],['נרות ירוקים / אדומים',P.greens+' / '+P.reds],['תרגילים',P.tricks+(P.best?' · <bdi dir="ltr">'+P.best.name+'</bdi>':'')],['נפילות (סטופ‑לוס)',String(P.wipes)],['רווח מהריצה','<b class="'+(P.money<0?'neg':'')+'">'+fmt(P.money)+'</b>'],['בונוס זמן','<b>'+fmt(tb)+'</b>']];
+    const rows=[['זמן',runT.toFixed(1)+' שנ׳ (יעד '+T.par+')'],['מטבעות',P.coins+' × 10+'],['גבישים / קוצי קרח',P.greens+' / '+P.reds],['תרגילים',P.tricks+(P.best?' · <bdi dir="ltr">'+P.best.name+'</bdi>':'')],['נפילות',String(P.wipes)],['ניקוד תרגילים ואיסוף','<b class="'+(P.money<0?'neg':'')+'">'+fmt(P.money)+'</b>'],['בונוס זמן','<b>'+fmt(tb)+'</b>']];
     $('#endRows').innerHTML=rows.map(r=>'<div><span>'+r[0]+'</span><span>'+r[1]+'</span></div>').join('');
-    $('#endTotal').textContent=fmt(total)+(record?' ★':''); drawCandles(); renderMenuCards();
+    $('#endTotal').textContent=fmt(total)+(record?' ★':''); drawProfile(); renderMenuCards();
   }
-  function drawCandles(){
-    const c=$('#candles'), g=c.getContext('2d'), W=c.width, H=c.height; g.clearRect(0,0,W,H);
-    const hist=P.history, n=18, per=track.len/n, cs=[]; let last=0;
-    for(let i=0;i<n;i++){ const a=i*per, b=a+per, pts=hist.filter(h=>h.s>=a&&h.s<b); const open=last; let close=open, hi=open, lo=open; pts.forEach(p=>{ hi=Math.max(hi,p.m); lo=Math.min(lo,p.m); close=p.m; }); last=close; cs.push({o:open,c:close,h:hi,l:lo}); }
-    const all=cs.flatMap(c=>[c.h,c.l,0]), mx=Math.max(...all), mn=Math.min(...all), rng=(mx-mn)||1, Y=v=>H-18-(v-mn)/rng*(H-40);
-    g.strokeStyle='rgba(255,255,255,.12)'; g.lineWidth=1; g.beginPath(); g.moveTo(0,Y(0)); g.lineTo(W,Y(0)); g.stroke();
-    const bw=W/n; cs.forEach((c,i)=>{ const up=c.c>=c.o, col=up?'#16e08a':'#ff3b57'; g.strokeStyle=col; g.fillStyle=col; const x=i*bw+bw/2; g.lineWidth=2; g.beginPath(); g.moveTo(x,Y(c.h)); g.lineTo(x,Y(c.l)); g.stroke(); const y1=Y(Math.max(c.o,c.c)), y2=Y(Math.min(c.o,c.c)); g.fillRect(x-bw*.3,y1,bw*.6,Math.max(3,y2-y1)); });
+  function drawProfile(){   // speed along the run
+    const c=$('#profile'), g=c.getContext('2d'), W=c.width, H=c.height; g.clearRect(0,0,W,H);
+    const hist=P.history.slice(); hist.push({s:Math.min(P.s,track.len),v:P.speed*3.6}); const mx=Math.max(20,...hist.map(h=>h.v||0)), X=s=>8+s/track.len*(W-16), Y=v=>H-22-(v/mx)*(H-44);
+    g.strokeStyle='rgba(255,255,255,.12)'; g.lineWidth=1; for(let i=0;i<4;i++){ const y=Y(mx*i/3); g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+    const gr=g.createLinearGradient(0,0,0,H); gr.addColorStop(0,'rgba(80,200,255,.55)'); gr.addColorStop(1,'rgba(80,200,255,.02)');
+    g.beginPath(); g.moveTo(X(hist[0].s),H-22); hist.forEach(h=>g.lineTo(X(h.s),Y(h.v||0))); g.lineTo(X(hist[hist.length-1].s),H-22); g.closePath(); g.fillStyle=gr; g.fill();
+    g.beginPath(); hist.forEach((h,i)=>i?g.lineTo(X(h.s),Y(h.v||0)):g.moveTo(X(h.s),Y(h.v||0))); g.strokeStyle='#7fd8ff'; g.lineWidth=3; g.lineJoin='round'; g.stroke();
+    g.fillStyle='rgba(255,255,255,.8)'; g.font='700 14px sans-serif'; g.textAlign='left'; g.fillText('מהירות מקסימלית '+Math.round(mx)+' קמ״ש',10,16); g.textAlign='right'; g.fillText('מרחק '+Math.round(track.len)+' מ׳',W-10,H-6);
   }
 
   /* ---------- radar ---------- */
@@ -328,7 +329,7 @@
   function renderMenuCards(){
     $('#walletN').textContent=fmt(save.wallet);
     ST.TrailMap.render($('#trailMap'),{tracks:ST.TRACKS,sel:trackIdx,best:save.best,unlocked},i=>{ if(!unlocked(i)){ menuNote('🔒 סיימו את '+ST.TRACKS[i-1].name+' עם 2 כוכבים כדי לפתוח'); return; } trackIdx=i; save.track=i; persist(); track=ST.TRACKS[i]; menuScene(); renderMenuCards(); });
-    { const t=ST.TRACKS[trackIdx], b=save.best[t.id], drop=Math.round(t.len*t.slope*.92); $('#trackInfo').innerHTML='<div class="tn">'+t.en+'</div><span class="chip '+t.diff+'">'+t.diffName+'</span><div class="tb">'+t.blurb+'</div><div class="facts"><span>אורך<b>'+t.len+' מ׳</b></span><span>ירידה<b>'+drop+' מ׳</b></span><span>יעד רווח<b>'+fmt(t.goals[0])+'</b></span><span>שיא<b>'+(b?fmt(b.profit):'—')+'</b></span></div>'; }
+    { const t=ST.TRACKS[trackIdx], b=save.best[t.id], drop=Math.round(t.len*t.slope*.92); $('#trackInfo').innerHTML='<div class="tn">'+t.en+'</div><span class="chip '+t.diff+'">'+t.diffName+'</span><div class="tb">'+t.blurb+'</div><div class="facts"><span>אורך<b>'+t.len+' מ׳</b></span><span>ירידה<b>'+drop+' מ׳</b></span><span>יעד ניקוד<b>'+fmt(t.goals[0])+'</b></span><span>שיא<b>'+(b?fmt(b.profit):'—')+'</b></span></div>'; }
     renderRiders();
     $('#boardCards').innerHTML=Rider.BOARDS.map((b,i)=>{ const own=save.owned.includes(i); return '<div class="card'+(i===save.board?' sel':'')+'" data-b="'+i+'"><div class="sw" style="background:linear-gradient(90deg,'+b.top[0]+','+b.top[1]+')"></div><div class="nm">'+b.name+'</div><div class="meta"><span>'+(own?(i===save.board?'נבחר':'שלכם'):'לרכישה')+'</span>'+(own?'':'<span class="px">'+fmt(b.price)+'</span>')+'</div></div>'; }).join('');
         document.querySelectorAll('#boardCards .card').forEach(c=>c.onclick=()=>{ const i=+c.dataset.b, b=Rider.BOARDS[i]; if(!save.owned.includes(i)){ if(save.wallet<b.price){ c.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:220}); return; } save.wallet-=b.price; save.owned.push(i); }
@@ -368,7 +369,7 @@
       if(mode==='play') stepPlayer(dt); else { P.x+=P.vx*dt; P.z+=P.vz*dt; P.s=-P.z; P.y=World.groundY(P.x,P.z); P.hd=lerpAngle(P.hd,Math.atan2(World.dcx(P.s),1),dt); P.tuck=0; P.lean=0; }
       if(mode==='play') collide(dt);
       // equity history
-      if(P.s>=P.histS+8){ P.histS=P.s; P.history.push({s:P.s,m:P.money}); }
+      if(P.s>=P.histS+8){ P.histS=P.s; P.history.push({s:P.s,m:P.money,v:P.speed*3.6}); }
       updateRider(dt,false); updateCamera(dt);
       if(P.s<60) tip('steer','גררו ימינה ושמאלה כדי לסוב · החזיקו למעלה כדי להתכופף',4600);
       { const kq=Math.round((P.s-track.rampStart)/track.rampEvery); if(kq>=0){ const r=World.rampAt(kq); if(P.s>r.s-45&&P.s<r.s) tip('ramp','קפיצה! לחצו על הכפתור ממש בקצה הרמפה לקפיצה מושלמת',4800); } }
@@ -394,7 +395,7 @@
     set(10,'בונים את ההר…'); ST.onResize(); ST.qApply(ST.Q.lv); await World.loadAssets();
     const qt=new URLSearchParams(location.search).get('track'); const qi=ST.TRACKS.findIndex(t=>t.id===qt); if(qi>=0) save.track=qi; else if(!(save.track>=0&&save.track<ST.TRACKS.length)||!unlocked(save.track)) save.track=0; track=ST.TRACKS[save.track]; trackIdx=ST.TRACKS.indexOf(track); World.setTrack(track); await World.ensureSky(track); set(35,'מלבישים את הרוכב…');
     try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
-    set(80,'מחממים את השוק…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=3; if(save.rider>0&&Rider.choices[save.rider]){ ST.People.template(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
+    set(80,'מחממים את הלוח…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=3; if(save.rider>0&&Rider.choices[save.rider]){ ST.People.template(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
     set(100); await new Promise(r=>setTimeout(r,250));
     $('#loading').remove(); mode='menu'; toMenu(); P.t=0; ST.People.preload(5);
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ startRun(); }

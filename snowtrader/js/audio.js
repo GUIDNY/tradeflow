@@ -1,4 +1,4 @@
-/* Snow Trader: all sound is synthesised (no files): wind that follows speed, carve hiss, coin chimes, landing thump,
+/* Snow Rush: all sound is synthesised (no files): wind that follows speed, carve hiss, coin chimes, landing thump,
    and a small synthwave loop. Starts on the first touch (browsers require it). */
 (function(ST){
   let ctx=null,master,wind,windF,windG,carveG,musicG,muted=false,noiseBuf,musicOn=false,step=0,next=0,timer=null;

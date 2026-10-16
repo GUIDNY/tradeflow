@@ -1,4 +1,4 @@
-/* Snow Trader: small helpers shared by every module (global namespace ST) */
+/* Snow Rush: small helpers shared by every module (global namespace ST) */
 window.ST = window.ST || {};
 (function(ST){
   const clamp=(v,a,b)=>v<a?a:v>b?b:v;
@@ -11,7 +11,7 @@ window.ST = window.ST || {};
     const a=hash2(xi,yi), b=hash2(xi+1,yi), c=hash2(xi,yi+1), d=hash2(xi+1,yi+1);
     const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
     return (a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v)*2-1; }
-  const fmt=n=>'$'+Math.round(n).toLocaleString('en-US');
+  const fmt=n=>Math.round(n).toLocaleString('en-US');
   const $=s=>document.querySelector(s);
   Object.assign(ST,{clamp,lerp,smooth,damp,lerpAngle,hash2,vnoise,fmt,$});
 })(window.ST);

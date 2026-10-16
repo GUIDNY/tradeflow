@@ -1,4 +1,4 @@
-/* Snow Trader: real people. Nine Mixamo characters (textured, rigged, ~14k triangles each) plus Mixamo's Idle / Walk /
+/* Snow Rush: real people. Nine Mixamo characters (textured, rigged, ~14k triangles each) plus Mixamo's Idle / Walk /
    Run / Wave clips, carried over to each skeleton bone by bone (the retarget method of the BuyToday mall game).
    Guests are spawned only near the player (and removed when far), so the crowd never costs more than ~20 figures. */
 (function(ST){

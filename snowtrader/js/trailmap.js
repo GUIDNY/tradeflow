@@ -1,4 +1,4 @@
-/* Snow Trader: the resort trail map (SVG). Five runs, coloured like real pistes: green circle, blue square, red diamond,
+/* Snow Rush: the resort trail map (SVG). Five runs, coloured like real pistes: green circle, blue square, red diamond,
    black double diamond, and the neon park. Tap a run to choose it; locked runs are greyed with a padlock. */
 (function(ST){
   const {hash2}=ST;

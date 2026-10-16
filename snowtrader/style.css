@@ -82,7 +82,7 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 .mission{font-family:var(--display);font-size:clamp(40px,8vw,64px);letter-spacing:.06em;color:var(--gold);text-shadow:0 4px 0 #000;transform:skewX(-6deg);line-height:1.05}
 .mission.bad{color:var(--r)}
 .stars{font-size:34px;letter-spacing:8px;color:var(--gold);margin:4px 0 6px;text-shadow:0 3px 0 #000}.stars .off{opacity:.25}
-#candles{width:100%;height:auto;max-height:26vh;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12)}
+#profile{width:100%;height:auto;max-height:26vh;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12)}
 .rows{margin:8px 0;display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:13px}
 .rows div{display:flex;flex-direction:column;align-items:flex-start;padding:5px 10px;background:rgba(255,255,255,.06);border-radius:8px;min-width:0}
 .rows div span:first-child{opacity:.65;font-size:11px;letter-spacing:.06em}.rows div span:last-child{font-weight:700}
@@ -98,7 +98,7 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 @media (max-height:480px) and (orientation:landscape){
   .panel.result{display:grid;grid-template-columns:1fr 1fr;column-gap:14px;width:min(96vw,780px);align-items:center;padding:10px 16px}
   #endTitle{grid-column:1;grid-row:1;font-size:34px}#stars{grid-column:1;grid-row:2;font-size:24px;margin:0}
-  #candles{grid-column:1;grid-row:3 / span 2;max-height:38vh}
+  #profile{grid-column:1;grid-row:3 / span 2;max-height:38vh}
   .rows{grid-column:2;grid-row:1 / span 2;margin:0;font-size:12px}.rows div{padding:3px 8px}
   .total{grid-column:2;grid-row:3;margin:4px 0}.total b{font-size:28px}
   .endbtns{grid-column:2;grid-row:4}

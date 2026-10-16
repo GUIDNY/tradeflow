@@ -1,4 +1,4 @@
-/* Snow Trader: renderer, light, post-processing and the adaptive quality ladder.
+/* Snow Rush: renderer, light, post-processing and the adaptive quality ladder.
    The pipeline (ACES + sRGB, procedural PMREM light, multisampled composer with bloom and a grade pass, frame-rate
    watcher that trades resolution/effects for smoothness) follows the technique of the BuyToday mall game. */
 (function(ST){
