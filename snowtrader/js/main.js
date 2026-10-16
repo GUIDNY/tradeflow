@@ -270,7 +270,7 @@
       air:air?1:0,grab:air&&P.grabbed?1:0,lean:P.lean,tuck:P.grounded?P.tuck*.7:(P.grabbed?0:.35),twist:air?clamp(P.wsp*-4,-30,30):0};
     P.landT+=dt; P.popT+=dt; const bell=(t,d)=>t<d?Math.sin(Math.PI*t/d):0; tgt.absorb=clamp(P.landAbs*bell(P.landT,.4)+(P.grounded?clamp(Math.abs(P.vyg-P.vygPrev)*.03,0,.3):0),0,1); P.vygPrev=P.vyg;
     tgt.ext=Math.max(P.popExt*bell(P.popT,.34),air&&P.airT<.25?.5*(1-P.airT/.25):0); tgt.rough=P.grounded?clamp(P.speed/((track.vref||24)*1.2),0,1)*(1-P.tuck*.4):0;
-    const p=R.P; ['crouch','air','grab','lean','tuck','twist'].forEach(k=>{ p[k]=damp(p[k],tgt[k],k==='air'?14:9,dt); }); ['absorb','ext','rough'].forEach(k=>{ p[k]=damp(p[k],tgt[k],k==='rough'?4:16,dt); }); p.t=P.t;
+    const p=R.P; ['crouch','air','grab','lean','tuck','twist'].forEach(k=>{ p[k]=damp(p[k],tgt[k],k==='air'?14:9,dt); }); ['absorb','ext','rough'].forEach(k=>{ p[k]=damp(p[k],tgt[k],k==='rough'?4:16,dt); }); p.t=P.t; p.om=damp(p.om||0,P.grounded?(P.omegaS||0):0,10,dt);
     if(P.tumble>0){ p.crouch=1; p.air=1; p.tuck=1; }
     R.pose({});
     // blink while invulnerable

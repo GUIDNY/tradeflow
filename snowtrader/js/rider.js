@@ -139,7 +139,7 @@
   };
 
   /* pose: world-axis offsets from the bind pose. Angles in degrees; the model faces +Z, its left is +X, up is +Y. */
-  R.P={crouch:0,lean:0,air:0,grab:0,twist:0,tuck:0,fall:0,t:0,sit:0,swing:0,look:0,absorb:0,ext:0,rough:0,speedK:0};
+  R.P={crouch:0,lean:0,air:0,grab:0,twist:0,tuck:0,fall:0,t:0,sit:0,swing:0,look:0,absorb:0,ext:0,rough:0,speedK:0,om:0};
   R.rollMax=.6;
   function rot(k,ax,ay,az,order){ R.drive[k]=_q2.clone().setFromEuler(new THREE.Euler(ax*RAD,ay*RAD,az*RAD,order||'ZYX')); }
   /* The pose is built from joint angles in the figure's own frame (+Z is where it faces, +X its left = the way it travels,
@@ -148,32 +148,42 @@
   R.pose=function(p){
     if(!R.ready) return; const P=Object.assign(R.P,p), a=P.air, g=P.grab, ln=P.lean, tw=P.twist, tk=P.tuck, k=P.sit||0, mx=(a0,b0)=>a0+(b0-a0)*k;
     R.drive={};
-    const toe=Math.max(0,ln), heel=Math.max(0,-ln), sw=Math.sin(P.t*2.2)*P.swing;
-    // knee flexion (deg): resting crouch + speed tuck + absorption of landings and bumps - the stretch of a pop
-    let kn=14+P.crouch*46+tk*10+P.absorb*34-P.ext*30+a*16+g*22; kn=clamp(kn,0,100);
+    // every joint is its own damped spring with its own stiffness and damping: they answer the same input at different speeds,
+    // so knees, ankles, hips, each spine segment, shoulders, elbows and wrists move separately instead of as one block
+    const now=P.t, dt=clamp(now-(R._lt==null?now-.016:R._lt),.001,.05); R._lt=now; R.S=R.S||{};
+    const S=(n,tg,f,z)=>{ const o=R.S[n]||(R.S[n]={x:tg,v:0}); const h=dt/2, w=f*f; for(let i=0;i<2;i++){ o.v+=(w*(tg-o.x)-2*z*f*o.v)*h; o.x+=o.v*h; } return o.x; };
+    const toe=Math.max(0,ln), heel=Math.max(0,-ln), sw=Math.sin(P.t*2.2)*P.swing, om=clamp((P.om||0)/1.6,-1,1);   // om: turn rate, -1..1
+    const kn=clamp(14+P.crouch*46+tk*10+P.absorb*34-P.ext*30+a*16+g*22,0,100);
     const buzz=P.rough*(Math.sin(P.t*17)*1.6+Math.sin(P.t*29+1)*1.1);   // the board chattering over snow
-    const front=kn*1.08+toe*4+buzz, back=kn*0.96+heel*3-buzz*.7;
-    const yawU=tw*.55+ln*10, hipYaw=8+tw*.25;
+    // knees: the leading one is soft and slow, the trailing one quick and a little springy; the board's chatter reaches them out of step
+    const kF=S('kF',kn*1.08+toe*4+buzz,8,.5), kB=S('kB',kn*0.96+heel*3-buzz*.7+Math.abs(om)*5,12,.62);
+    const hipYaw=8+tw*.25;
+    const yawU=tw*.55+ln*10;
     // legs: thigh forward by the knee angle, shin back by about as much, so the hips stay over the feet; a wide stance with the toes turned out
-    rot('UpperLegL',mx(-(front+4),-84+sw*.3),   mx(16+tw*.15,7),  mx(9+kn*.05,0));
-    rot('UpperLegR',mx(-(back+4),-86-sw*.3),    mx(2+tw*.15,-5), mx(-(9+kn*.05),0));
-    rot('LowerLegL',mx(front*.94,-4+sw),        mx(16,7), 0);
-    rot('LowerLegR',mx(back*.94,-8-sw),         mx(2,-5), 0);
-    rot('FootL',0,mx(20,0),0); rot('FootR',0,mx(-8,0),0);                // soles flat on the bindings, front foot +20 (ducked rear foot -8)
-    // trunk: pelvis open to the nose, shoulders more, eyes down the hill; leans into the turn and folds forward as the knees bend
+    rot('UpperLegL',mx(-(kF+4),-84+sw*.3),   mx(S('hyL',16+tw*.15+om*5,10,.7),7),  mx(S('hrL',9+kn*.05+om*3,9,.6),0));
+    rot('UpperLegR',mx(-(kB+4),-86-sw*.3),   mx(S('hyR',2+tw*.15-om*4,10,.7),-5),  mx(S('hrR',-(9+kn*.05)+om*3,9,.6),0));
+    rot('LowerLegL',mx(kF*.94,-4+sw),        mx(16,7), 0);
+    rot('LowerLegR',mx(kB*.94,-8-sw),        mx(2,-5), 0);
+    // ankles: boots flex over the shin on toe/heel pressure and roll with the edge (small, the boot is stiff)
+    rot('FootL',mx(S('anL',toe*5-heel*6-kF*.06+buzz*.5,15,.55),0),mx(20,0),mx(S('arL',ln*-6,14,.6),0));
+    rot('FootR',mx(S('anR',toe*4-heel*7-kB*.06-buzz*.5,15,.55),0),mx(-8,0),mx(S('arR',ln*-6,14,.6),0));
+    // trunk: each segment follows a beat behind the one below it, so a turn twists the spine and the head leads
     const fold=kn*.16+tk*12+g*14;
-    rot('Hips',   mx(2+toe*5-heel*3,-6),                    mx(hipYaw,0),               ln*6);
-    rot('Abdomen',mx(8+fold*.45+toe*3,-4),                  mx(18+yawU*.7,0),           ln*-5);
-    rot('Torso',  mx(10+fold*.4+toe*3-heel*3,-4),           mx(32+yawU,0),              ln*-4);
-    rot('Chest',  mx(8+fold*.15,-2),                        mx(46+yawU,0),              ln*-2);
-    rot('Neck',  mx(-(10+kn*.10+tk*8),-4),                  mx(66+yawU*.9+P.look*.2,P.look*.5),  0);
-    rot('Head',  mx(-(8+kn*.07+tk*6),-4),                   mx(84+yawU*.9+P.look*.3,P.look),     0);
-    // arms: out along the board for balance, wide in the air, tucked in a tuck; leading hand to the toe edge in a grab; seated: resting on the lap
+    rot('Hips',   mx(S('hpP',2+toe*5-heel*3,11,.7),-6),               mx(S('hpY',hipYaw-om*3,12,.75),0),  S('hpR',ln*6+om*3,10,.7));
+    rot('Abdomen',mx(S('abP',8+fold*.45+toe*3,9,.7),-4),              mx(S('abY',18+yawU*.7-om*4,9,.65),0), S('abR',ln*-5-om*3,8,.65));
+    rot('Torso',  mx(S('toP',10+fold*.4+toe*3-heel*3,8,.65),-4),      mx(S('toY',32+yawU-om*7,7.5,.6),0), S('toR',ln*-4-om*4,7,.6));
+    rot('Chest',  mx(S('chP',8+fold*.15+buzz*.4,7,.6),-2),            mx(S('chY',46+yawU-om*9,6.5,.55),0), S('chR',ln*-2-om*4,6,.55));
+    rot('Neck',  mx(-(10+kn*.10+tk*8)+S('neP',-buzz*.5,12,.6),-4),     mx(S('neY',66+yawU*.9+P.look*.2+om*14,6,.6),P.look*.5), S('neR',-ln*5,6,.6));
+    rot('Head',  mx(-(8+kn*.07+tk*6),-4),                              mx(S('heY',84+yawU*.9+P.look*.3+om*22,5.5,.55),P.look),  S('heR',-ln*4,5.5,.6));
+    // arms: out along the board for balance, wide in the air, tucked in a tuck; the turn swings them against the body, elbows and wrists each on their own
     const spread=mx(52+a*22-tk*36-P.crouch*8+P.ext*16,16)-(R.droop||0);
-    rot('UpperArmL', mx(-16-kn*.12-tk*18+g*20+P.ext*10,-28), mx(-6-a*8+ln*8,-6), -spread+ln*14-g*40);
-    rot('UpperArmR', mx(-12-kn*.12-tk*18+P.ext*10,-28),       mx(6+a*8,6),         spread+ln*14);
-    rot('LowerArmL', mx(-30-a*10+g*30,-58), 0, -(spread*.3)-g*10);
-    rot('LowerArmR', mx(-28-a*10,-58),      0,  spread*.3);
+    rot('ShoulderL',0,0,S('shL',-om*6+a*5,9,.6)); rot('ShoulderR',0,0,S('shR',om*6-a*5,9,.6));
+    rot('UpperArmL', mx(S('uLp',-16-kn*.12-tk*18+g*20+P.ext*10+om*10,8,.5),-28), mx(S('uLy',-6-a*8+ln*8+om*16,8,.5),-6), -spread+S('uLr',ln*14-g*40+om*10,8,.5));
+    rot('UpperArmR', mx(S('uRp',-12-kn*.12-tk*18+P.ext*10-om*10,7.5,.5),-28),    mx(S('uRy',6+a*8-om*16,7.5,.5),6),   spread+S('uRr',ln*14-om*10,7.5,.5));
+    rot('LowerArmL', mx(S('eL',-30-a*10+g*30-kF*.15-buzz*1.5,11,.42),-58), 0, -(spread*.3)-g*10);
+    rot('LowerArmR', mx(S('eR',-28-a*10-kB*.15+buzz*1.5-om*8,9.5,.42),-58),  0,  spread*.3);
+    rot('WristL',S('wLp',-8+om*10+buzz*2,18,.4),S('wLy',om*10,16,.4),S('wLr',-6-ln*6,16,.4));
+    rot('WristR',S('wRp',-8-om*10-buzz*2,17,.4),S('wRy',-om*10,15,.4),S('wRr',6-ln*6,15,.4));
     if(g>0.01&&k<.5){ rot('UpperArmL',16+g*24, -50-g*24, -spread*.6-g*34); rot('LowerArmL',14+g*30, 0, -g*10); }
     // apply: top-down
     R.model.updateMatrixWorld(true); const F=R.model.getWorldQuaternion(new THREE.Quaternion());   // the figure's own frame: deltas turn with it
