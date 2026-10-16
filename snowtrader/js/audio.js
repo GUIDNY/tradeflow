@@ -15,7 +15,10 @@
     const gs=ctx.createBufferSource(); gs.buffer=noiseBuf; gs.loop=true; grindF=ctx.createBiquadFilter(); grindF.type='bandpass'; grindF.frequency.value=3200; grindF.Q.value=6;
     grindG=ctx.createGain(); grindG.gain.value=0; gs.connect(grindF); grindF.connect(grindG); grindG.connect(master); gs.start();
   };
-  let grindF=null, grindG=null;
+  let grindF=null, grindG=null, spinF=null, spinG=null;
+  /* a spin: air rushing past, swelling twice a turn (each time the body faces into the wind) and rising with the rate */
+  A.spin=function(rate,phase){ if(!ctx) return; if(!spinG){ const s2=ctx.createBufferSource(); s2.buffer=noiseBuf; s2.loop=true; spinF=ctx.createBiquadFilter(); spinF.type='bandpass'; spinF.Q.value=1.1; spinG=ctx.createGain(); spinG.gain.value=0; s2.connect(spinF); spinF.connect(spinG); spinG.connect(master); s2.start(); }
+    const t=ctx.currentTime, k=Math.min(1,Math.abs(rate)/8.4); spinG.gain.setTargetAtTime(k*(.04+.14*Math.pow(Math.abs(Math.sin(phase)),2)),t,.02); spinF.frequency.setTargetAtTime(500+k*1300,t,.05); };
   A.grind=function(level,kind){ if(!ctx||!grindG) return; const t=ctx.currentTime, rail=kind==='rail';
     grindG.gain.setTargetAtTime(level*(rail?.32:.22),t,.03); if(level>0){ grindF.frequency.setTargetAtTime(rail?2600+level*1400:700+level*500,t,.05); grindF.Q.setTargetAtTime(rail?7:1.4,t,.05); } };
   A.setMuted=function(m){ muted=m; if(master) master.gain.setTargetAtTime(m?0:.9,ctx.currentTime,.05); };

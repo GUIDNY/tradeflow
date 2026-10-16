@@ -84,13 +84,23 @@
   function emit(x,y,z,vx,vy,vz,size,life){ const i=sp.i; sp.i=(sp.i+1)%SP_N; sp.pos[i*3]=x; sp.pos[i*3+1]=y; sp.pos[i*3+2]=z; sp.vel[i*3]=vx; sp.vel[i*3+1]=vy; sp.vel[i*3+2]=vz; sp.life[i]=life; sp.size[i]=size; sp.alpha[i]=.9; }
   function updateSpray(dt){ for(let i=0;i<SP_N;i++){ if(sp.life[i]<=0){ sp.alpha[i]=0; continue; } sp.life[i]-=dt; sp.vel[i*3+1]-=9*dt; for(let k=0;k<3;k++) sp.pos[i*3+k]+=sp.vel[i*3+k]*dt; const ls=Math.max(0,sp.life[i]); sp.alpha[i]=Math.min(.85,ls*2.2); sp.size[i]*=1+dt*.9; }
     spGeo.attributes.position.needsUpdate=true; spGeo.attributes.alpha.needsUpdate=true; spGeo.attributes.size.needsUpdate=true; }
-  const TR_N=170, tr={pts:[],geo:new THREE.BufferGeometry(),pos:new Float32Array(TR_N*2*3),idx:new Uint16Array((TR_N-1)*6)};
-  tr.geo.setAttribute('position',new THREE.BufferAttribute(tr.pos,3)); tr.geo.setIndex(new THREE.BufferAttribute(tr.idx,1));
-  const trailMesh=new THREE.Mesh(tr.geo,new THREE.MeshBasicMaterial({color:0x5b6a9c,transparent:true,opacity:.34,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4,fog:true})); trailMesh.frustumCulled=false; trailMesh.renderOrder=2; scene.add(trailMesh);
-  function trailPush(x,y,z,hd,gap){ const L=tr.pts[tr.pts.length-1]; if(L&&Math.hypot(L.x-x,L.z-z)<.7&&!gap) return; tr.pts.push({x,y,z,hd,gap}); if(tr.pts.length>TR_N) tr.pts.shift(); rebuildTrail(); }
-  function rebuildTrail(){ const n=tr.pts.length; let ic=0; for(let i=0;i<n;i++){ const p=tr.pts[i], rx=Math.cos(p.hd)*.17, rz=Math.sin(p.hd)*.17; tr.pos.set([p.x-rx,p.y+.04,p.z-rz,p.x+rx,p.y+.04,p.z+rz],i*6);
-      if(i>0&&!p.gap){ const a=(i-1)*2,b=a+1,c=i*2,d=c+1; tr.idx[ic++]=a; tr.idx[ic++]=b; tr.idx[ic++]=c; tr.idx[ic++]=b; tr.idx[ic++]=d; tr.idx[ic++]=c; } }
-    tr.geo.setDrawRange(0,ic); tr.geo.attributes.position.needsUpdate=true; tr.geo.index.needsUpdate=true; }
+  /* the board's mark in the snow: a carve cuts a narrow, darker groove under its edge; a skid or a stop smears a wide, faint swathe.
+     Each point keeps its own width, offset (toward the edge that cut it) and depth; the shader darkens the middle of the groove. */
+  const TR_N=170, tr={pts:[],geo:new THREE.BufferGeometry(),pos:new Float32Array(TR_N*2*3),ac:new Float32Array(TR_N*2),al:new Float32Array(TR_N*2),idx:new Uint16Array((TR_N-1)*6)};
+  tr.geo.setAttribute('position',new THREE.BufferAttribute(tr.pos,3)); tr.geo.setAttribute('across',new THREE.BufferAttribute(tr.ac,1)); tr.geo.setAttribute('alpha',new THREE.BufferAttribute(tr.al,1)); tr.geo.setIndex(new THREE.BufferAttribute(tr.idx,1));
+  const trailMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,fog:true,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4,
+    uniforms:THREE.UniformsUtils.merge([THREE.UniformsLib.fog,{col:{value:new THREE.Color(0x4a587f)}}]),
+    vertexShader:'attribute float across; attribute float alpha; varying float vAc; varying float vA;\n#include <fog_pars_vertex>\nvoid main(){ vAc=across; vA=alpha; vec4 mvPosition=modelViewMatrix*vec4(position,1.0); gl_Position=projectionMatrix*mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader:'uniform vec3 col; varying float vAc; varying float vA;\n#include <fog_pars_fragment>\nvoid main(){ float c=1.-abs(vAc*2.-1.); gl_FragColor=vec4(col,vA*(.25+.75*smoothstep(0.,.7,c)));\n#include <fog_fragment>\n}'});
+  const trailMesh=new THREE.Mesh(tr.geo,trailMat); trailMesh.frustumCulled=false; trailMesh.renderOrder=2; scene.add(trailMesh);
+  function trailPush(x,y,z,hd,gap){ const L=tr.pts[tr.pts.length-1]; if(L&&Math.hypot(L.x-x,L.z-z)<.7&&!gap) return;
+    const e=Math.abs(P.edge||0), carve=smooth(.25,.85,e)*(1-P.skid), skid=clamp(P.skid*1.4+P.brakeK,0,1);
+    const w=lerp(lerp(.15,.07,carve),.5,skid), off=carve*.11*(Math.sign(P.edge)||0), a=lerp(lerp(.3,.55,carve),.2,skid);
+    tr.pts.push({x,y,z,hd,gap,w,off,a}); if(tr.pts.length>TR_N) tr.pts.shift(); rebuildTrail(); }
+  function rebuildTrail(){ const n=tr.pts.length; let ic=0; for(let i=0;i<n;i++){ const p=tr.pts[i], c=Math.cos(p.hd), sn=Math.sin(p.hd), w=p.w||.15, o=p.off||0, cx=p.x+c*o, cz=p.z+sn*o;
+      tr.pos.set([cx-c*w,p.y+.04,cz-sn*w,cx+c*w,p.y+.04,cz+sn*w],i*6); tr.ac[i*2]=0; tr.ac[i*2+1]=1; const fade=Math.min(1,i/12); tr.al[i*2]=tr.al[i*2+1]=(p.a||.3)*fade;
+      if(i>0&&!p.gap){ const a=(i-1)*2,b=a+1,c2=i*2,d=c2+1; tr.idx[ic++]=a; tr.idx[ic++]=b; tr.idx[ic++]=c2; tr.idx[ic++]=b; tr.idx[ic++]=d; tr.idx[ic++]=c2; } }
+    tr.geo.setDrawRange(0,ic); tr.geo.attributes.position.needsUpdate=true; tr.geo.attributes.across.needsUpdate=true; tr.geo.attributes.alpha.needsUpdate=true; tr.geo.index.needsUpdate=true; }
 
   /* ---------- run setup ---------- */
   function resetPlayer(){
@@ -149,7 +159,7 @@
   function onLand(e){
     const power=clamp(e.imp/9,.12,1);
     if(e.out==='fall') return;                                   // the fall event handles the rest
-    Audio.land(power); if(e.air>.3) puff(power);
+    Audio.land(power); if(e.air>.3) puff(power); camPunch=Math.max(camPunch,clamp((e.imp-3)*.06,0,.38));
     if(e.air<.28) return;                                        // just a hop
     let pts=0; const parts=[], half=Math.abs(e.half), flips=Math.abs(e.flips);
     if(half){ const side=((e.spin>0)!==!!e.swTake)?'BS':'FS'; parts.push(side+' '+(half*180)); pts+=half*130*(1+(half-1)*.45); }
@@ -188,7 +198,7 @@
     score(half?end+' BUTTER '+half*180:end+' PRESS',40+Math.min(e.time,3)*35+half*110,!e.clean); }
   function onEvent(e){
     if(e.type==='land') onLand(e);
-    else if(e.type==='takeoff'){ if(e.pop) Audio.jump(); if(e.lip) toast('PERFECT POP','',false); }
+    else if(e.type==='takeoff'){ if(e.pop) Audio.jump(); if(e.lip) toast('PERFECT POP','',false); if(e.pop&&P.vy>4.5) fovKick=Math.max(fovKick,4.5); }
     else if(e.type==='fall') onFall(e);
     else if(e.type==='grindStart'){ balEl.classList.add('on'); balName.textContent=e.style+' · '+e.name; Audio.land(.25); }
     else if(e.type==='grindEnd') onGrindEnd(e);
@@ -252,7 +262,7 @@
 
   /* ---------- camera ---------- */
   const CAMS=['chase','close','wide','side']; let camMode=0;
-  let camHd=0, camSnap=true, heroK=0, heroSide=0; const camPos=new THREE.Vector3(), camLook=new THREE.Vector3(), _f=new THREE.Vector3(), _ft=new THREE.Vector3(), _g=new THREE.Vector3(), _gl=new THREE.Vector3();
+  let camHd=0, camSnap=true, heroK=0, heroSide=0, kickK=0, camSide=0, camPunch=0, fovKick=0; const camPos=new THREE.Vector3(), camLook=new THREE.Vector3(), _f=new THREE.Vector3(), _ft=new THREE.Vector3(), _g=new THREE.Vector3(), _gl=new THREE.Vector3();
   function camReset(){ camSnap=true; camHd=P.hd; }
   function cycleCam(){ camMode=(camMode+1)%CAMS.length; camSnap=true; subtitle('מצלמה: '+['רגילה','קרובה','רחבה','צד'][camMode],1200); }
   function updateCamera(dt){
@@ -262,18 +272,27 @@
     const heroOn=air&&P.airT>.4&&!P.fall; heroK=damp(heroK,heroOn?1:0,heroOn?2.2:3.5,dt); if(heroOn&&!heroSide) heroSide=Math.random()<.5?-1:1; if(!heroOn&&heroK<.02) heroSide=0;
     const camA=camHd+(heroSide||1)*heroK*.85, fx=Math.sin(camA), fz=-Math.cos(camA);
     const cm=CAMS[camMode], cd=cm==='close'?.62:cm==='wide'?1.7:1, ch2=cm==='close'?.7:cm==='wide'?1.9:1;
-    const vq=clamp(sp/((track.vref||24)*1.3),0,1), dist=(lerp(4.7,6.6,vq)+(air?.7:0))*(1-.28*heroK)*cd, h=(lerp(1.9,2.6,vq)+(air?.8:0)+P.tuck*-.3)*(1-.35*heroK)*ch2;
-    let tx=P.x-fx*dist, tz=P.z-fz*dist; let ty=P.y+h;
+    // a kicker coming up: the camera rises and looks further ahead so the jump and its landing are in the picture
+    let kick=0; if(!air&&mode==='play'){ World.forRamps(P.s,P.s+40,r=>{ const d=r.s+r.L-P.s; if(d>2&&d<40&&Math.abs(World.cx(r.s)+r.u-P.x)<r.w+3) kick=Math.max(kick,1-smooth(18,40,d)); }); }
+    kickK=damp(kickK,kick,3,dt);
+    // carving: drift to the outside of the turn so the lean into it shows; landings punch the camera down with their impact
+    camSide=damp(camSide,air?0:-clamp(P.lean,-1,1)*.85,2.5,dt); camPunch=damp(camPunch,0,9,dt);
+    const vq=clamp(sp/((track.vref||24)*1.3),0,1), dist=(lerp(4.7,6.6,vq)+(air?.7:0)+kickK*.9)*(1-.28*heroK)*cd, h=(lerp(1.9,2.6,vq)+(air?.8:0)+P.tuck*-.3+kickK*.7)*(1-.35*heroK)*ch2;
+    const rxC=Math.cos(camA), rzC=Math.sin(camA);
+    let tx=P.x-fx*dist+rxC*camSide*cd, tz=P.z-fz*dist+rzC*camSide*cd; let ty=P.y+h-camPunch;
     if(cm==='side'){ const rx=Math.cos(camA), rz=Math.sin(camA); tx=P.x+rx*5.2-fx*1.2; tz=P.z+rz*5.2-fz*1.2; ty=P.y+1.3; }
     const gy=World.groundY(tx,tz)+1.3; if(ty<gy) ty=gy;
     _f.set(tx,ty,tz); if(camSnap){ camPos.copy(_f); camSnap=false; } else { const k=1-Math.exp(-dt*(air?6:11)); camPos.lerp(_f,k); }
-    const la=CAMS[camMode]==='side'?.6:8, lx=P.x+fx*la, lz=P.z+fz*la, ly=P.y+(CAMS[camMode]==='side'?.9:1.2)+(air?clamp(P.vy*.06,-1.5,1.5):0)-(sp>20?.2:0);
+    const la=CAMS[camMode]==='side'?.6:8+kickK*7, lx=P.x+fx*la, lz=P.z+fz*la, ly=P.y+(CAMS[camMode]==='side'?.9:1.2)+(air?clamp(P.vy*.06,-1.5,1.5):0)-(sp>20?.2:0)-camPunch*.5;
     camLook.lerp(new THREE.Vector3(lx,ly,lz),1-Math.exp(-dt*9));
     if(mode==='countdown'){ const k=clamp(1-countdown/2.5,0,1), e=k*k*(3-2*k), th=lerp(PI*.92,0,e)*ST.Resort.lodgeSide(), r=lerp(6.2,dist,e), ch=lerp(1.5,h,e);
       _g.set(P.x+Math.sin(th)*r*Math.cos(P.hd)+Math.sin(P.hd)*0, 0, P.z+Math.cos(th)*r); _g.y=Math.max(P.y+ch,World.groundY(_g.x,_g.z)+1.0); _gl.set(P.x,P.y+1.3,P.z); _gl.lerp(camLook,e); _g.lerp(camPos,e*e*e); }
     camera.position.copy(mode==='countdown'?_g:camPos); if(P.shake>0){ const s=P.shake*P.shake*.5; camera.position.x+=(Math.random()-.5)*s; camera.position.y+=(Math.random()-.5)*s; }
+    // very fast on the snow: the lens picks up the chatter of the board
+    if(!air&&mode==='play'){ const ch=smooth(.85,1.3,sp/(track.vref||24))*.018; camera.position.y+=Math.sin(P.t*41)*ch+Math.sin(P.t*67+1)*ch*.6; }
     camera.lookAt(mode==='countdown'?_gl:camLook); camera.rotateZ(-P.lean*.045-(P.fall&&P.fall.ph==='down'?Math.sin(P.t*20)*.03:0));
-    const base=ST.baseFov||62; const f=base+clamp((sp/(track.vref||24)-.35)/1.0,0,1)*14+(P.boost>0?3:0)+heroK*5; if(Math.abs(camera.fov-f)>.05){ camera.fov=damp(camera.fov,f,4,dt); camera.updateProjectionMatrix(); }
+    fovKick=damp(fovKick,0,4,dt);
+    const base=ST.baseFov||62; const f=base+clamp((sp/(track.vref||24)-.35)/1.0,0,1)*14+(P.boost>0?3:0)+heroK*5+fovKick; if(Math.abs(camera.fov-f)>.05){ camera.fov=damp(camera.fov,f,4,dt); camera.updateProjectionMatrix(); }
   }
   function menuCamera(t){ const W=innerWidth,H=innerHeight; if(W>H*1.1) camera.setViewOffset(W,H,W*.2,0,W,H); else if(camera.view&&camera.view.enabled) camera.clearViewOffset(); const a=PI+Math.sin(t*.15)*.9+.4, r=4.3; camera.position.set(P.x+Math.sin(a)*r*.6-1.2,P.y+1.45,P.z+Math.cos(a)*r); camera.lookAt(P.x,P.y+.95,P.z); camera.fov=ST.baseFov||62; camera.updateProjectionMatrix(); }
 
@@ -480,7 +499,7 @@
     el.hud.classList.toggle('air',airborne()&&!useJoy()); jumpHint(); coinFade(); balanceHud(); if(!P.grind&&balEl.classList.contains('on')) balEl.classList.remove('on');
     if(flashK>0){ flashK=Math.max(0,flashK-dt*1.8); el.flash.style.opacity=flashK; }
     gr('uSpeed',clamp((P.speed/(track.vref||24)-.85)/.6,0,1)); if(P.fall&&P.fall.ph!=='recover'&&P.fall.ph!=='getup') gr('uDesat',damp(ST.GFX.grade?ST.GFX.grade.uniforms.uDesat.value:0,.85,6,dt)); else if(ST.GFX.grade&&ST.GFX.grade.uniforms.uDesat.value>0) gr('uDesat',damp(ST.GFX.grade.uniforms.uDesat.value,0,5,dt));
-    Audio.update(P.speed*(24/(track.vref||24)),P.grind?0:Math.abs(P.lean)+P.tuck*.5,!P.grounded); Audio.grind(P.grind&&mode==='play'?clamp(P.grind.v/7,.25,1):0,P.grind?P.grind.r.kind:'');
+    Audio.update(P.speed*(24/(track.vref||24)),P.grind?0:Math.abs(P.lean)+P.tuck*.5,!P.grounded); Audio.grind(P.grind&&mode==='play'?clamp(P.grind.v/7,.25,1):0,P.grind?P.grind.r.kind:''); Audio.spin(!P.grounded&&mode==='play'?P.wsp:0,P.sp||0);
   }
 
   /* ---------- boot ---------- */

@@ -169,7 +169,7 @@
     let vf=P.vx*f3x+vy3*f3y+P.vz*f3z, vr=P.vx*r3x+vy3*r3y+P.vz*r3z;
     // along the board: base friction, air drag (less in a tuck), and a little edge scrub while carving hard
     const dq=T.dq||(T.dq=tuneDrag(T)), lat=Math.abs(P.om*speed);
-    const drag=C.mu*N+dq*vf*vf*(1-.38*P.tuck)+.04*lat;
+    const drag=C.mu*N+dq*vf*vf*(1-.38*P.tuck)+.04*lat*(.35+.65*P.skid);   // a clean carve hardly scrubs; a skidded turn does
     vf=Math.sign(vf)*Math.max(0,Math.abs(vf)-drag*dt);
     // across the board: an engaged edge grips (fast, up to its hold); braking or a let-go edge slides (Coulomb friction)
     const sliding=P.braking||P.brakeK>.5;
