@@ -157,6 +157,7 @@
     g.setAttribute('color',new THREE.Float32BufferAttribute(C,3)); g.setAttribute('aSnow',new THREE.Float32BufferAttribute(A,1)); g.computeBoundingSphere(); return g; }
   const CONIFERS={spruce:{H:9.5,R:2.5,y0:1.4,layers:12,K:8,droop:.55,snow:.62,trunk:.24,seed:3},fir:{H:8.6,R:3.0,y0:1.1,layers:10,K:7,droop:.75,snow:.8,trunk:.27,seed:9}};
   const TREE={}; for(const k in CONIFERS) TREE[k]={near:conifer(CONIFERS[k],'near'),far:conifer(CONIFERS[k],'far')};
+  const WHITE=new THREE.Color(1,1,1);
   function rockGeo(){ const g=new THREE.IcosahedronGeometry(1,1); const p=g.attributes.position; for(let i=0;i<p.count;i++){ const x=p.getX(i),y=p.getY(i),z=p.getZ(i), k=1+hash2(Math.round(x*7),Math.round(z*7+y*3))*.45; p.setXYZ(i,x*k*1.25,y*k*.8,z*k); }
     g.computeVertexNormals(); return paint(g,(x,y,z,c)=>{ const s=smooth(.15,.65,y); c.setRGB(.26,.25,.3).lerp(new THREE.Color(.93,.95,1),s*.9); }); }
   function firGeo(){
@@ -248,9 +249,9 @@
         if(ST.Resort&&ST.Resort.blocked(s,u)||VG&&VG.blocked(s,u)) continue; rocks.push({x,y:groundY(x,z)-sc*.25,z,sc,sy:1.5+hash2(ci,n2*11+904)*1.3,r:hash2(ci,n2*11+905)*6.28,giant:1}); } }
     const dummy=new THREE.Object3D();
     if(trees.length){ const firs=trees.filter((t,i)=>hash2(i,ci+77)<.4), spruces=trees.filter((t,i)=>!(hash2(i,ci+77)<.4)), lod={near:[],far:[]}, tint=new THREE.Color();
-      [[TREE.spruce,spruces],[TREE.fir,firs]].forEach(([T2,arr])=>{ if(!arr.length) return; ['near','far'].forEach(L=>{ const im=new THREE.InstancedMesh(T2[L],treeMat,arr.length);
+      [[TREE.spruce,spruces],[TREE.fir,firs]].forEach(([T2,arr])=>{ if(!arr.length) return; ['near','far'].forEach(L=>{ const im=new THREE.InstancedMesh(T2[L],T2.mat?T2.mat[L]:treeMat,arr.length);
           arr.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); const k=t.sc*1.12, w=.9+hash2(i,ci+5)*.25; dummy.scale.set(k*w,k*(.88+hash2(i,ci)*.4),k*w); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix);
-            const h=hash2(i,ci+31); im.setColorAt(i,tint.setRGB(.8+h*.45,.85+hash2(i,ci+32)*.35,.8+hash2(i,ci+33)*.3)); });
+            const h=hash2(i,ci+31); tint.setRGB(.8+h*.45,.85+hash2(i,ci+32)*.35,.8+hash2(i,ci+33)*.3); if(T2.model) tint.lerp(WHITE,.6); im.setColorAt(i,tint); });   // a model's baked snow takes the tint too: keep it light
           im.castShadow=L==='near'; im.receiveShadow=true; im.frustumCulled=false; im.visible=L==='near'; grp.add(im); lod[L].push(im); }); });
       grp.userData.treeLod=lod; trees.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+7) items.push({type:'tree',x:t.x,z:t.z,y:t.y,r:.8*t.sc}); }); }
     if(rocks.length&&ASSET.rocks.length){ const groups=ASSET.rocks.map(()=>[]); rocks.forEach(t=>{ const pick=t.giant?(hash2(t.x|0,t.z|0)<.5?3:2):(hash2(t.x|0,(t.z|0)+5)<.5?0:1); groups[pick%ASSET.rocks.length].push(t); });
@@ -422,6 +423,10 @@
         geo.translate(-(b.min.x+b.max.x)/2,-b.min.y,-(b.min.z+b.max.z)/2); geo.scale(k,k,k); geo.computeVertexNormals();
         const mat=rockSnow(me.material.clone()); mat.side=THREE.DoubleSide; res({name,geo,mat,h:sz.y*k}); },undefined,()=>res(null)); });
     const rs=await Promise.all(['rock_07','rock_09','stone_01','rock_face_01'].map(loadGlb)); ASSET.rocks=rs.filter(Boolean);
+    // models listed in the asset registry (js/assets.js): trees take the generated ones' place, scaled to the same height
+    const AG=ST.Assets?await ST.Assets.preload():null;
+    if(AG) for(const k in AG.trees){ if(!TREE[k]) continue; const H=CONIFERS[k].H, n=ST.Assets.flatten(AG.trees[k].nearGl,{height:H}), f=ST.Assets.flatten(AG.trees[k].farGl,{height:H}); if(!n) continue;
+      const N=ST.Assets.mergeFlat(n), Fm=ST.Assets.mergeFlat(f||n); TREE[k]={near:N.geo,far:Fm.geo,mat:{near:N.mat,far:Fm.mat},model:true,tris:[n.tris,(f||n).tris]}; }
   }
   function applySkyPhoto(tr,id){ const cfg=ASSET.skyCfg&&ASSET.skyCfg[id], tex=ASSET.skyTex[id]; if(!cfg||!tex||T!==tr) return; const u=sky.material.uniforms, k=tr.sky;
     const des=k.sunDir, az=Math.atan2(des[0],-des[2])-Math.atan2(cfg.sunDir[0],-cfg.sunDir[2]); u.tPhoto.value=tex; u.uHas.value=1; u.uYaw.value=az; u.uExp.value=tr.id==='bull'?1.12:1.0;

@@ -1,50 +1,74 @@
-/* Snow Rush: real people. Nine Mixamo characters (textured, rigged, ~14k triangles each) plus Mixamo's Idle / Walk /
-   Run / Wave clips, carried over to each skeleton bone by bone (the retarget method of the BuyToday mall game), and a
-   sitting pose made here from the Idle pose (thighs forward, shins down).
+/* Snow Rush: real people. The guests listed in the asset registry (js/assets.js: nine Mixamo characters, textured, rigged,
+   ~14k triangles each; any other rig the registry can name) plus Mixamo's Idle / Walk / Run / Wave clips, carried over to
+   each skeleton bone by bone (the retarget method of the BuyToday mall game), and a sitting pose made here from the Idle
+   pose (thighs forward, shins down).
    Level of detail: every registered person can be shown two ways. The nearest few (14 on a desktop, 7 on a phone) are full
    skinned figures; everyone else within ~230 m is a 360-triangle stand-in drawn with all the others in one instanced mesh,
    in the same jacket, trousers and hat, legs and arms swinging when they walk. A person can have a behaviour (beh) that
    moves it each frame (village walkers, the lift queue...); the figure, whichever it is, just follows. */
 (function(ST){
   const {hash2,clamp}=ST; const {scene}=ST;
-  const NAMES=['Ch02','Ch03','Ch07','Ch12','Ch21','Ch22','Ch26','Ch27','Ch33'];
+  const A=ST.Assets, PEOPLE=A.people;
+  const NAMES=Object.keys(PEOPLE).filter(n=>PEOPLE[n].weight>0);                 // the crowd; weight 0 = only where asked for by name
+  const CUM=[]; { let t=0; NAMES.forEach(n=>{ t+=PEOPLE[n].weight; CUM.push(t); }); CUM.forEach((c,i)=>CUM[i]=c/t); }
+  const pick=h=>{ for(let i=0;i<CUM.length;i++) if(h<CUM[i]) return NAMES[i]; return NAMES[NAMES.length-1]; };
+  const MKEY={}; for(const k in A.RIGS.mixamo.map) MKEY[A.RIGS.mixamo.map[k]]=k;   // Mixamo bone name -> joint
   const P={names:NAMES,tpl:{},pend:{},anims:null,regs:[],active:[],ready:false,count:0};
   const coarse=matchMedia('(pointer:coarse)').matches; const MAXA=coarse?7:14;   // full figures alive at once (the nearest)
   const R_DET=coarse?60:95, R_IMP=coarse?170:240;                               // full figures within R_DET, stand-ins within R_IMP
 
   function loadGLTF(url){ return new Promise((res,rej)=>{ const L=new THREE.GLTFLoader(); if(window.MeshoptDecoder) L.setMeshoptDecoder(window.MeshoptDecoder); L.load(url,res,undefined,rej); }); }
-  function mixRetarget(clip,srcRoot,tgtRoot){
-    const W=root=>{ root.updateMatrixWorld(true); const m={}; root.traverse(o=>{ if(/^mixamorig/.test(o.name)) m[o.name]={b:o,w:o.getWorldQuaternion(new THREE.Quaternion())}; }); return m; };
-    const S=W(srcRoot), T=W(tgtRoot), R={};
-    Object.keys(T).forEach(n=>{ if(S[n]) R[n]=S[n].w.clone().invert().multiply(T[n].w); });
-    const parentR=n=>{ const p=T[n].b.parent; if(p&&R[p.name]) return R[p.name]; return S[n].b.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(p.getWorldQuaternion(new THREE.Quaternion())); };
+  /* Mixamo's clips onto any skeleton. Each target bone copies its source bone's turn away from the rest pose, measured in
+     world space, so bones that point the same way at rest move the same way. A bind pose with the arms far from Mixamo's
+     T-pose (Meshy's hang at ~60° with the elbows bent) would carry that difference into every frame, so an arm bone more
+     than 12° off at rest is first turned to point where the source's does. Legs and spine are left alone: a few degrees
+     there is where a rig put its joints, not how the model stands. pairs: [source bone, target bone, joint]; the joints have
+     to chain like Mixamo's (each one's parent is the joint that is its parent in Mixamo). */
+  const ARM_AIM={ShoulderL:'UpperArmL',UpperArmL:'LowerArmL',LowerArmL:'WristL',ShoulderR:'UpperArmR',UpperArmR:'LowerArmR',LowerArmR:'WristR'}, AIM_MIN=Math.cos(12*Math.PI/180);
+  function retarget(clip,srcRoot,tgtRoot,pairs){
+    srcRoot.updateMatrixWorld(true); tgtRoot.updateMatrixWorld(true);
+    const SB={}, TB={}; srcRoot.traverse(o=>{ if(o.isBone) SB[o.name]=o; }); tgtRoot.traverse(o=>{ if(o.isBone) TB[o.name]=o; });
+    const wq=o=>o.getWorldQuaternion(new THREE.Quaternion()), wp=o=>o.getWorldPosition(new THREE.Vector3()), src={}, tgtOf={}, J={}, R={};
+    pairs.forEach(([sn,tn,k])=>{ if(!SB[sn]||!TB[tn]) return; src[tn]=sn; tgtOf[sn]=tn; if(k) J[k]=[SB[sn],TB[tn]]; R[tn]=wq(SB[sn]).invert().multiply(wq(TB[tn])); });
+    retarget.fixed=[];
+    for(const k in ARM_AIM){ const a=J[k], c=J[ARM_AIM[k]]; if(!a||!c) continue;
+      const ds=wp(c[0]).sub(wp(a[0])).normalize(), dt=wp(c[1]).sub(wp(a[1])).normalize(); if(ds.dot(dt)>AIM_MIN) continue;
+      R[a[1].name]=wq(a[0]).invert().multiply(new THREE.Quaternion().setFromUnitVectors(dt,ds)).multiply(wq(a[1])); retarget.fixed.push(k); }
+    const parentR=tn=>{ const p=TB[tn].parent; if(p&&R[p.name]) return R[p.name]; return SB[src[tn]].parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(p.getWorldQuaternion(new THREE.Quaternion())); };
     const tracks=[], q=new THREE.Quaternion(), ip=new THREE.Quaternion();
-    clip.tracks.forEach(t=>{ const i=t.name.lastIndexOf('.'), bn=t.name.slice(0,i), prop=t.name.slice(i+1); if(prop!=='quaternion'||!R[bn]) return;
-      const v=t.values.slice(), Rb=R[bn]; ip.copy(parentR(bn)).invert(); for(let k=0;k<v.length;k+=4){ q.fromArray(v,k); q.premultiply(ip).multiply(Rb); q.toArray(v,k); }
-      tracks.push(new THREE.QuaternionKeyframeTrack(t.name,t.times.slice(),v)); });
+    clip.tracks.forEach(t=>{ const i=t.name.lastIndexOf('.'), bn=t.name.slice(0,i), prop=t.name.slice(i+1), tn=tgtOf[bn]; if(prop!=='quaternion'||!tn) return;
+      const v=t.values.slice(), Rb=R[tn]; ip.copy(parentR(tn)).invert(); for(let k=0;k<v.length;k+=4){ q.fromArray(v,k); q.premultiply(ip).multiply(Rb); q.toArray(v,k); }
+      tracks.push(new THREE.QuaternionKeyframeTrack(tn+'.quaternion',t.times.slice(),v)); });
     const t0=tracks.reduce((m,t)=>Math.min(m,t.times[0]),Infinity); if(t0>0&&t0<.5) tracks.forEach(t=>t.shift(-t0));   // start at the first key: no twitch on loop
     return new THREE.AnimationClip(clip.name,t0>0&&t0<.5?clip.duration-t0:clip.duration,tracks);
   }
   function skeletonUtils(){ return new Promise((res,rej)=>{ if(THREE.SkeletonUtils) return res(); const s=document.createElement('script'); s.src='lib/skeleton-utils.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
   function loadAnims(){ if(P.anims) return P.anims; return P.anims=Promise.all([skeletonUtils(),loadGLTF('assets/people/anims.glb')]).then(([,g])=>g); }
-  function bone(m,n){ let b=null; m.traverse(o=>{ if(!b&&o.name==='mixamorig'+n) b=o; }); return b; }
-  /* a template: the loaded character, its four clips retargeted, and the scale that makes it 1.78 m tall */
+  function bone(m,T,k){ const n=T.map[k]; let b=null; m.traverse(o=>{ if(!b&&o.name===n) b=o; }); return b; }   // a joint of a figure (or its clone) by the registry's name
+  /* a template: the loaded character, its four clips retargeted, and the scale that makes it its registry height (1.78 m) */
   P.template=function(name){
     if(P.tpl[name]) return Promise.resolve(P.tpl[name]); if(P.pend[name]) return P.pend[name];
-    return P.pend[name]=loadAnims().then(an=>loadGLTF('assets/people/'+name+'.glb').then(g=>{
-      const m=g.scene; m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; (Array.isArray(o.material)?o.material:[o.material]).forEach(mt=>{ mt.metalness=0; mt.roughness=Math.max(mt.roughness||0,.65); if(mt.map) mt.map.anisotropy=4; }); } });
-      m.updateMatrixWorld(true); const top=bone(m,'HeadTop_End')||bone(m,'Head'), fl=bone(m,'LeftFoot'), fr=bone(m,'RightFoot'); const v=new THREE.Vector3();
-      const ty=top.getWorldPosition(v).y, fy=Math.min(fl.getWorldPosition(v).y,fr.getWorldPosition(v).y), h=(ty-fy)+.09, k=1.78/h;
-      const clips={}; ['Idle','Walk','Run','Wave'].forEach(n=>{ const c=an.animations.find(a=>a.name===n); if(c) clips[n]=mixRetarget(c,an.scene,m); });
-      splitOutfit(m); mergeParts(m); const T={name,scene:m,clips,k,y:-(fy-.09)*k}; P.tpl[name]=T; P.ready=true; return T; }));
+    const E=PEOPLE[name]; if(!E) return Promise.reject(new Error('no guest '+name)); const rig=A.RIGS[E.rig]||A.RIGS.mixamo, map=rig.map;
+    return P.pend[name]=loadAnims().then(an=>loadGLTF(E.url).then(g=>{
+      const m=g.scene; if(E.rig!=='mixamo') A.poseToBind(m);   // a rig whose file keeps its nodes in another pose than the skin's bind
+      m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; (Array.isArray(o.material)?o.material:[o.material]).forEach(mt=>{ mt.metalness=0; mt.roughness=Math.max(mt.roughness||0,.65); if(mt.map) mt.map.anisotropy=4; }); } });
+      m.updateMatrixWorld(true); const B={}; m.traverse(o=>{ if(o.isBone) B[o.name]=o; }); const bf=k=>B[map[k]]||null;
+      const top=B[rig.top]||bf('Head'), fl=bf('FootL'), fr=bf('FootR'); const v=new THREE.Vector3();
+      const ty=top.getWorldPosition(v).y, fy=Math.min(fl.getWorldPosition(v).y,fr.getWorldPosition(v).y), h=(ty-fy)+.09, k=(E.height||1.78)/h;
+      // a rig whose skeleton sits far from its file's origin (Meshy's: ~6.7 km) is moved back under its hips
+      const hp=bf('Hips').getWorldPosition(new THREE.Vector3()), x0=E.rig==='mixamo'?0:-hp.x*k, z0=E.rig==='mixamo'?0:-hp.z*k;
+      const pairs=E.rig==='mixamo'?Object.keys(B).map(n=>[n,n,MKEY[n]]):A.MIX.map(j=>[A.RIGS.mixamo.map[j],map[j],j]);   // Mixamo: every bone (fingers too); others: the 20 joints
+      const clips={}; let fixed=[]; ['Idle','Walk','Run','Wave'].forEach(n=>{ const c=an.animations.find(a=>a.name===n); if(c){ clips[n]=retarget(c,an.scene,m,pairs); fixed=retarget.fixed; } });
+      if(E.outfit!=='baked') splitOutfit(m); mergeParts(m); if(E.tint==='pants') A.tintable(m,PANTS[0]);
+      return A.wearAll(m,E).then(()=>{ const T={name,E,map,scene:m,clips,k,y:-(fy-.09)*k,x0,z0,armFix:fixed}; P.tpl[name]=T; P.ready=true; return T; }); }));
   };
   /* sitting: the Idle pose with each thigh turned forward and each shin back down (turns made in world space, so they suit
      every skeleton); the figure is lowered so its feet stay on the ground (T.sitY) */
   function sitClip(T){ if(T.sit) return T.sit; const m=THREE.SkeletonUtils.clone(T.scene), mx=new THREE.AnimationMixer(m); mx.clipAction(T.clips.Idle).play(); mx.update(0); m.updateMatrixWorld(true);
     const X=new THREE.Vector3(1,0,0), _a=new THREE.Quaternion(), _b=new THREE.Quaternion(), _c=new THREE.Quaternion(), v=new THREE.Vector3();
-    const turn=(n,ang)=>{ const b=bone(m,n); if(!b) return; _a.setFromAxisAngle(X,ang); b.getWorldQuaternion(_b); _a.multiply(_b); b.parent.getWorldQuaternion(_c); b.quaternion.copy(_c.invert().multiply(_a)); b.updateMatrixWorld(true); };
-    const footY=()=>{ m.updateMatrixWorld(true); return Math.min(bone(m,'LeftFoot').getWorldPosition(v).y,bone(m,'RightFoot').getWorldPosition(v).y); }, f0=footY();
-    ['Left','Right'].forEach(sd=>{ turn(sd+'UpLeg',-1.48); turn(sd+'Leg',1.42); turn(sd+'Arm',-.42); turn(sd+'ForeArm',-.75); }); turn('Spine1',.08);
+    const turn=(k,ang)=>{ const b=bone(m,T,k); if(!b) return; _a.setFromAxisAngle(X,ang); b.getWorldQuaternion(_b); _a.multiply(_b); b.parent.getWorldQuaternion(_c); b.quaternion.copy(_c.invert().multiply(_a)); b.updateMatrixWorld(true); };
+    const footY=()=>{ m.updateMatrixWorld(true); return Math.min(bone(m,T,'FootL').getWorldPosition(v).y,bone(m,T,'FootR').getWorldPosition(v).y); }, f0=footY();
+    ['L','R'].forEach(sd=>{ turn('UpperLeg'+sd,-1.48); turn('LowerLeg'+sd,1.42); turn('UpperArm'+sd,-.42); turn('LowerArm'+sd,-.75); }); turn('Torso',.08);
     T.sitY=-(footY()-f0)*T.k;   // metres to lower the figure
     const tracks=[]; m.traverse(o=>{ if(o.isBone){ const q=o.quaternion; tracks.push(new THREE.QuaternionKeyframeTrack(o.name+'.quaternion',[0,1],[q.x,q.y,q.z,q.w,q.x,q.y,q.z,q.w])); } });
     mx.stopAllAction(); return T.sit=new THREE.AnimationClip('Sit',1,tracks); }
@@ -114,8 +138,8 @@
 
   const BEAN=[0xff3d6e,0x2f8bff,0xffc83a,0x16e08a,0xff7a1a,0xb04bff,0x22d3ee,0xf5f5f5,0xe11d48];
   const beanGeo=new THREE.SphereGeometry(.125,14,10,0,Math.PI*2,0,Math.PI*.55), pomGeo=new THREE.SphereGeometry(.045,8,6);
-  function winterize(m,seed){   // a hat so a guest in street clothes reads as a skier
-    const head=bone(m,'Head'); if(!head) return; m.updateMatrixWorld(true); const v=new THREE.Vector3(); head.getWorldPosition(v);
+  function winterize(m,seed,T){   // a hat so a guest in street clothes reads as a skier
+    const head=bone(m,T,'Head'); if(!head) return; m.updateMatrixWorld(true); const v=new THREE.Vector3(); head.getWorldPosition(v);
     // beanie and pompom as one mesh (vertex colours), no shadow: one small draw per figure instead of four
     const c=new THREE.Color(BEAN[seed%BEAN.length]), g=hatGeo(c), hat=new THREE.Mesh(g,hatMat); g.userData.hat=1; hat.position.copy(v); hat.position.y+=.105; hat.scale.set(1,1.15,1.1);
     scene.add(hat); head.attach(hat); }
@@ -127,17 +151,21 @@
     const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.BufferAttribute(nor,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); a.dispose(); b.dispose(); return g; }
   function spawn(r){
     const T=P.tpl[r.ch]; if(!T) return null;
-    const m=THREE.SkeletonUtils.clone(T.scene), g=new THREE.Group(); g.add(m); dressOutfit(m,JACKETS[Math.floor(hash2(r.id,13)*JACKETS.length)],PANTS[Math.floor(hash2(r.id,17)*PANTS.length)]); m.scale.multiplyScalar(T.k*(r.sc||1)); m.position.y=T.y*(r.sc||1); scene.add(g);
+    const m=THREE.SkeletonUtils.clone(T.scene), g=new THREE.Group(); g.add(m); const C=siCols(r);
+    if(T.E.outfit!=='baked') dressOutfit(m,C.j,C.p);
+    else if(T.E.tint==='pants') m.traverse(o=>{ if(o.isMesh&&o.material&&o.material.userData.pants){ o.material=A.tintMat(o.material,C.p); o.userData.own=true; } });   // its own trousers' colour
+    m.scale.multiplyScalar(T.k*(r.sc||1)); m.position.set(T.x0*(r.sc||1),T.y*(r.sc||1),T.z0*(r.sc||1)); scene.add(g);
     const mixer=new THREE.AnimationMixer(m), acts={}; Object.keys(T.clips).forEach(n=>{ const a=mixer.clipAction(T.clips[n]); a.setLoop(THREE.LoopRepeat,Infinity); acts[n]=a; });
     const want=r.anim||r.type; if(want==='Sit') acts.Sit=mixer.clipAction(sitClip(T)); const a=acts[want]||acts.Idle; a.play(); a.time=hash2(r.id,5)*a.getClip().duration; mixer.update(0);
-    g.position.set(r.x,r.y+(want==='Sit'?T.sitY:0),r.z); g.rotation.y=r.ry||0; g.updateMatrixWorld(true); winterize(m,r.id);
+    g.position.set(r.x,r.y+(want==='Sit'?T.sitY:0),r.z); g.rotation.y=r.ry||0; g.updateMatrixWorld(true); if(T.E.hat!==false) winterize(m,r.id,T);
     return {r,g,m,mixer,acts,T,cur:acts[want]?want:'Idle',t:Math.random()*10,dir:1}; }
   function setAnim(a,name){ if(a.cur===name) return; if(name==='Sit'&&!a.acts.Sit) a.acts.Sit=a.mixer.clipAction(sitClip(a.T)); const act=a.acts[name]||a.acts.Idle, prev=a.acts[a.cur];
     act.reset(); act.setLoop(THREE.LoopRepeat,Infinity); act.play(); if(prev&&prev!==act) prev.crossFadeTo(act,name==='Sit'||a.cur==='Sit'?.2:.35,false); a.cur=name; }
   function kill(a){ try{ a.mixer.stopAllAction(); a.mixer.uncacheRoot(a.m); }catch(e){} scene.remove(a.g);
     a.g.traverse(o=>{ if(!o.isMesh) return; if(o.geometry&&o.geometry.userData.hat){ o.geometry.dispose(); if(o.parent) o.parent.remove(o); } if(o.userData.own&&o.material) o.material.dispose(); }); }   // its own outfit material too (the shared geometry stays)
   let rid=1;
-  P.add=function(ci,spec){ const W=ST.World; spec.id=rid++; spec.ci=ci; spec.y=spec.yFix!=null?spec.yFix:W.groundY(spec.x,spec.z); spec.ch=NAMES[Math.floor(hash2(spec.id,9)*NAMES.length)]; P.regs.push(spec); };
+  P.add=function(ci,spec){ const W=ST.World; spec.id=rid++; spec.ci=ci; spec.y=spec.yFix!=null?spec.yFix:W.groundY(spec.x,spec.z);
+    if(spec.ch&&PEOPLE[spec.ch]) spec.fixed=true; else spec.ch=pick(hash2(spec.id,9)); P.regs.push(spec); };
   P.clear=function(ci){ P.regs=P.regs.filter(r=>{ if(r.ci===ci){ if(r.act){ kill(r.act); P.active=P.active.filter(x=>x!==r.act); } return false; } return true; }); };
   P.reset=function(){ P.active.forEach(kill); P.active=[]; P.regs=[]; };
   /* the old guests' walk: back and forth along a segment from where they were placed */
@@ -152,7 +180,10 @@
       cand.sort((a,b)=>(a.act?a.d2*.7:a.d2)-(b.act?b.d2*.7:b.d2)); P.want=new Set(cand.slice(0,MAXA));
       for(const r of P.regs){ if(r.act&&!P.want.has(r)){ kill(r.act); P.active=P.active.filter(x=>x!==r.act); r.act=null; } } }
     let budget=2;   // cloning a figure costs a few ms: at most two a frame
-    for(const r of P.want){ if(budget<=0) break; if(r.act||r.hide) continue; if(!P.tpl[r.ch]){ const any=Object.keys(P.tpl)[0]; if(!any){ P.template(r.ch).catch(()=>{}); break; } r.ch=any; } r.act=spawn(r); if(r.act){ P.active.push(r.act); budget--; } }
+    for(const r of P.want){ if(budget<=0) break; if(r.act||r.hide) continue;
+      if(!P.tpl[r.ch]){ if(r.fixed){ P.template(r.ch).catch(()=>{}); continue; }   // asked for by name: wait for that one (a stand-in meanwhile)
+        const any=Object.keys(P.tpl).find(n=>PEOPLE[n].weight>0); if(!any){ P.template(r.ch).catch(()=>{}); break; } r.ch=any; }
+      r.act=spawn(r); if(r.act){ P.active.push(r.act); budget--; } }
     for(let i=0;i<P.active.length;i++){ const a=P.active[i], r=a.r, d=Math.sqrt(r.d2), every=d<45?1:d<90?2:3, an=r.anim||r.type;
       a.g.visible=!r.hide; if(r.hide) continue; setAnim(a,an); a.g.position.set(r.x,r.y+(a.cur==='Sit'?a.T.sitY||0:0),r.z); a.g.rotation.y=r.ry||0;
       if(a.cur==='Walk') a.acts.Walk.timeScale=clamp((r.spd||1.15)/1.2,.6,1.5);
@@ -193,11 +224,15 @@
     geo.setAttribute('iJ',mk(3)); geo.setAttribute('iP',mk(3)); geo.setAttribute('iH',mk(3)); geo.setAttribute('iW',mk(2));
     const im=new THREE.InstancedMesh(geo,standInMat(),N); im.count=0; im.frustumCulled=false; im.castShadow=false; im.receiveShadow=true; scene.add(im); return {im,geo,N}; });
   const _m=new THREE.Matrix4(), _q=new THREE.Quaternion(), _p=new THREE.Vector3(), _s=new THREE.Vector3(1,1,1), _y=new THREE.Vector3(0,1,0), _cc=new THREE.Color();
+  /* a guest's colours (jacket, trousers, hat), the same on its full figure and on its stand-in: drawn from the palettes, or a
+     baked model's own (its registry entry's standIn) */
+  function siCols(r){ if(r.si&&r.siK===r.ch) return r.si; const S=PEOPLE[r.ch]&&PEOPLE[r.ch].standIn||{}; r.siK=r.ch;
+    return r.si={j:S.jacket!=null?S.jacket:JACKETS[Math.floor(hash2(r.id,13)*JACKETS.length)],p:S.pants!=null?S.pants:PANTS[Math.floor(hash2(r.id,17)*PANTS.length)],h:S.hat!=null?S.hat:BEAN[r.id%BEAN.length]}; }
   const lin=(hex,arr,i)=>{ _cc.setHex(hex).convertSRGBToLinear(); arr[i*3]=_cc.r; arr[i*3+1]=_cc.g; arr[i*3+2]=_cc.b; };
   function updateStandIns(dt){ const cnt=[0,0];
     for(const r of P.regs){ if(r.act&&r.act.g.visible||r.hide||r.d2>R_IMP*R_IMP) continue; const sit=(r.anim||r.type)==='Sit'?1:0, S=SI[sit], i=cnt[sit]; if(i>=S.N) continue; cnt[sit]++;
       _q.setFromAxisAngle(_y,r.ry||0); _p.set(r.x,r.y,r.z); _m.compose(_p,_q,_s); S.im.setMatrixAt(i,_m);
-      const g=S.geo.attributes; lin(JACKETS[Math.floor(hash2(r.id,13)*JACKETS.length)],g.iJ.array,i); lin(PANTS[Math.floor(hash2(r.id,17)*PANTS.length)],g.iP.array,i); lin(BEAN[r.id%BEAN.length],g.iH.array,i);
+      const g=S.geo.attributes, C=siCols(r); lin(C.j,g.iJ.array,i); lin(C.p,g.iP.array,i); lin(C.h,g.iH.array,i);
       const walk=(r.anim||r.type)==='Walk'; r.wph=(r.wph||hash2(r.id,3)*6.28)+(walk?(r.spd||1.15)*dt*4.4:0); g.iW.array[i*2]=r.wph; g.iW.array[i*2+1]=walk?.42:0; }
     SI.forEach((S,k)=>{ S.im.count=cnt[k]; S.im.instanceMatrix.needsUpdate=true; ['iJ','iP','iH','iW'].forEach(n=>S.geo.attributes[n].needsUpdate=true); }); }
   P.standIns=()=>SI.map(S=>S.im.count);

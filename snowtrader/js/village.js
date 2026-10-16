@@ -311,7 +311,9 @@
       sign(B,id,x-Math.cos(ry)*.012,y,z+Math.sin(ry)*.012,2.5,ry-PI/2); sign(B,id+'b',x+Math.cos(ry)*.012,y,z-Math.sin(ry)*.012,2.5,ry+PI/2); }); }   // both faces read the right way
   function flag(B,col,seed){ B.body.geo(cylG,M4(0,4,0,0,0,0,.05,8,.05),C('#d7dbe2'),K.metal); B.body.geo(sphG,M4(0,8.05,0,0,0,0,.09),PAL.gold,K.metal);
     for(let i=0;i<6;i++){ const x0=.06+i*.38, x1=x0+.38, z0=Math.sin(i*.9+seed)*.12, z1=Math.sin(i*.9+.9+seed)*.12; B.body.quad([x0,6.2,z0],[x1,6.2,z1],[x1,7.8,z1],[x0,7.8,z0],col,K.plain); B.body.quad([x1,6.2,z1],[x0,6.2,z0],[x0,7.8,z0],[x1,7.8,z1],col,K.plain); } }
-  function spruce(B,h,seed){ const T=ST.World.TREE[seed%3===0?'fir':'spruce'].near, k=h/9.2; B.body.geoC(T,M4(0,0,0,0,seed*1.7,0,k,k*(.95+hash2(seed,3)*.15),k),K.plain); }
+  function spruce(B,h,seed){ const kind=seed%3===0?'fir':'spruce', TR=ST.World.TREE[kind], k=h/9.2, ky=k*(.95+hash2(seed,3)*.15);
+    if(TR.model&&modelAt('tree:'+kind,{parts:[{geo:TR.near,mat:TR.mat.near}]},k,ky,k,seed*1.7)) return;   // a tree model from the asset registry
+    B.body.geoC(TR.near,M4(0,0,0,0,seed*1.7,0,k,ky,k),K.plain); }
   function snowbank(B,len,seed){ const n=Math.max(1,Math.round(len/2.2)); for(let i=0;i<n;i++){ const x=-len/2+(i+.5)*len/n, r=.75+hash2(i,seed)*.5; B.body.geo(sphG,M4(x,0,0,0,hash2(i,seed+3)*3,0,r*1.4,r*.65,r),PAL.snow,K.snow); } }
   function fenceLine(B,ax,az,bx,bz,col){ const L=Math.hypot(bx-ax,bz-az), n=Math.max(1,Math.round(L/2.2)), ry=Math.atan2(bx-ax,bz-az);
     for(let i=0;i<=n;i++){ const t=i/n; B.body.geo(cylG,M4(ax+(bx-ax)*t,.55,az+(bz-az)*t,0,0,0,.04,1.1,.04),PAL.metal,K.metal); }
@@ -356,10 +358,25 @@
     SET.forEach(k=>{ const m=B[k].mesh(MAT[k]); if(!m) return; m.castShadow=k==='body'; m.receiveShadow=k!=='bulb'; m.userData.dyn=1; g.add(m); }); return g; };
   const HALFX=2.0;
 
+  /* ---------- models from the asset registry (js/assets.js) ----------
+     A listed model stands where the generator would have built: every placement of a kind is gathered while the village is
+     laid out (the batcher's current spot, X) and drawn as one instanced mesh per part of the model. */
+  let MP=null; V.modelMats=[];
+  const got=()=>ST.Assets?ST.Assets.got:null;
+  const _mq=new THREE.Quaternion(), _mv=new THREE.Vector3(), _ms=new THREE.Vector3(), _my=new THREE.Vector3(0,1,0);
+  function modelAt(kind,F,sx,sy,sz,yaw){ if(!F||!MP) return false; let e=MP.get(kind); if(!e) MP.set(kind,e={F,list:[]});
+    _mq.setFromAxisAngle(_my,Math.atan2(X.s,X.c)+(yaw||0)); e.list.push(new THREE.Matrix4().compose(_mv.set(X.ox,X.oy,X.oz),_mq,_ms.set(sx||1,sy||sx||1,sz||sx||1))); return true; }
+  /* a prop: the listed model if there is one, else the generator */
+  function prop(kind,gen){ const G=got(), F=G&&G.props[kind]; if(F&&modelAt('prop:'+kind,F)) return; gen(); }
+  function modelMeshes(grp){ if(!MP) return; V.modelMats=[];
+    MP.forEach(e=>e.F.parts.forEach(p=>{ const im=new THREE.InstancedMesh(p.geo,p.mat,e.list.length); e.list.forEach((m,i)=>im.setMatrixAt(i,m)); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; im.userData.model=1; grp.add(im);
+      (Array.isArray(p.mat)?p.mat:[p.mat]).forEach(mt=>{ if(mt.emissiveMap||mt.emissive&&mt.emissive.getHex()) V.modelMats.push(mt); }); }));   // windows that glow follow the time of day
+    MP=null; }
+
   /* ---------- build: lay the village out on the floor, one set of buffers per quarter ---------- */
   const SET=['body','glass','sign','bulb'];
   V.build=function(T){ const key=T.id+':'+T.len; if(V.group&&V.key===key&&V.group.parent){ V.applyLight(); V.populate(); return; }
-    V.dispose(); buildAtlas(); const Wd=W(), F=V.ls, G=-F, L=V.L;
+    V.dispose(); buildAtlas(); MP=new Map(); const Wd=W(), F=V.ls, G=-F, L=V.L;
     const cl=[0,1,2,3].map(()=>({body:new Batch(),glass:new Batch(),sign:new Batch(true),bulb:new Batch()})), Bat=d=>cl[d<64?0:d<112?1:d<160?2:3];
     const wp=(d,u)=>{ const s=L+d, x=Wd.cx(s)+u, z=-s; return {x,z,y:Wd.groundY(x,z)}; };
     const dirs=d=>{ const s=L+d, k=Wd.dcx(s), n=Math.hypot(k,1); return {fx:k/n,fz:-1/n,rx:1/n,rz:k/n}; };   // downhill, across (+u)
@@ -372,7 +389,9 @@
     function bld(d,u,face,o){ const along=face==='up'||face==='down', hd=(along?o.d:o.w)/2, hu=(along?o.w:o.d)/2;
       let top=-1e9, low=1e9; [[-1,-1],[1,-1],[1,1],[-1,1],[0,0]].forEach(([a,b2])=>{ const y=wp(d+a*hd,u+b2*hu).y; top=Math.max(top,y); low=Math.min(low,y); });
       const onBank=Math.abs(u)>V.VW-2, y0=onBank?wp(d,u-Math.sign(u)*hu).y+.1:top+.05; o.base=Math.max(1.6,y0-low+1.2);
-      const B=put(d,u,face,0,y0); const h=house(B,o); V.blds.push({d,u,hd:hd+.2,hu:hu+.2,ao:.42,h}); return B; }
+      const B=put(d,u,face,0,y0), G2=got(), key=G2&&(G2.buildings[o.sign]?o.sign:G2.buildings.house?'house':null);
+      if(key){ const F=G2.buildings[key], sc=F.spec.fit==='footprint'?Math.min(o.w/F.size.x,o.d/F.size.z):1; modelAt('bld:'+key,F,sc); V.blds.push({d,u,hd:hd+.2,hu:hu+.2,ao:.42,h:F.size.y*sc}); return B; }   // a listed model, fitted to the footprint
+      const h=house(B,o); V.blds.push({d,u,hd:hd+.2,hu:hu+.2,ao:.42,h}); return B; }
     V.blds=[]; V.lamps=[]; V.seats=[];
     const warm=[[1,.8,.45],[1,.7,.35]], fest=[[1,.82,.45],[1,.3,.25],[.4,.8,1],[1,.75,.2]];
 
@@ -396,13 +415,13 @@
      [106,G*53,12,10,3,'z'],[151,G*54,13,10,3,'x'],[176,G*52,11,9,2,'z'],[112,F*53,12,10,3,'x'],[152,F*54,13,10,3,'z'],[134,F*52,10,9,2,'z']].forEach(([d,u,w,dd,fl,rg,sg],i)=>
       bld(d,u,'street',{w,d:dd,floors:fl,top:'wood',woodFloors:fl>3?2:1,balc:fl-1,ridge:rg,seed:20+i,sign:sg,signW:3.6,signY:3.2,litP:.45}));
     // --- the church closes the street ---
-    { const B=put(196,0,'up'); church(B); V.blds.push({d:200,u:0,hd:12,hu:6.4,ao:.4}); V.spots.church={d:186,u:0}; }
+    { const B=put(196,0,'up'); prop('church',()=>church(B)); V.blds.push({d:200,u:0,hd:12,hu:6.4,ao:.4}); V.spots.church={d:186,u:0}; }
     // --- the Christmas tree, benches, the market ---
-    { const B=put(74,0,'up'); xtree(B,13); V.lamps.push({d:74,u:0,r:10,k:1.3}); V.blds.push({d:74,u:0,hd:3.8,hu:3.8,ao:.3}); }
-    for(let i=0;i<4;i++){ const a=PI/4+i*PI/2, d=74+Math.cos(a)*7.2, u=Math.sin(a)*7.2, B=put(d,u,{d:74,u:0}); bench(B); const yaw=Math.atan2(X.s,X.c); V.seats.push({x:X.ox+X.s*.06,z:X.oz+X.c*.06,y:X.oy,ry:yaw,kind:'bench'}); }
-    V.huts=[]; [['m1',61,G*17],['m2',72,G*19],['m3',84,G*17],['m4',67,F*18],['m5',79,F*19],['m6',90,F*13],['m7',57,G*7]].forEach(([id,d,u],i)=>{ const B=put(d,u,{d:74,u:0}); hut(B,id,i); V.blds.push({d,u,hd:1.9,hu:1.9,ao:.3}); V.lamps.push({d:d+(74-d)*.12,u:u*.88,r:5,k:.7});
+    { const B=put(74,0,'up'); prop('xtree',()=>xtree(B,13)); V.lamps.push({d:74,u:0,r:10,k:1.3}); V.blds.push({d:74,u:0,hd:3.8,hu:3.8,ao:.3}); }
+    for(let i=0;i<4;i++){ const a=PI/4+i*PI/2, d=74+Math.cos(a)*7.2, u=Math.sin(a)*7.2, B=put(d,u,{d:74,u:0}); prop('bench',()=>bench(B)); const yaw=Math.atan2(X.s,X.c); V.seats.push({x:X.ox+X.s*.06,z:X.oz+X.c*.06,y:X.oy,ry:yaw,kind:'bench'}); }
+    V.huts=[]; [['m1',61,G*17],['m2',72,G*19],['m3',84,G*17],['m4',67,F*18],['m5',79,F*19],['m6',90,F*13],['m7',57,G*7]].forEach(([id,d,u],i)=>{ const B=put(d,u,{d:74,u:0}); prop('hut',()=>hut(B,id,i)); V.blds.push({d,u,hd:1.9,hu:1.9,ao:.3}); V.lamps.push({d:d+(74-d)*.12,u:u*.88,r:5,k:.7});
       V.huts.push({x:X.ox,z:X.oz,yaw:Math.atan2(X.s,X.c)}); });
-    { const B=put(46,G*7,{d:74,u:0}); signpost(B); }
+    { const B=put(46,G*7,{d:74,u:0}); prop('signpost',()=>signpost(B)); }
     // café terrace: tables, closed parasols, heaters
     for(let i=0;i<4;i++){ const d=90.5+(i%2)*3.2, u=G*(11+Math.floor(i/2)*5.5+(i%2)*1.2), B=put(d,u,'up');
       B.body.geo(cylG,M4(0,.55,0,0,0,0,.05,1.1,.05),PAL.metal,K.metal); B.body.geo(cylG,M4(0,1.1,0,0,0,0,.45,.05,.45),C('#e9e4da'),K.plain); B.body.geo(cylG,M4(0,1.14,0,0,0,0,.4,.04,.4),PAL.snow,K.snow);
@@ -411,14 +430,14 @@
         V.seats.push({x:X.ox+(x+sg*.05)*X.c,z:X.oz-(x+sg*.05)*X.s,y:X.oy,ry:Math.atan2(-sg*X.c,sg*X.s),kind:'cafe'}); }); }
     [[89,G*9.5],[95,G*22]].forEach(([d,u])=>{ const B=put(d,u,'up'); B.body.geo(cylG,M4(0,1.2,0,0,0,0,.06,2.4,.06),PAL.metal,K.metal); B.bulb.geo(cylG,M4(0,2.35,0,0,0,0,.22,.3,.22),[1,.45,.15],0); B.body.geo(coneG,M4(0,2.7,0,0,0,0,.45,.35,.45),PAL.metal,K.metal); V.lamps.push({d,u,r:4,k:.8}); });
     // --- lamps along the street and round the square ---
-    for(let d=106;d<=182;d+=12) [-1,1].forEach(sd=>{ const u=sd*6.4, B=put(d+(sd>0?6:0),u,'street'); lamp(B,4.2); V.lamps.push({d:d+(sd>0?6:0),u,r:7.5,k:1}); });
-    for(let i=0;i<9;i++){ const a=i/9*PI*2+.35, d=74+Math.cos(a)*27, u=Math.sin(a)*22; if(Math.abs(u)>18&&d<66&&Math.sign(u)===F) continue; const B=put(d,u,'up'); lamp(B,4.2); V.lamps.push({d,u,r:7.5,k:1}); }
+    for(let d=106;d<=182;d+=12) [-1,1].forEach(sd=>{ const u=sd*6.4, B=put(d+(sd>0?6:0),u,'street'); prop('lamp',()=>lamp(B,4.2)); V.lamps.push({d:d+(sd>0?6:0),u,r:7.5,k:1}); });
+    for(let i=0;i<9;i++){ const a=i/9*PI*2+.35, d=74+Math.cos(a)*27, u=Math.sin(a)*22; if(Math.abs(u)>18&&d<66&&Math.sign(u)===F) continue; const B=put(d,u,'up'); prop('lamp',()=>lamp(B,4.2)); V.lamps.push({d,u,r:7.5,k:1}); }
     // flags in front of the Grand Hotel, snow banks along the street, spruces
-    [C('#c8102e'),C('#f4f4f4'),C('#1d5bb8'),C('#ffc21a'),C('#16a34a')].forEach((c,i)=>{ const B=put(70+i*4.4,G*31,'street'); flag(B,c,i); });
+    [C('#c8102e'),C('#f4f4f4'),C('#1d5bb8'),C('#ffc21a'),C('#16a34a')].forEach((c,i)=>{ const B=put(70+i*4.4,G*31,'street'); prop('flag',()=>flag(B,c,i)); });
     for(let d=110;d<182;d+=12) [-1,1].forEach(sd=>{ if(hash2(d,sd+5)<.35) return; const B=put(d+2+hash2(d,sd)*4,sd*5.9,'street'); place(X.ox,X.oy,X.oz,Math.atan2(X.s,X.c)+PI/2); snowbank(B,3.5+hash2(d,sd+1)*3,d+sd); });
     [[129,G*24,9],[153,F*23,8],[189,G*10,10],[189,F*10,9.5],[207,G*13,11],[207,F*13,12],[170,G*43,10],[128,F*43,11],[100,G*45,9],[44,F*24,8],[92,F*44,10],[172,F*44,9],[63,G*27,7],[194,G*30,11],[196,F*31,10]].forEach(([d,u,h],i)=>{ const B=put(d,u,'up'); spruce(B,h,i); V.blds.push({d,u,hd:1.6,hu:1.6,ao:.25}); });
     // --- the finish: a grandstand facing the run-out ---
-    { const u=G*(Wd.halfW(L+14)+8); const B=put(14,u,'street'); stand(B,14); V.blds.push({d:14,u,hd:7,hu:2.5,ao:.3}); V.spots.stand={x:X.ox,y:X.oy,z:X.oz,yaw:Math.atan2(X.s,X.c)}; }
+    { const u=G*(Wd.halfW(L+14)+8); const B=put(14,u,'street'); prop('stand',()=>stand(B,14)); V.blds.push({d:14,u,hd:7,hu:2.5,ao:.3}); V.spots.stand={x:X.ox,y:X.oy,z:X.oz,yaw:Math.atan2(X.s,X.c)}; }
     // --- the lift: terminal, and the queue's maze ---
     terminal(Bat);
     /* the maze: three lanes on the square's side of the loading line; the queue snakes from the entry (downhill end of the
@@ -432,7 +451,7 @@
     // --- meshes ---
     const grp=new THREE.Group(); grp.name='village';
     cl.forEach(c=>SET.forEach(k=>{ const m=c[k].mesh(MAT[k]); if(!m) return; m.castShadow=k==='body'; m.receiveShadow=k!=='bulb'; m.matrixAutoUpdate=false; grp.add(m); }));
-    scene.add(grp); V.group=grp; V.key=key; V.applyLight(); V.populate(); };
+    modelMeshes(grp); scene.add(grp); V.group=grp; V.key=key; V.applyLight(); V.populate(); };
   /* ---------- village life: who stands, walks, sits and queues where (registered with ST.People after every reset) ---------- */
   const _o={x:0,z:0,dx:0,dz:1};
   function pathOf(pts,loop){ const Wd=W(), L=V.L, P=pts.map(p=>{ const s=L+p[0]; return {x:Wd.cx(s)+p[1],z:-s}; }); if(loop) P.push(P[0]);
@@ -494,11 +513,14 @@
     return k; };
 
   /* a building for the resort along the run (World chunks place it): the village's house, merged at its own origin */
-  V.makeHouse=function(o){ buildAtlas(); const B={body:new Batch(),glass:new Batch(),sign:new Batch(true),bulb:new Batch()}; place(0,0,0,0); const h=house(B,o), g=new THREE.Group();
+  V.makeHouse=function(o){ const G2=got(), F=G2&&(G2.buildings.lodge||G2.buildings.house);
+    if(F){ const g=new THREE.Group(), sc=F.spec.fit==='footprint'?Math.min(o.w/F.size.x,o.d/F.size.z):1;   // a listed model (lodge, else any house)
+      F.parts.forEach(p=>{ const m=new THREE.Mesh(p.geo,p.mat); m.scale.setScalar(sc); m.castShadow=true; m.receiveShadow=true; m.userData.dyn=1; m.userData.model=1; g.add(m); }); g.userData.h=F.size.y*sc; return g; }
+    buildAtlas(); const B={body:new Batch(),glass:new Batch(),sign:new Batch(true),bulb:new Batch()}; place(0,0,0,0); const h=house(B,o), g=new THREE.Group();
     SET.forEach(k=>{ const m=B[k].mesh(MAT[k]); if(!m) return; m.castShadow=k==='body'; m.receiveShadow=k!=='bulb'; m.userData.dyn=1; g.add(m); }); g.userData.h=h; return g; };
-  V.dispose=function(){ if(!V.group) return; scene.remove(V.group); V.group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); V.group=null; V.key=''; };
+  V.dispose=function(){ if(!V.group) return; scene.remove(V.group); V.group.traverse(o=>{ if(o.geometry&&!o.userData.model) o.geometry.dispose(); }); V.group=null; V.key=''; };   // listed models' geometry stays: it is the registry's
   /* windows and bulbs follow the time of day of the run (morning, sunset, blue hour, night) */
-  V.applyLight=function(){ const n=V.night; MAT.glass.emissiveIntensity=.3+1.25*n; MAT.bulb.emissiveIntensity=1.1+2.2*n; MAT.sign.emissiveIntensity=.12+.55*n; };
+  V.applyLight=function(){ const n=V.night; MAT.glass.emissiveIntensity=.3+1.25*n; MAT.bulb.emissiveIntensity=1.1+2.2*n; MAT.sign.emissiveIntensity=.12+.55*n; V.modelMats.forEach(m=>m.emissiveIntensity=.3+1.25*n); };
 
   ST.Village=V;
 })(window.ST);

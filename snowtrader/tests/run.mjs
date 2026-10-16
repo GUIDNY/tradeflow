@@ -22,7 +22,7 @@ await new Promise(r=>server.listen(0,r)); const PORT=server.address().port;
 const exe=process.env.CHROME||(fs.existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome')?'/opt/pw-browsers/chromium-1194/chrome-linux/chrome':undefined);
 const browser=await chromium.launch({executablePath:exe,headless:!process.env.HEADFUL,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--no-sandbox']});
 const errors=[];
-async function open(q){ const p=await browser.newPage({viewport:{width:640,height:400}}); p.on('pageerror',e=>errors.push(e.message));
+async function open(q,init){ const p=await browser.newPage({viewport:{width:640,height:400}}); p.on('pageerror',e=>errors.push(e.message)); if(init) await p.addInitScript(init);
   await p.goto(`http://localhost:${PORT}/index.html?q=0&fx=0&nolift=1&${q||''}`); await p.waitForFunction('window.READY',null,{timeout:120000});
   await p.waitForFunction('ST.Rider.current!=="hero"',null,{timeout:240000}).catch(()=>{});
   // shared helpers in the page
@@ -188,6 +188,38 @@ await test('pipe',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug,
     ST.Physics.step=orig;
     return {heightAboveFloorM:+top.toFixed(2),wallH:pp.H,air:+airT.toFixed(2),landing:landed?landed.out:null,impact:landed?+landed.imp.toFixed(1):null,ridingAfter:P.grounded&&P.speed>3,fell:!!P.fall,maxEnergyGainJkg:+gain.toFixed(2)}; });
   return {ok:r.heightAboveFloorM>r.wallH+.3&&r.landing==='clean'&&!r.fell&&r.ridingAfter&&r.maxEnergyGainJkg<1.5,detail:JSON.stringify(r)}; });
+
+/* the asset replacement layer (js/assets.js): the Mixamo crowd retargets as before (no rest fix), the Meshy model works as a
+   village guest (arms fixed to Mixamo's rest, walks like a Mixamo guest, stands on its own spot), and every slot takes a listed
+   model: stand-ins from tests/fixtures (a helmet, goggles and mitts on the rider, the Meshy body as a garment on itself, a
+   tree, the café and the lodges as a house, the benches) land where the generator would have built */
+await test('assets',async()=>{ const g=await page.evaluate(async()=>{ const PP=ST.People, out={crowd:PP.names.length,crowdFix:0};
+    for(const n of PP.names){ const T=await PP.template(n); out.crowdFix+=T.armFix.length; }
+    const M=await PP.template('meshy_rider'), C=await PP.template('Ch02'); out.meshyFix=M.armFix.length;
+    const cyc=T=>{ const m=THREE.SkeletonUtils.clone(T.scene); m.scale.multiplyScalar(T.k); m.position.set(T.x0,T.y,T.z0); const g=new THREE.Group(); g.add(m); const B={}; m.traverse(o=>{ if(o.isBone) B[o.name]=o; });
+      const P=k=>B[T.map[k]].getWorldPosition(new THREE.Vector3()), mx=new THREE.AnimationMixer(m); mx.clipAction(T.clips.Walk).play(); let fz0=9, fz1=-9, low=9, wx=0, hx=0;
+      for(let i=0;i<16;i++){ mx.setTime(T.clips.Walk.duration*i/16); g.updateMatrixWorld(true); const h=P('Hips'), f=P('FootL'); fz0=Math.min(fz0,f.z-h.z); fz1=Math.max(fz1,f.z-h.z); low=Math.min(low,f.y,P('FootR').y); wx+=Math.abs(P('WristL').x-h.x)/16; hx=Math.max(hx,Math.hypot(h.x,h.z)); }
+      return {swing:fz1-fz0,low,wx,hx}; };
+    const a=cyc(M), b=cyc(C); out.meshy={swing:+a.swing.toFixed(2),footLow:+a.low.toFixed(2),wristOut:+a.wx.toFixed(2),hipsOff:+a.hx.toFixed(2)}; out.ch02={swing:+b.swing.toFixed(2),wristOut:+b.wx.toFixed(2)}; return out; });
+  const p2=await open('',()=>{ const F='tests/fixtures/'; window.ST_ASSETS_EXTRA={characters:{meshy_rider:{parts:['assets/chars/meshy_rider.glb']}},
+    gear:{helmet:{url:F+'helmet.glb',tint:true},goggles:{url:F+'goggles.glb'},mitts:{url:F+'mitt.glb'}},
+    world:{trees:{spruce:{near:F+'tree.glb',far:F+'tree_far.glb'}},buildings:{cafe:{url:F+'house.glb',fit:'footprint'},lodge:{url:F+'house.glb',fit:'footprint'}},props:{bench:{url:F+'bench.glb'}}}}; });
+  const s=await p2.evaluate(async()=>{ const R=ST.Rider, W=ST.World, V=ST.Village, out={};
+    const parts=[]; R.model.traverse(o=>{ if(o.userData.part) parts.push(o); }); let base=null; R.model.traverse(o=>{ if(o.isSkinnedMesh&&!o.userData.part&&!base) base=o; });
+    let worst=-1; if(parts.length&&base){ worst=0; R.model.updateMatrixWorld(true); const a=new THREE.Vector3(), c=new THREE.Vector3(); for(let i=0;i<base.geometry.attributes.position.count;i+=997){ base.boneTransform(i,a); parts[0].boneTransform(i,c); worst=Math.max(worst,a.applyMatrix4(base.matrixWorld).distanceTo(c.applyMatrix4(parts[0].matrixWorld))); } }
+    out.part={n:parts.length,worstMm:+(worst*1000).toFixed(1)};
+    await R.swap('hero'); let gm=0; R.gear.traverse(o=>{ if(o.userData.gearModel) gm++; }); out.gear={models:gm,mittsOnWrists:(R.glovePieces||[]).slice(-2).filter(o=>o.parent&&/^Wrist/.test(o.parent.name)).length};
+    const TR=W.TREE.spruce; let near=0; ST.scene.traverse(o=>{ if(o.isInstancedMesh&&o.geometry===TR.near) near+=o.count; }); out.trees={model:!!TR.model,near,firBuilt:!W.TREE.fir.model};
+    const cafe=V.blds.find(b=>b.d===101), cs=V.L+101, cw={x:W.cx(cs)+cafe.u,z:-cs}; let cafeD=null, benches=0; const m=new THREE.Matrix4(), v=new THREE.Vector3();
+    V.group.traverse(o=>{ if(!o.isInstancedMesh||!o.userData.model) return; if(o.count===1&&cafeD===null){ o.getMatrixAt(0,m); v.setFromMatrixPosition(m); cafeD=Math.hypot(v.x-cw.x,v.z-cw.z); } if(o.count===4) benches=4; });
+    out.village={cafeOffM:cafeD==null?null:+cafeD.toFixed(2),benches,glowMats:V.modelMats.length};
+    const st=ST.Resort.sites(ST.debug.track()).find(t=>t.k!=='station'); W.update(st.s,true); let lodge=0; ST.scene.traverse(o=>{ if(o.isMesh&&!o.isInstancedMesh&&o.userData.model&&o.userData.dyn) lodge++; }); out.lodgeMeshes=lodge;
+    return out; });
+  await p2.close();
+  const r={...g,...s}, checks={crowdAsBefore:r.crowd===9&&r.crowdFix===0,meshyArms:r.meshyFix===6,meshyWalks:r.meshy.swing>.4&&Math.abs(r.meshy.swing-r.ch02.swing)<.2&&Math.abs(r.meshy.wristOut-r.ch02.wristOut)<.06,
+    meshyGrounded:r.meshy.footLow>.05&&r.meshy.footLow<.2,meshyInPlace:r.meshy.hipsOff<.3,part:r.part.n===1&&r.part.worstMm<1,gear:r.gear.models>=2&&r.gear.mittsOnWrists===2,trees:r.trees.model&&r.trees.near>0&&r.trees.firBuilt,
+    cafe:r.village.cafeOffM!==null&&r.village.cafeOffM<.5,benches:r.village.benches===4,glow:r.village.glowMats>=1,lodges:r.lodgeMeshes>=3,noErrors:errors.length===0}, bad=Object.keys(checks).filter(k=>!checks[k]);
+  return {ok:!bad.length,detail:JSON.stringify(r)+(bad.length?' FAILED: '+bad.join(','):'')}; });
 
 await browser.close(); server.close();
 const failed=results.filter(r=>!r.ok);

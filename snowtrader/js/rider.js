@@ -71,14 +71,7 @@
   const BN={}; MIX.forEach(k=>BN[k]=k);   // the loader strips the dots from node names (UpperArm.L -> UpperArmL)
 
   function loadGLTF(url){ return new Promise((res,rej)=>{ const L=new THREE.GLTFLoader(); if(window.MeshoptDecoder) L.setMeshoptDecoder(window.MeshoptDecoder); L.load(url,res,undefined,rej); }); }
-  function poseToBind(rootObj){   // every bone back to the pose the skin was bound in (the file saves its nodes in another one)
-    rootObj.updateMatrixWorld(true); const W=new Map();
-    rootObj.traverse(o=>{ if(!o.isSkinnedMesh) return; o.skeleton.bones.forEach((b,i)=>{ if(!W.has(b)) W.set(b,new THREE.Matrix4().copy(o.skeleton.boneInverses[i]).invert().premultiply(o.bindMatrix)); }); });
-    const inv=new THREE.Matrix4(), m=new THREE.Matrix4(), sc=new THREE.Vector3();
-    const walk=o=>{ if(W.has(o)){ const pw=W.get(o.parent)||o.parent.matrixWorld; m.copy(inv.copy(pw).invert()).multiply(W.get(o)); const s0=o.scale.clone(); m.decompose(o.position,o.quaternion,sc); o.scale.copy(s0); o.updateMatrixWorld(true); }
-      o.children.forEach(walk); };
-    walk(rootObj); rootObj.updateMatrixWorld(true);
-  }
+  const poseToBind=o=>ST.Assets.poseToBind(o);   // every bone back to the pose the skin was bound in (the file saves its nodes in another one)
   const _q=new THREE.Quaternion(), _q2=new THREE.Quaternion(), _e=new THREE.Euler(), _v=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(), _v4=new THREE.Vector3(), _v5=new THREE.Vector3(), _v6=new THREE.Vector3(), _p0=new THREE.Vector3(), _p1=new THREE.Vector3(), _p2=new THREE.Vector3(), _dq=new THREE.Quaternion(), _wq=new THREE.Quaternion(), _pq=new THREE.Quaternion();
   /* where each ankle must be, in the rig frame (board level): over the middle of each binding (front foot forward = -Z), ankle height of a boot on a binding */
   R.bindT={L:new THREE.Vector3(0,.205,-.28),R:new THREE.Vector3(0,.205,.28)}; R.ikOn=true;
@@ -107,8 +100,6 @@
     R.heroModel=model; R.heroMats=R.mats; measureLimbs(); R.dress(); R.addGear(); R.ready=true; R.pose({}); return model;
   };
   /* ---------- any Mixamo-rigged character as the rider ---------- */
-  const MXMAP={Hips:'Hips',Abdomen:'Spine',Torso:'Spine1',Chest:'Spine2',Neck:'Neck',Head:'Head',ShoulderL:'LeftShoulder',UpperArmL:'LeftArm',LowerArmL:'LeftForeArm',WristL:'LeftHand',ShoulderR:'RightShoulder',UpperArmR:'RightArm',LowerArmR:'RightForeArm',WristR:'RightHand',
-    UpperLegL:'LeftUpLeg',LowerLegL:'LeftLeg',FootL:'LeftFoot',UpperLegR:'RightUpLeg',LowerLegR:'RightLeg',FootR:'RightFoot'};
   R.droop=0; R.choices=['hero'].concat(ST.People?ST.People.names:[]).concat(ST.Assets?Object.keys(ST.Assets.characters):[]); R.current='hero'; R.spec=null;
   function adopt(model,boneFor,k,rotY){
     if(R.model&&R.model.parent) R.model.parent.remove(R.model);
@@ -132,28 +123,20 @@
       // nothing): the highest bone (the head's end) to the ankles, plus the ankle's height above the sole
       m.updateMatrixWorld(true); const v=new THREE.Vector3(); let top=-1e9; m.traverse(o=>{ if(o.isBone) top=Math.max(top,o.getWorldPosition(v).y); });
       const fy=Math.min(boneFor('FootL').getWorldPosition(v).y,boneFor('FootR').getWorldPosition(v).y), k=spec.height/Math.max(.1,top-fy+.09);
-      if(spec.tint) tintable(m);
-      return {spec,scene:m,boneFor,k,check:ST.Assets.check(name,m,boneFor)}; }); };
-  /* A baked texture can still take the run's colours where the model marks a region (vertex colour, red = trousers; written when
-     the asset is prepared, from the bind pose: below the jacket hem, not the boots). The texture's own light and dark (folds,
-     seams) is kept and only its colour is replaced; very dark texels (boots, zips) are left as they are, and so is the
-     jacket's yellow where its hem hangs over the trousers (redder than any trouser texel). */
-  function tintable(m){ m.traverse(o=>{ if(!o.isMesh||!o.geometry.attributes.color) return; const g=o.geometry; g.setAttribute('aTint',g.attributes.color); g.deleteAttribute('color');
-    const mt=o.material; mt.vertexColors=false; const col=mt.userData.pants=new THREE.Color(R.look.pants).convertSRGBToLinear();
-    mt.onBeforeCompile=sh=>{ sh.uniforms.uPants={value:col};
-      sh.vertexShader='attribute vec4 aTint;\nvarying float vTint;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vTint=aTint.r;');
-      sh.fragmentShader='uniform vec3 uPants;\nvarying float vTint;\n'+sh.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\n { float tl=dot(diffuseColor.rgb,vec3(.299,.587,.114)); float tk=vTint*smoothstep(.015,.05,tl)*(1.-smoothstep(.08,.16,diffuseColor.r-diffuseColor.g)); diffuseColor.rgb=mix(diffuseColor.rgb,uPants*clamp(tl/.17,0.,1.7),tk); }'); };
-    mt.customProgramCacheKey=()=>'st-tint'; mt.needsUpdate=true; }); }
+      if(spec.tint) ST.Assets.tintable(m,R.look.pants);
+      return ST.Assets.wearAll(m,spec).then(()=>({spec,scene:m,boneFor,k,check:ST.Assets.check(name,m,boneFor)})); }); };   // garments listed with it (parts) go onto its bones
+  /* A baked texture can still take the run's colours where the model marks a region (vertex colour, red = trousers; written
+     when the asset is prepared, from the bind pose: below the jacket hem, not the boots): ST.Assets.tintable. */
   R.preload=name=>name==='hero'?Promise.resolve():R.isAsset(name)?R.loadAsset(name):ST.People.template(name);
   R.swap=async function(name){
     if(name===R.current) return; const prev=R.current;
     if(name==='hero'){ R.spec=null; const hm=R.heroModel; const B={}; hm.traverse(o=>{ if(o.isBone) B[o.name]=o; }); adopt(hm,key=>B[key],1.0,Math.PI/2); R.mats=R.heroMats; R.current='hero'; R.dress(); return; }
     if(R.isAsset(name)){ const A=await R.loadAsset(name); R.spec=A.spec; adopt(A.scene,A.boneFor,A.k,A.spec.facing==='-Z'?-Math.PI/2:Math.PI/2); R.mats={}; R.current=name; R.assetCheck=A.check; return; }
-    R.spec=null;
     const T=await ST.People.template(name), m=THREE.SkeletonUtils.clone(T.scene);
+    R.spec=T.E.outfit==='baked'?{gear:T.E.hat!==false,outfit:'baked'}:null;   // a guest in its own ski kit keeps it (and its own helmet: hat:false)
     m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false; } }); ST.People.dressOutfit(m,R.look.jacket,R.look.pants);
-    const find=n=>{ let b=null; m.traverse(o=>{ if(!b&&o.name==='mixamorig'+n) b=o; }); return b; };
-    adopt(m,key=>find(MXMAP[key]),T.k,Math.PI/2); R.mats={}; R.current=name; };
+    const B={}; m.traverse(o=>{ if(o.isBone) B[o.name]=o; });
+    adopt(m,key=>B[T.map[key]]||null,T.k,Math.PI/2); R.mats={}; R.current=name; };
   R.dress=function(){ if(R.current!=='hero'&&R.current) return; const k=R.look, M=R.mats; const set=(n,c)=>{ if(M[n]) M[n].color.setHex(c).convertSRGBToLinear(); };
     set('Skin',k.skin); set('Skin2',k.skin); set('Hair',k.hair); set('Hair2',k.hair); set('Top',k.jacket); set('Top2',0x1a1c22); set('Accent',0xffffff); set('Pants',k.pants); set('Shoe',0x22242b); set('Sole',0xeeeeee);
     if(M.Top){ M.Top.roughness=.55; M.Top.metalness=.05; } };
@@ -161,13 +144,23 @@
     if(R.spec&&R.spec.gear===false){ R.helm=null; R.lens=null; return; }   // the model brings its own helmet, goggles and gloves
     const head=R.bones.Head; if(!head) return;
     const hp=head.getWorldPosition(new THREE.Vector3()), mp=R.model.getWorldPosition(new THREE.Vector3());
-    const gear=new THREE.Group();
-    const helm=new THREE.Mesh(new THREE.SphereGeometry(.156,24,16,0,Math.PI*2,0,Math.PI*.6),new THREE.MeshStandardMaterial({color:R.look.helmet,roughness:.92,metalness:0})); helm.scale.set(1,.98,1.12); helm.position.set(0,.105,-.015); helm.castShadow=true; gear.add(helm); R.helm=helm;
-    const strap=new THREE.Mesh(new THREE.TorusGeometry(.148,.016,8,28),new THREE.MeshStandardMaterial({color:0x0c0d11,roughness:.6})); strap.rotation.x=Math.PI/2; strap.position.set(0,.115,.0); strap.scale.set(1,1.1,1); gear.add(strap);
-    const lens=new THREE.Mesh(new THREE.BoxGeometry(.2,.082,.06),new THREE.MeshStandardMaterial({color:0xff7a2e,roughness:.12,metalness:.9,emissive:0xff5a1e,emissiveIntensity:.5})); lens.position.set(0,.108,.125); lens.geometry.translate(0,0,0); gear.add(lens); R.lens=lens;
-    const frame=new THREE.Mesh(new THREE.BoxGeometry(.225,.1,.05),new THREE.MeshStandardMaterial({color:0x101218,roughness:.5})); frame.position.set(0,.108,.118); gear.add(frame);
-    // black mitts on both wrists, like the reference
-    ['WristL','WristR'].forEach(k=>{ const wb=R.bones[k]; if(!wb) return; const wp=wb.getWorldPosition(new THREE.Vector3()); const glove=new THREE.Mesh(new THREE.BoxGeometry(.11,.1,.17),new THREE.MeshStandardMaterial({color:0x0e1015,roughness:.7})); glove.castShadow=true; scene.add(glove); glove.position.copy(wp); R.model.updateMatrixWorld(true); wb.attach(glove); R.glovePieces=(R.glovePieces||[]).concat(glove); });
+    const gear=new THREE.Group(), GM=ST.Assets?ST.Assets.got.gear:{};
+    // a listed model (js/assets.js gear) is used as authored: origin at the head pivot, +Z forward, Y up, metres
+    const model=(F,tint)=>{ const g=new THREE.Group(); let one=null; F.parts.forEach(p=>{ const own=tint&&!Array.isArray(p.mat), me=new THREE.Mesh(p.geo,own?p.mat.clone():p.mat); me.castShadow=true; me.userData.gearModel=1; g.add(me); if(own&&!one) one=me; }); return {g,one}; };
+    if(GM.helmet){ const h=model(GM.helmet,GM.helmet.spec.tint); gear.add(h.g); R.helm=h.one; if(R.helm) R.helm.material.color.setHex(R.look.helmet); }   // as setLook colours it
+    else { const helm=new THREE.Mesh(new THREE.SphereGeometry(.156,24,16,0,Math.PI*2,0,Math.PI*.6),new THREE.MeshStandardMaterial({color:R.look.helmet,roughness:.92,metalness:0})); helm.scale.set(1,.98,1.12); helm.position.set(0,.105,-.015); helm.castShadow=true; gear.add(helm); R.helm=helm;
+      const strap=new THREE.Mesh(new THREE.TorusGeometry(.148,.016,8,28),new THREE.MeshStandardMaterial({color:0x0c0d11,roughness:.6})); strap.rotation.x=Math.PI/2; strap.position.set(0,.115,.0); strap.scale.set(1,1.1,1); gear.add(strap); }
+    if(GM.goggles){ gear.add(model(GM.goggles).g); R.lens=null; }
+    else { const lens=new THREE.Mesh(new THREE.BoxGeometry(.2,.082,.06),new THREE.MeshStandardMaterial({color:0xff7a2e,roughness:.12,metalness:.9,emissive:0xff5a1e,emissiveIntensity:.5})); lens.position.set(0,.108,.125); lens.geometry.translate(0,0,0); gear.add(lens); R.lens=lens;
+      const frame=new THREE.Mesh(new THREE.BoxGeometry(.225,.1,.05),new THREE.MeshStandardMaterial({color:0x101218,roughness:.5})); frame.position.set(0,.108,.118); gear.add(frame); }
+    // black mitts on both wrists, like the reference. A listed mitt is a left one (fingers toward +X, palm down), turned to
+    // lie along the forearm; the right one is its mirror image
+    R.model.updateMatrixWorld(true); const qb=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,R.model.rotation.y,0)).premultiply(rig.getWorldQuaternion(new THREE.Quaternion()));
+    ['WristL','WristR'].forEach(k=>{ const wb=R.bones[k]; if(!wb) return; const wp=wb.getWorldPosition(new THREE.Vector3()); let glove;
+      if(GM.mitts){ glove=model(GM.mitts).g; const sd=k==='WristL'?1:-1, fa=R.bones[k==='WristL'?'LowerArmL':'LowerArmR'], d=fa?wp.clone().sub(fa.getWorldPosition(new THREE.Vector3())).normalize():new THREE.Vector3(sd,0,0).applyQuaternion(qb);
+        glove.scale.x=sd; glove.quaternion.setFromUnitVectors(new THREE.Vector3(sd,0,0).applyQuaternion(qb),d).multiply(qb); }
+      else { glove=new THREE.Mesh(new THREE.BoxGeometry(.11,.1,.17),new THREE.MeshStandardMaterial({color:0x0e1015,roughness:.7})); glove.castShadow=true; }
+      scene.add(glove); glove.position.copy(wp); glove.updateMatrixWorld(true); wb.attach(glove); R.glovePieces=(R.glovePieces||[]).concat(glove); });
     gear.position.copy(hp.clone().sub(mp)).multiplyScalar(0); R.gear=gear;
     // gear is authored in the head's local frame: bone-local = world-up/forward only if the bone is bound upright; attach keeps the world pose
     rig.add(gear); gear.position.copy(rig.worldToLocal(hp.clone())); gear.rotation.set(0,R.model.rotation.y,0); gear.updateMatrixWorld(true); head.attach(gear);
