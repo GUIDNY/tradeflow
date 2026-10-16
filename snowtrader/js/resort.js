@@ -36,7 +36,7 @@
   R.liftU=liftU; R.lodgeSide=()=>lodgeSide;
   /* buildings along the run (the bottom of the run is the village: js/village.js) */
   R.sites=function(tr){ const i=ST.TRACKS.indexOf(tr), ls=i%2===0?1:-1, ld=-ls; const L=tr.len, W=s=>tr.halfW+3.5*Math.sin(s*.011+1);
-    return [{k:'lodge',s:26,u:ld*(W(26)+21),r:16},{k:'cafe',s:L*.5,u:ld*(W(L*.5)+17),r:9},{k:'station',s:-34,u:ls*(W(-34)+19),r:8},{k:'apres',s:L*.27,u:ld*(W(L*.27)+17),r:10},{k:'mcafe',s:L*.74,u:ld*(W(L*.74)+17),r:10}]; };
+    return [{k:'lodge',s:26,u:ld*(W(26)+21),r:16},{k:'cafe',s:L*.5,u:ld*(W(L*.5)+17),r:9},{k:'station',s:-34,u:ls*(W(-34)+19),r:12},{k:'apres',s:L*.27,u:ld*(W(L*.27)+17),r:10},{k:'mcafe',s:L*.74,u:ld*(W(L*.74)+17),r:10}]; };
   R.blocked=function(s,u){ if(!T) return false; const lu=liftU(s); if(s>-40&&s<liftEnd()+6&&Math.abs(u-lu)<8) return true;
     const sites=R.sites(T); for(const t of sites){ const du=u-t.u, ds=s-t.s; if(du*du+ds*ds<(t.r+6)*(t.r+6)) return true; } return false; };
 
@@ -109,11 +109,15 @@
   const LP=42, LS0=-34, HALF=2.0, BW_H=3.1, LOAD_H=3.3, LOAD_BACK=7;
   let towers=null;
   function liftEnd(){ const V=VIL(); return V?LEN+V.terminal.d:LEN+60; }
-  function getTowers(){ if(towers) return towers; const W=ST.World, sT=liftEnd(), V=VIL(); towers=[];
+  function getTowers(){ if(towers) return towers; const W=ST.World, sT=liftEnd(); towers=[];
     const at=(s,h,extra)=>{ const x=W.cx(s)+liftU(s), z=-s; return Object.assign({s,x,z,y:W.groundY(x,z)+h,gy:W.groundY(x,z)},extra||{}); };
-    for(let k=0;;k++){ const s=LS0+k*LP; if(s>sT-(V?30:0)-LOAD_BACK) break; towers.push(at(s,12.5,{k})); }
-    if(V){ towers.push(at(sT-LOAD_BACK,LOAD_H,{load:true})); towers.push(at(sT,BW_H,{wheel:true})); }
-    R.sT=sT; R.sLoad=sT-LOAD_BACK+.5; return towers; }
+    // a terminal at each end (bullwheel + sheave at loading height), towers every 42 m between them
+    towers.push(at(LS0,BW_H,{wheel:true,top:true})); towers.push(at(LS0+LOAD_BACK,LOAD_H,{load:true,top:true}));
+    for(let k=0;;k++){ const s=LS0+LOAD_BACK+33+k*LP; if(s>sT-30-LOAD_BACK) break; towers.push(at(s,12.5,{k})); }
+    towers.push(at(sT-LOAD_BACK,LOAD_H,{load:true})); towers.push(at(sT,BW_H,{wheel:true}));
+    R.sT=sT; R.sLoad=sT-LOAD_BACK+.5; R.sTop=LS0; R.sOff=LS0+LOAD_BACK-.5;
+    const loop=2*(sT-LS0)+2*ARC; R.chs=loop/Math.max(1,Math.round(loop/16));   // a whole number of chairs round the loop, so both turns line up
+    return towers; }
   R.towers=()=>getTowers();
   function span(s){ const tw=getTowers(); let lo=0, hi=tw.length-1; if(s<=tw[0].s) return 0; if(s>=tw[hi].s) return hi-1; while(hi-lo>1){ const m=(lo+hi)>>1; if(tw[m].s<=s) lo=m; else hi=m; } return lo; }
   function cablePoint(s,line){   // line: -1 uphill (left), +1 downhill
@@ -141,7 +145,8 @@
     for(let s=Math.ceil((s0-20)/90)*90+45;s<s0+L;s+=90){ if(s<s0||s>LEN-30) continue; [-1,1].forEach(side=>{ const u=side*(hw(s)+.9), x=W.cx(s)+u, z=-s, y=W.groundY(x,z); cyl(.05,.06,3.2,M.steel,x,y+1.5,z,grp,6);
         const sg=new THREE.Mesh(new THREE.PlaneGeometry(1.1,1.1),new THREE.MeshBasicMaterial({map:signTex(T.diff),side:THREE.DoubleSide})); sg.position.set(x,y+3.1,z); sg.rotation.y=PI/2+side*.15; grp.add(sg); }); }
     // buildings (only the chunk that owns the site builds it)
-    R.sites(T).forEach((t,i)=>{ if(t.s<s0||t.s>=s0+L) return; let o; const k=t.k, house=k!=='station', V=ST.Village;
+    { const V=ST.Village; if(LS0>=s0&&LS0<s0+L&&V&&V.makeTerminal){ const g=V.makeTerminal(); if(g) grp.add(g); } }   // the top terminal
+    R.sites(T).forEach((t,i)=>{ if(t.s<s0||t.s>=s0+L||t.k==='station') return; let o; const k=t.k, house=true, V=ST.Village;
       if(house&&V&&V.makeHouse){ const spec=HOUSES[k]; o=V.makeHouse(spec); const tr=terrace(k==='lodge'?5:3,i), tk=k==='lodge'?.9:.62; tr.scale.setScalar(tk); tr.position.set(0,-.05,spec.d/2-.6*tk); o.add(tr);   // the deck stays on the cut terrace
         placeBuilding(grp,t,o,true); o.position.y+=.95; o.updateMatrixWorld(true); addSmoke(grp,o,new THREE.Vector3(spec.w*.22*(spec.seed%2?1:-1),o.userData.h+1.6,-spec.d*.18)); }
       else { o=house?chalet(.62,k.toUpperCase(),''):station(); placeBuilding(grp,t,o,house); if(house) addSmoke(grp,o); }
@@ -179,18 +184,21 @@
   const lineP=(line,t)=>line<0?2*(R.sT||0)+ARC-CSPEED*t:CSPEED*t;
   R.seatsOf=j=>hash2(j,5)<.7?2:1;
   /* the next chair to pass the load sheave: its id, seats and the seconds until it gets there (rope time) */
-  R.nextChair=function(t){ getTowers(); const p=lineP(-1,t), js=(R.sLoad-p)/CHS, j=Math.floor(js)+1; return {j,seats:R.seatsOf(j),dt:(j*CHS+p-R.sLoad)/CSPEED,period:CHS/CSPEED}; };
+  R.nextChair=function(t){ getTowers(); const C=R.chs, p=lineP(-1,t), js=(R.sLoad-p)/C, j=Math.floor(js)+1; return {j,seats:R.seatsOf(j),dt:(j*C+p-R.sLoad)/CSPEED,period:C/CSPEED}; };
   function updateChairs(t,ps,back,ahead){
-    let n=0, nr=0; const tw=getTowers(), sT=R.sT, win0=ps-(back||110), win1=ps+(ahead||230), sTop=tw[0].s+4, V=VIL();
-    const c0=cablePoint(sT,0), c1=cablePoint(sT-1,0), dl=Math.hypot(c0.x-c1.x,c0.z-c1.z)||1, dx=(c0.x-c1.x)/dl, dz=(c0.z-c1.z)/dl;   // downhill at the bullwheel
-    [-1,1].forEach(line=>{ if(R.liftMode&&line>0) return; const p=lineP(line,t);
-      for(let j=Math.ceil((win0-p)/CHS); j*CHS+p<=Math.min(win1,sT+(line>0&&V?ARC:0)); j++){ const s=j*CHS+p; if(s<sTop||n>=CH_N) continue;
+    let n=0, nr=0; getTowers(); const sT=R.sT, LT=R.sTop, C=R.chs, win0=ps-(back||110), win1=ps+(ahead||230), F=liftSide;
+    const dir=(s,e)=>{ const a=cablePoint(s,0), b=cablePoint(s+e,0), l=Math.hypot(b.x-a.x,b.z-a.z)||1; return [a,(b.x-a.x)/l*Math.sign(e),(b.z-a.z)/l*Math.sign(e)]; };
+    const [c0,dx,dz]=dir(sT,-1), [t0,tx,tz]=dir(LT,1);   // the bullwheels and the downhill direction at each
+    [-1,1].forEach(line=>{ if(R.liftMode&&line>0) return; const p=lineP(line,t), lo=line<0?LT-ARC:LT, hi=line<0?sT:sT+ARC;
+      for(let j=Math.ceil((Math.max(win0,lo)-p)/C); j*C+p<=Math.min(win1,hi); j++){ const s=j*C+p; if(n>=CH_N) break;
+        if(R.liftMode&&line<0&&Math.abs(s-(R.playerS||0))<10) continue;   // the ride's own chair is drawn by main.js
         let x,y,z,yaw;
-        if(s>sT){ const th=(s-sT)/HALF, cs=Math.cos(th), sn=Math.sin(th), F=liftSide; x=c0.x+F*HALF*cs+HALF*sn*dx; z=c0.z+HALF*sn*dz; y=c0.y; yaw=Math.atan2(-F*sn+cs*dx,cs*dz); }
+        if(s>sT){ const th=(s-sT)/HALF, cs=Math.cos(th), sn=Math.sin(th); x=c0.x+F*HALF*cs+HALF*sn*dx; z=c0.z+HALF*sn*dz; y=c0.y; yaw=Math.atan2(-F*sn+cs*dx,cs*dz); }     // round the bottom wheel
+        else if(s<LT){ const th=(LT-s)/HALF, cs=Math.cos(th), sn=Math.sin(th); x=t0.x-F*HALF*cs-HALF*sn*tx; z=t0.z-HALF*sn*tz; y=t0.y; yaw=Math.atan2(F*sn-cs*tx,-cs*tz); }   // round the top wheel
         else { const a=cablePoint(s,line), b=cablePoint(s+1,line); x=a.x; y=a.y; z=a.z; yaw=Math.atan2(b.x-a.x,b.z-a.z)+(line<0?PI:0); }
-        const calm=V?smooth(sT-4,sT-30,s):1;   // no swinging in the station
+        const calm=smooth(sT-4,sT-30,s)*smooth(LT+4,LT+30,s);   // no swinging in the stations
         _e.set(Math.sin(t*1.3+j)*.05*calm,yaw,Math.sin(t*.9+j*2)*.06*calm,'YXZ'); _q.setFromEuler(_e); _p.set(x,y,z); _m.compose(_p,_q,_s); chairs.setMatrixAt(n,_m);
-        const seats=line<0?(V&&s>R.sLoad?0:R.seatsOf(j)):(s>sT-8&&V?0:hash2(j,9)<.25?1:0);
+        const seats=line<0?(s>R.sLoad||s<R.sOff?0:R.seatsOf(j)):(s>sT-8||s<LT+LOAD_BACK+.5?0:hash2(j,9)<.25?1:0);   // riders board at a sheave and get off at the other end
         if(!seated&&ST.People&&ST.People.seatedRiders) seated=ST.People.seatedRiders(CH_N*2);
         for(let r=0;r<seats&&seated;r++){ _ov.set(r?.55:-.55,-2.66,-.06).applyQuaternion(_q); _p.set(x+_ov.x,y+_ov.y,z+_ov.z); seated.set(nr,_p,_q,(j*7+r*3+1)>>>0); nr++; }
         n++; } });

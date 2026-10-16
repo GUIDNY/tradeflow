@@ -119,7 +119,7 @@
   function startLift(){
     Audio.init(); Audio.music(!save.muted);
     resetPlayer(); mode='lift'; el.menu.hidden=true; el.end.hidden=true; el.hud.hidden=false; el.hud.classList.add('lifting'); el.pause.hidden=true; $('#liftHud').hidden=false; el.tip.hidden=true; tipShown={};
-    ST.Resort.towers(); ST.Resort.liftMode=true; lift.t=0; lift.s0=ST.Resort.sLoad||track.len+34; lift.s1=-26; lift.on=true; lift.fact=-1; P.s=lift.s0; P.z=-P.s; World.update(P.s-150,true);   // the ride starts at the load line in the village
+    ST.Resort.towers(); ST.Resort.liftMode=true; lift.t=0; lift.s0=ST.Resort.sLoad||track.len+34; lift.s1=ST.Resort.sOff||-26; lift.on=true; lift.fact=-1; P.s=lift.s0; P.z=-P.s; World.update(P.s-150,true);   // the ride starts at the load line in the village
     const R=Rider; R.model.rotation.y=PI; R.P.sit=1; R.P.swing=1; R.root.visible=true; ST.Resort.playerChair.visible=true; lift.cam.set(0,0,0); lift.first=true; subtitle(track.en,2000);
   }
   function endLift(){
@@ -127,7 +127,7 @@
   }
   const _tq=new THREE.Quaternion(), _tv=new THREE.Vector3();
   function updateLift(dt){
-    lift.t+=dt; const u=clamp(lift.t/lift.T,0,1), e=u*u*u*(u*(6*u-15)+10); const s=lerp(lift.s0,lift.s1,e); P.s=s; P.z=-s;
+    lift.t+=dt; const u=clamp(lift.t/lift.T,0,1), e=u*u*u*(u*(6*u-15)+10); const s=lerp(lift.s0,lift.s1,e); P.s=s; P.z=-s; ST.Resort.playerS=s;
     const Rs=ST.Resort, p=Rs.cablePoint(s,-1), p2=Rs.cablePoint(s-1.5,-1); const tx=p2.x-p.x, tz=p2.z-p.z, tl=Math.hypot(tx,tz)||1, tdx=tx/tl, tdz=tz/tl, yaw=Math.atan2(tx,tz);
     const sway=Math.sin(lift.t*1.7)*.035, sway2=Math.sin(lift.t*1.1)*.03; _e.set(sway2,yaw,sway,'YXZ'); Rs.playerChair.quaternion.setFromEuler(_e); Rs.playerChair.position.set(p.x,p.y,p.z);
     const R=Rider; R.root.position.set(p.x,p.y-3.28,p.z); R.root.rotation.set(0,yaw+PI,0); R.tilt.quaternion.identity(); R.tilt.quaternion.setFromEuler(_e.set(sway2,0,sway,'YXZ')); R.trick.rotation.set(0,0,0);
@@ -138,8 +138,9 @@
     if(u<.34){ cx=p.x+dirT*4.2; cy=p.y-1.8; cz=p.z; lx=p.x; ly=p.y-1.9; lz=p.z; }
     else if(u<.7){ cx=p.x-tdx*5.2-dirT*1.0; cy=p.y-.2; cz=p.z-tdz*5.2; lx=p.x+tdx*20; ly=p.y+1.6; lz=p.z+tdz*20; }
     else { cx=p.x+tdx*3.4+dirT*3.2; cy=p.y-.9; cz=p.z+tdz*3.4; lx=p.x; ly=p.y-1.9; lz=p.z; }
-    _f.set(cx,cy,cz); _ft.set(lx,ly,lz); if(lift.first){ lift.cam.copy(_f); lift.look.copy(_ft); lift.first=false; } else { lift.cam.lerp(_f,1-Math.exp(-dt*2.6)); lift.look.lerp(_ft,1-Math.exp(-dt*3.2)); }
-    camera.position.copy(lift.cam); camera.lookAt(lift.look); camera.rotateZ(sway*1.4); if(camera.fov!==(ST.baseFov||62)+6){ camera.fov=(ST.baseFov||62)+6; camera.updateProjectionMatrix(); }
+    // the shots ease from one to the next as offsets from the chair, so the time-lapsed chair (up to ~100 m/s) never leaves the frame
+    _f.set(cx-p.x,cy-p.y,cz-p.z); _ft.set(lx-p.x,ly-p.y,lz-p.z); if(lift.first){ lift.cam.copy(_f); lift.look.copy(_ft); lift.first=false; } else { lift.cam.lerp(_f,1-Math.exp(-dt*2.6)); lift.look.lerp(_ft,1-Math.exp(-dt*3.2)); }
+    camera.position.set(p.x+lift.cam.x,p.y+lift.cam.y,p.z+lift.cam.z); _ft.set(p.x+lift.look.x,p.y+lift.look.y,p.z+lift.look.z); camera.lookAt(_ft); camera.rotateZ(sway*1.4); if(camera.fov!==(ST.baseFov||62)+6){ camera.fov=(ST.baseFov||62)+6; camera.updateProjectionMatrix(); }
     const fi=Math.min(FACTS.length-1,Math.floor(lift.t/3.4)); if(fi!==lift.fact){ lift.fact=fi; $('#liftFact').textContent=FACTS[fi]; }
     gr('uSpeed',Math.sin(u*PI)*.35); if(u>=1) endLift();
   }

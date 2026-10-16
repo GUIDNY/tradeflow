@@ -322,8 +322,9 @@
     B.body.box(0,5.08,-.7,w+.5,.2,4.1,PAL.snow,K.snow,null,{x:[1,0,0],y:[0,.985,.17],z:[0,-.17,.985]}); sign(B,'timing',0,6.6,-1.4,5.2,0); B.body.box(0,6.6,-1.5,5.5,2,.15,PAL.dark,K.metal); }
 
   /* ---------- the lift's bottom terminal (the rope geometry is the Resort's) ---------- */
-  function terminal(Bat){ const R=ST.Resort; if(!R||!R.towers) return; const tw=R.towers(), bw=tw[tw.length-1], ld=tw[tw.length-2]; if(!bw||!bw.wheel) return;
-    const F=V.ls, yaw=Math.atan2(bw.x-ld.x,bw.z-ld.z);   // local +Z = downhill along the rope
+  /* a terminal: the bottom one (on the square: gates, loading mat, the queue's sign) or the top one (unload ramp) */
+  function terminal(Bat,top){ const R=ST.Resort; if(!R||!R.towers) return; const tw=R.towers(), bw=top?tw[0]:tw[tw.length-1], ld=top?tw[1]:tw[tw.length-2]; if(!bw||!bw.wheel) return;
+    const F=V.ls, yaw=Math.atan2(bw.x-ld.x,bw.z-ld.z);   // local +Z: from the sheave toward the wheel along the rope
     const B=Bat(bw.s-V.L); place(bw.x,bw.gy,bw.z,yaw); const hB=bw.y-bw.gy, red=C('#c8102e'), grey=C('#c9ced6');
     // bullwheel and its drive housing on a central column; a canopy over the whole station
     B.body.geo(torG,M4(0,hB,0,PI/2,0,0,1),PAL.metal,K.metal); B.body.geo(cylG,M4(0,hB+.15,0,0,0,0,.35,.6,.35),PAL.metal,K.metal);
@@ -337,17 +338,22 @@
     // gates across the uphill line, the loading mat, the operator's hut on the outer side
     place(bw.x,bw.gy,bw.z,yaw); const cu=R.cablePoint(ld.s,-1), inner=Math.sign((cu.x-bw.x)*X.c-(cu.z-bw.z)*X.s)||1;   // local side of the uphill (loading) line
     const dark=C('#3b4250');
-    for(let i=0;i<3;i++){ const gx=inner*(HALFX-1.4+i*1.4); B.body.box(gx,.5,-sL+2.6,.08,1,.36,dark,K.metal); B.body.box(gx,.95,-sL+2.6,.1,.06,.42,dark,K.metal); B.bulb.box(gx,1.02,-sL+2.6,.08,.05,.08,[.2,1,.4],0); }
+    if(!top) for(let i=0;i<3;i++){ const gx=inner*(HALFX-1.4+i*1.4); B.body.box(gx,.5,-sL+2.6,.08,1,.36,dark,K.metal); B.body.box(gx,.95,-sL+2.6,.1,.06,.42,dark,K.metal); B.bulb.box(gx,1.02,-sL+2.6,.08,.05,.08,[.2,1,.4],0); }
     // load sheave: a gallows from the outer side, its beam over both lines (nothing stands between the lines at the load)
     place(ld.x,ld.gy,ld.z,yaw); const hL=ld.y-ld.gy, ox=-inner*3.7; B.body.box(ox,(hL+.6)/2,0,.4,hL+.6,.4,grey,K.metal,['-y']); B.body.box((ox+inner*2.6)/2,hL+.42,0,Math.abs(ox-inner*2.6)+.3,.3,.4,grey,K.metal);
     [-1,1].forEach(sd=>B.body.geo(cylG,M4(sd*2,hL+.12,0,0,0,PI/2,.28,.24,.28),PAL.metal,K.metal));
     place(bw.x,bw.gy,bw.z,yaw);
-    B.body.box(inner*HALFX,.02,-sL+.5,2.8,.04,1.6,C('#26313f'),K.plain);
+    if(!top) B.body.box(inner*HALFX,.02,-sL+.5,2.8,.04,1.6,C('#26313f'),K.plain);
+    else { B.body.box(inner*HALFX,.22,-sL+.4,2.6,.44,3,PAL.snow,K.snow,['-y']); B.body.box(inner*(HALFX+2.4),.12,-sL+.4,2.2,.24,3,PAL.snow,K.snow,['-y']); }   // the unload ramp, stepping down to the side
     { const lx=-inner*(HALFX+3.8), lz=-sL+1.5, wx=X.ox+lx*X.c+lz*X.s, wz=X.oz-lx*X.s+lz*X.c; place(wx,bw.gy,wz,yaw+(inner>0?-PI/2:PI/2));   // its windows face the line
       B.body.box(0,1.3,0,2.6,2.6,2.6,C('#e6e1d6'),K.plaster,['-y']); B.body.box(0,2.75,0,3.2,.25,3.2,C('#3a4150'),K.metal); B.body.box(0,2.95,0,3.1,.3,3.1,PAL.snow,K.snow);
       ['+z','+x','-x'].forEach(f=>window_(B,f,2.6,2.6,0,1.6,1.7,1,.6,null,0)); }
+    if(top) return;
     { const sx=inner*(cw/2+.08), zc=(cz0+cz1)/2-1; B.body.box(sx,cy-.5,zc,.16,1.3,5.2,red,K.plain); sign(B,'lift',sx+inner*.09,cy-.5,zc,4.9,inner*PI/2); }   // and one to the square
     V.loadPt={s:R.sLoad,x:cu.x,z:cu.z,yaw,inner}; }
+  /* the top terminal, for the chunk at the top of the run (world coordinates) */
+  V.makeTerminal=function(){ if(!V.T) return null; buildAtlas(); const B={body:new Batch(),glass:new Batch(),sign:new Batch(true),bulb:new Batch()}; terminal(()=>B,true); const g=new THREE.Group();
+    SET.forEach(k=>{ const m=B[k].mesh(MAT[k]); if(!m) return; m.castShadow=k==='body'; m.receiveShadow=k!=='bulb'; m.userData.dyn=1; g.add(m); }); return g; };
   const HALFX=2.0;
 
   /* ---------- build: lay the village out on the floor, one set of buffers per quarter ---------- */
