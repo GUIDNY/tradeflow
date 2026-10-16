@@ -119,15 +119,17 @@
   function startLift(){
     Audio.init(); Audio.music(!save.muted);
     resetPlayer(); mode='lift'; el.menu.hidden=true; el.end.hidden=true; el.hud.hidden=false; el.hud.classList.add('lifting'); el.pause.hidden=true; $('#liftHud').hidden=false; el.tip.hidden=true; tipShown={};
-    ST.Resort.towers(); ST.Resort.liftMode=true; lift.t=0; lift.s0=ST.Resort.sLoad||track.len+34; lift.s1=ST.Resort.sOff||-26; lift.on=true; lift.fact=-1; P.s=lift.s0; P.z=-P.s; World.update(P.s-150,true);   // the ride starts at the load line in the village
+    ST.Resort.towers(); ST.Resort.liftMode=true; lift.t=0; lift.lastS=null; lift.s0=ST.Resort.sLoad||track.len+34; lift.s1=ST.Resort.sOff||-26; lift.on=true; lift.fact=-1; P.s=lift.s0; P.z=-P.s; World.update(P.s-150,true);   // the ride starts at the load line in the village
     const R=Rider; R.model.rotation.y=PI; R.P.sit=1; R.P.swing=1; R.root.visible=true; ST.Resort.playerChair.visible=true; lift.cam.set(0,0,0); lift.first=true; subtitle(track.en,2000);
   }
   function endLift(){
-    lift.on=false; ST.Resort.liftMode=false; const R=Rider; R.model.rotation.y=PI/2; R.P.sit=0; R.P.swing=0; ST.Resort.playerChair.visible=false; el.hud.classList.remove('lifting'); $('#liftHud').hidden=true; beginCountdown();
+    lift.on=false; Audio.liftHum(0); ST.Resort.liftMode=false; const R=Rider; R.model.rotation.y=PI/2; R.P.sit=0; R.P.swing=0; ST.Resort.playerChair.visible=false; el.hud.classList.remove('lifting'); $('#liftHud').hidden=true; beginCountdown();
   }
   const _tq=new THREE.Quaternion(), _tv=new THREE.Vector3();
   function updateLift(dt){
     lift.t+=dt; const u=clamp(lift.t/lift.T,0,1), e=u*u*u*(u*(6*u-15)+10); const s=lerp(lift.s0,lift.s1,e); P.s=s; P.z=-s; ST.Resort.playerS=s;
+    if(lift.lastS!=null) ST.Resort.towers().forEach(tw=>{ if((tw.s-s)*(tw.s-lift.lastS)<0&&!tw.wheel) Audio.liftClack(tw.load?.6:1); }); lift.lastS=s;
+    Audio.liftHum(.55+.45*stationHum()); Audio.crowd(clamp(1-(track.len+40-s)/220,0,1)*.7);
     const Rs=ST.Resort, p=Rs.cablePoint(s,-1), p2=Rs.cablePoint(s-1.5,-1); const tx=p2.x-p.x, tz=p2.z-p.z, tl=Math.hypot(tx,tz)||1, tdx=tx/tl, tdz=tz/tl, yaw=Math.atan2(tx,tz);
     const sway=Math.sin(lift.t*1.7)*.035, sway2=Math.sin(lift.t*1.1)*.03; _e.set(sway2,yaw,sway,'YXZ'); Rs.playerChair.quaternion.setFromEuler(_e); Rs.playerChair.position.set(p.x,p.y,p.z);
     const R=Rider; R.root.position.set(p.x,p.y-3.28,p.z); R.root.rotation.set(0,yaw+PI,0); R.tilt.quaternion.identity(); R.tilt.quaternion.setFromEuler(_e.set(sway2,0,sway,'YXZ')); R.trick.rotation.set(0,0,0);
@@ -380,7 +382,7 @@
 
   /* ---------- end of run ---------- */
   function finishRun(){
-    mode='finish'; P.fin=0; Audio.win(); bigText('FINISH','gold'); flash('#ffffff',.35); subtitle('חוצים את קו הסיום…',1800); ST.Village.cheer();
+    mode='finish'; P.fin=0; Audio.win(); bigText('FINISH','gold'); flash('#ffffff',.35); subtitle('חוצים את קו הסיום…',1800); ST.Village.cheer(); setTimeout(()=>Audio.cheer(),350);
     setTimeout(()=>showResults(),2300);
   }
   function showResults(){
@@ -441,9 +443,12 @@
   function menuScene(){ resetPlayer(true); const V=ST.Village, M=V&&V.spots&&V.spots.menu;
     if(M){ const s=track.len+M.d; ST.Physics.reset(P,World.cx(s)+M.u,-s,M.hd||0); } else P.hd=0;
     ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.yC; World.update(P.s,true,4,4); mode='menu'; }
-  function toMenu(){ mode='menu'; el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.menu.hidden=false; Audio.music(false); menuScene(); renderMenuCards(); gr('uDesat',0); }
+  let bellT=6;   // the church bell rings soon after the village comes into view, then every minute or so
+  /* the chairlift's machinery is heard near either terminal */
+  function stationHum(){ const tw=ST.Resort.towers&&ST.Resort.towers(); if(!tw||!tw.length) return 0; const c=camera.position; let best=1e9; [tw[0],tw[tw.length-1]].forEach(w=>{ const d=Math.hypot(c.x-w.x,c.z-w.z); if(d<best) best=d; }); return clamp(1-(best-8)/45,0,1); }
+  function toMenu(){ mode='menu'; bellT=Math.min(bellT,4); el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.menu.hidden=false; Audio.music(false); menuScene(); renderMenuCards(); gr('uDesat',0); }
   function togglePause(){ if(mode==='play'){ mode='pause'; el.pause.hidden=false; } else if(mode==='pause'){ mode='play'; el.pause.hidden=true; last=performance.now(); } }
-  $('#playBtn').onclick=startRun; $('#againBtn').onclick=startRun; $('#menuBtn').onclick=toMenu; $('#pause').onclick=togglePause; $('#resumeBtn').onclick=togglePause; $('#restartBtn').onclick=startRun; $('#quitBtn').onclick=toMenu;
+  $('#playBtn').onclick=()=>{ if(!save.ctlSeen) showControls(startRun); else startRun(); };   // the controls before the very first run $('#againBtn').onclick=startRun; $('#menuBtn').onclick=toMenu; $('#pause').onclick=togglePause; $('#resumeBtn').onclick=togglePause; $('#restartBtn').onclick=startRun; $('#quitBtn').onclick=toMenu;
   $('#mute').onclick=()=>{ save.muted=!save.muted; Audio.setMuted(save.muted); $('#mute').textContent=save.muted?'🔇':'🔊'; persist(); };
   $('#mute').textContent=save.muted?'🔇':'🔊';
   /* control scheme: buttons (default) or the joystick; the short how-to follows it */
@@ -452,6 +457,21 @@
   function applyCtl(){ const joy=save.ctl==='joy'; document.body.classList.toggle('ctl-joy',joy); $('#ctlBtn').textContent=joy?'שליטה: ג׳ויסטיק ⇄ כפתורים':'שליטה: כפתורים ⇄ ג׳ויסטיק';
     $('#howtoTxt').innerHTML=HOWTO[joy?'joy':'buttons'].map(t=>'<span>'+t+'</span>').join(''); $('#btnGrab').querySelector('.g').textContent=joy?'תפיסה':'מהירות'; }
   $('#ctlBtn').onclick=()=>{ save.ctl=save.ctl==='joy'?'buttons':'joy'; persist(); applyCtl(); }; applyCtl();
+  /* the Controls screen: keyboard and touch side by side (on a phone the touch card comes first), for the scheme in use */
+  const CTL_KEYS=[[['←','→'],'פנייה','החזיקו = קארב חזק יותר'],[['↓'],'בלימה בהחלקה'],[['↑'],'כפיפה למהירות'],[['רווח'],'החזיקו לטעינה, שחררו לקפיצה','בקצה הקיקר = פופ מושלם'],
+    [['←','→'],'באוויר: סיבוב'],[['↑','↓'],'באוויר: סלטה קדימה / אחורה'],[['Shift'],'באוויר: תפיסה','לחיצה נוספת = תפיסה אחרת'],[['Shift','↑','↓'],'על השלג: לחיצה על האף / הזנב','ותוך כדי פנייה = באטר'],
+    [['←','→'],'על מעקה או קופסה: איזון'],[['C'],'מצלמה'],[['H'],'הסתרת הממשק'],[['P'],'הפסקה'],[['R'],'ריצה מחדש'],[['Enter'],'דילוג על הרכבל']];
+  const CTL_BTN=[[['◀','▶'],'פנייה','החזיקו = קארב חזק יותר'],[['◀ ▶'],'שתיהן יחד (או אגודל באמצע) = בלימה'],[['קפיצה'],'החזיקו לטעינה, שחררו לקפיצה'],[['מהירות'],'כפיפה למהירות'],
+    [['סיבוב'],'באוויר, במקום קפיצה','◀ ▶ בוחרים את הכיוון'],[['תפיסה'],'באוויר, במקום מהירות','לחיצה נוספת = תפיסה אחרת'],[['סלטה'],'מופיע באוויר'],[['◀','▶'],'על מעקה: איזון','מהירות = לחיצה על האף'],[['❚❚'],'הפסקה']];
+  const CTL_JOY=[[['🕹'],'גררו לפנייה','למטה = בלימה · למעלה = כפיפה'],[['קפיצה'],'החזיקו ושחררו','באוויר + כיוון = סיבוב או סלטה'],[['תפיסה'],'באוויר: תפיסה','על השלג + קדימה = לחיצה על האף'],[['🕹'],'על מעקה: גררו לאיזון'],[['❚❚'],'הפסקה']];
+  let ctlThen=null;
+  function showControls(then){ const row=(r,b)=>'<div class="r"><span>'+r[1]+(r[2]?'<span class="air">'+r[2]+'</span>':'')+'</span><span class="k">'+r[0].map(k=>'<kbd'+(b?' class="b"':'')+'>'+k+'</kbd>').join('')+'</span></div>';
+    $('#ctlKeys .list').innerHTML=CTL_KEYS.map(r=>row(r,false)).join(''); $('#ctlTouch .list').innerHTML=(useJoy()?CTL_JOY:CTL_BTN).map(r=>row(r,true)).join('');
+    $('#ctlOk').textContent=then?'הבנתי · יוצאים':'סגירה'; ctlThen=then||null; $('#controls').hidden=false; }
+  $('#ctlOk').onclick=()=>{ $('#controls').hidden=true; if(!save.ctlSeen){ save.ctlSeen=1; persist(); } const t=ctlThen; ctlThen=null; if(t) t(); };
+  $('#helpBtn').onclick=()=>showControls(); $('#helpBtn2').onclick=()=>showControls();
+  $('#viewBtn').onclick=()=>{ const on=document.body.classList.toggle('menu-min'); $('#viewBtn').textContent=on?'☰ תפריט':'👁 נוף'; };
+  if(matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch');
 
   /* ---------- main loop ---------- */
   let last=performance.now(), frame=0, tAcc=0;
@@ -472,7 +492,7 @@
     if(mode==='pause') return;
     ST.People.update(dt,camera.position.x,camera.position.z);
     if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); ST.Village.update(dt); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
-    if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); ST.Resort.update(tAcc,P.s,240,120); World.update(P.s,false,4,4); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); ST.Village.update(dt); return; }
+    if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); Audio.crowd(.75); Audio.liftHum(stationHum()); bellT-=dt; if(bellT<=0){ bellT=75+Math.random()*40; Audio.bell(3); } ST.Resort.update(tAcc,P.s,240,120); World.update(P.s,false,4,4); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); ST.Village.update(dt); return; }
     if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.autoSkate=1.5; P.vx=Math.sin(P.hd)*.8; P.vz=-Math.cos(P.hd)*.8; subtitle(useJoy()?'גררו לפנייה · החזיקו קפיצה ושחררו · משכו למטה לבלימה':'◀ ▶ פנייה · החזיקו קפיצה ושחררו · באוויר: סיבוב ותפיסה',3800); } }
       updateRider(dt,true); updateCamera(dt); }
     else if(mode==='play'||mode==='finish'){
@@ -496,7 +516,7 @@
     ST.renderer.getPixelRatio(); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900;
     // HUD
     P.shown+=(P.money-P.shown)*Math.min(1,dt*7); el.money.textContent=fmt(P.shown); el.money.classList.toggle('neg',P.shown<0);
-    el.spd.textContent=Math.round((P.speed3||P.speed)*3.6); const pg=clamp(P.s/track.len,0,1); el.prog.style.width=(pg*100)+'%'; el.progTxt.textContent=Math.max(0,Math.round(track.len-P.s))+' מ׳ לסיום';
+    el.spd.textContent=Math.round((P.speed3||P.speed)*3.6); const pg=clamp(P.s/track.len,0,1); el.prog.style.width=(pg*100)+'%'; { const left=Math.max(0,Math.round(track.len-P.s)); if(left!==el.progTxt._v){ el.progTxt._v=left; el.progTxt.textContent=track.en+'  ·  '+left+' מ׳'; } }   // the run's name and what is left of it
     const m=mult(); el.combo.hidden=P.combo<1; if(P.combo>0){ el.comboX.textContent='x'+m; el.comboBar.style.transform='scaleX('+clamp(P.comboT/6,0,1)+')'; }
     { const vk=P.speed/(track.vref||24); el.speedfx.style.opacity=clamp((vk-.9)/.5,0,1)*.85; }
     if(frame%2===0) drawRadar(); el.radarTxt.textContent=Math.round(P.s)+' / '+track.len;
@@ -504,7 +524,8 @@
     el.hud.classList.toggle('air',airborne()&&!useJoy()); jumpHint(); coinFade(); balanceHud(); if(!P.grind&&balEl.classList.contains('on')) balEl.classList.remove('on');
     if(flashK>0){ flashK=Math.max(0,flashK-dt*1.8); el.flash.style.opacity=flashK; }
     gr('uSpeed',clamp((P.speed/(track.vref||24)-.85)/.6,0,1)); if(P.fall&&P.fall.ph!=='recover'&&P.fall.ph!=='getup') gr('uDesat',damp(ST.GFX.grade?ST.GFX.grade.uniforms.uDesat.value:0,.85,6,dt)); else if(ST.GFX.grade&&ST.GFX.grade.uniforms.uDesat.value>0) gr('uDesat',damp(ST.GFX.grade.uniforms.uDesat.value,0,5,dt));
-    Audio.update(P.speed*(24/(track.vref||24)),P.grind?0:Math.abs(P.lean)+P.tuck*.5,!P.grounded); Audio.grind(P.grind&&mode==='play'?clamp(P.grind.v/7,.25,1):0,P.grind?P.grind.r.kind:''); Audio.spin(!P.grounded&&mode==='play'?P.wsp:0,P.sp||0);
+    Audio.update(P.speed*(24/(track.vref||24)),P.grind?0:Math.abs(P.lean)+P.tuck*.5,!P.grounded,P.grind?0:Math.max(P.brakeK||0,(P.skid||0)*.8));
+    Audio.crowd(clamp((P.s-(track.len-170))/200,0,1)*(mode==='end'?.8:1)); Audio.liftHum(stationHum()); Audio.grind(P.grind&&mode==='play'?clamp(P.grind.v/7,.25,1):0,P.grind?P.grind.r.kind:''); Audio.spin(!P.grounded&&mode==='play'?P.wsp:0,P.sp||0);
   }
 
   /* ---------- boot ---------- */

@@ -102,7 +102,9 @@ await test('town',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug,
     const s0=V.Q.served; for(let i=0;i<600;i++) D.tick(1/30);   // 20 s of village life
     return {upPerM:+up.toFixed(3),grade:+grade.toFixed(3),across70:across(70),across140:across(140),kickersPastFinish:kick,meshes,ktris:Math.round(tris/1000),wheelH:+(bw.y-bw.gy).toFixed(2),seatAboveSnow:+seat.toFixed(2),
       people:PP.regs.filter(r=>r.ci==='village').length,full:PP.active.length,standIns:PP.standIns(),sitting:PP.regs.filter(r=>r.anim==='Sit').length,walking:PP.regs.filter(r=>r.anim==='Walk').length,boarded20s:V.Q.served-s0,menuOnSquare:D.P.s>L+60,atlasH:V.atlasH}; });
-  return {ok:r.upPerM<0&&r.grade<.06&&r.across70<.5&&r.across140<.5&&r.kickersPastFinish===0&&r.meshes>=8&&r.ktris<700&&Math.abs(r.wheelH-3.1)<.05&&r.seatAboveSnow>.6&&r.seatAboveSnow<1.3&&r.people>=50&&r.full<=14&&r.standIns[0]>0&&r.sitting>=6&&r.walking>=5&&r.boarded20s>=6&&r.menuOnSquare&&r.atlasH<=2048,detail:JSON.stringify(r)}; });
+  const checks={downhill:r.upPerM<0,gentle:r.grade<.06,flat:r.across70<.5&&r.across140<.5,noKickers:r.kickersPastFinish===0,merged:r.meshes>=8&&r.ktris<700,wheel:Math.abs(r.wheelH-3.1)<.05,seat:r.seatAboveSnow>.6&&r.seatAboveSnow<1.3,
+    people:r.people>=50,lod:r.full<=14&&r.standIns[0]>0,sitting:r.sitting>=6,walking:r.walking>=5,queue:r.boarded20s>=6,menu:r.menuOnSquare,atlas:r.atlasH<=2048}, bad=Object.keys(checks).filter(k=>!checks[k]);
+  return {ok:!bad.length,detail:JSON.stringify(r)+(bad.length?' FAILED: '+bad.join(','):'')}; });
 
 await test('tracks',async()=>{ const all=[]; for(const id of ['bunny','bull','bear','ridge','ipo']){ const r=await page.evaluate((id)=>{ const D=ST.debug, W=ST.World, I=D.input, P=D.P; T.start(id); const Tr=D.track(); let t=0;
       while(D.mode==='play'&&t<300){ const s=P.s, u=P.x-W.cx(s); let target=W.cx(s+14), best=1e9;

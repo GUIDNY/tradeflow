@@ -48,8 +48,8 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 #moneyN.neg{color:var(--r);text-shadow:0 4px 0 #2a0309}
 #moneyD{height:22px;font-family:var(--display);font-size:22px;color:var(--gold);letter-spacing:.04em;text-shadow:0 2px 0 #000;opacity:0;transition:opacity .25s}
 .spd{font-size:13px;opacity:.9;text-shadow:0 2px 6px #000;margin-top:2px}.spd b{font-family:var(--display);font-size:26px;font-weight:400;letter-spacing:.04em;margin-right:4px}
-.prog{position:absolute;left:50%;top:14px;transform:translateX(-50%);width:min(34vw,300px);height:10px;border-radius:6px;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.7);overflow:hidden;direction:ltr}
-.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--g),var(--gold))}
+.prog{position:absolute;left:50%;top:14px;transform:translateX(-50%);width:min(34vw,300px);height:10px;border-radius:6px;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,255,255,.7);direction:ltr}
+.prog i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,var(--g),var(--gold))}
 .prog span{position:absolute;top:14px;left:0;right:0;text-align:center;font-size:11px;font-weight:700;text-shadow:0 1px 4px #000;letter-spacing:.1em}
 #combo{position:absolute;top:92px;right:16px;direction:ltr;text-align:right;font-family:var(--display);text-shadow:0 3px 0 #000}
 #combo b{font-size:44px;color:var(--gold);font-weight:400;display:inline-block;transform:skewX(-8deg)}
@@ -133,6 +133,10 @@ body.ctl-joy #btnFlip{display:none}
 @media (max-height:480px){#trailMap svg{height:44vh}}
 .logo.big{font-size:clamp(44px,min(8vw,13vh),96px)!important}
 #boardCards .card{min-width:128px;padding:8px 10px}#boardCards .sw{height:18px;margin-bottom:5px}#boardCards .nm{font-size:14px}
+/* "view": fold the menu down to its title and the start button, to look at the village behind it */
+body.menu-min #menu .mbody>:not(#playBtn),body.menu-min #menu .howto,body.menu-min #menu .wallet,body.menu-min #menu #ctlBtn,body.menu-min #menu #helpBtn{display:none}
+body.menu-min #menu{background:none}
+body.menu-min #menu .mbody{width:min(360px,100%)}
 .mbody .cta{margin-top:2px;font-size:26px;padding:8px 44px 6px;width:100%;transform:none}
 .mbody .cta:active{transform:translateY(4px)}
 #mnote{position:fixed;left:50%;bottom:90px;transform:translate(-50%,20px);background:rgba(10,12,26,.92);border:1px solid rgba(255,255,255,.3);padding:10px 18px;border-radius:12px;font-weight:700;z-index:40;opacity:0;transition:.25s;pointer-events:none}#mnote.show{opacity:1;transform:translate(-50%,0)}
@@ -176,6 +180,23 @@ body.ctl-joy #btnFlip{display:none}
 
 /* menu: control scheme and how to play */
 .howto #howtoTxt{display:contents}
+#controls{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(4,4,16,.6);backdrop-filter:blur(6px)}
+#controls[hidden]{display:none}
+.ctlpanel{width:min(94vw,780px);max-height:92vh;overflow:auto;text-align:start}
+.ctlpanel h2{text-align:center;margin:2px 0 10px}
+.ctlgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ctlcard{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px 12px}
+.ctlcard h3{margin:0 0 8px;font-size:14px;letter-spacing:.04em;opacity:.9}
+.ctlcard .list{display:block}
+.ctlcard .r{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px solid rgba(255,255,255,.07);font-size:13px;line-height:1.3;background:none;border-radius:0;text-align:start}
+.ctlcard .r:first-child{border-top:0}
+.ctlcard .k{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;direction:ltr;flex:none;max-width:48%}
+.ctlcard kbd{font:700 11px/1 Rubik,sans-serif;min-width:22px;text-align:center;padding:5px 6px;border-radius:6px;background:#f2f4fa;color:#11131c;box-shadow:0 2px 0 rgba(0,0,0,.45)}
+.ctlcard kbd.b{background:#2a2f45;color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.35) inset}
+.ctlcard .air{display:block;font-size:11px;opacity:.7}
+#ctlOk{display:block;margin:12px auto 2px;min-width:220px;position:sticky;bottom:4px;box-shadow:0 8px 30px rgba(0,0,0,.55)}
+body.touch #ctlTouch{order:-1}
+@media (max-width:640px),(max-height:440px){.ctlgrid{grid-template-columns:1fr}.ctlpanel{padding:12px}.ctlcard .r{font-size:12px}}
 .mtop .ctlbtn{pointer-events:auto;font:700 12px Rubik,sans-serif;padding:6px 12px;border-radius:999px;align-self:center;white-space:nowrap}
 /* narrow portrait phones: smaller buttons with room between the two thumbs' clusters */
 @media (max-width:440px) and (orientation:portrait){ #steer .act{width:68px;height:68px;font-size:24px} #steer{gap:10px} .act{width:60px;height:60px;font-size:13px} .act.big{width:82px;height:82px;font-size:18px} #btns .row{gap:10px} .act.small{width:52px;height:52px;font-size:12px} }

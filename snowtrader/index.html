@@ -25,6 +25,8 @@
   <div class="mtop">
     <div class="logo big">SNOW<b>RUSH</b><small>הר · לוח · מהירות</small></div>
     <button id="ctlBtn" class="ghost ctlbtn"></button>
+    <button id="helpBtn" class="ghost ctlbtn" aria-label="שליטה">? שליטה</button>
+    <button id="viewBtn" class="ghost ctlbtn" aria-label="נוף">👁 נוף</button>
     <div class="wallet"><span>ניקוד כולל</span><b id="walletN">0</b></div>
   </div>
   <div class="mbody">
@@ -56,7 +58,12 @@
 </div>
 
 <!-- pause -->
-<div id="pausemenu" hidden><div class="panel"><h2>הפסקה</h2><button id="resumeBtn" class="cta">להמשיך</button><button id="restartBtn" class="ghost">התחלה מחדש</button><button id="quitBtn" class="ghost">לתפריט</button></div></div>
+<div id="pausemenu" hidden><div class="panel"><h2>הפסקה</h2><button id="resumeBtn" class="cta">להמשיך</button><button id="restartBtn" class="ghost">התחלה מחדש</button><button id="helpBtn2" class="ghost">שליטה</button><button id="quitBtn" class="ghost">לתפריט</button></div></div>
+
+<!-- controls: shown before the first run, and from the menu and the pause menu -->
+<div id="controls" hidden><div class="panel ctlpanel"><h2>שליטה</h2>
+  <div class="ctlgrid"><section class="ctlcard" id="ctlKeys"><h3>⌨️ מקלדת</h3><div class="list"></div></section><section class="ctlcard" id="ctlTouch"><h3>📱 מגע</h3><div class="list"></div></section></div>
+  <button id="ctlOk" class="cta">הבנתי · יוצאים</button></div></div>
 
 <!-- results -->
 <div id="end" hidden><div class="panel result">
