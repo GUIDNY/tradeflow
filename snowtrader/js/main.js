@@ -9,6 +9,7 @@
   const KEY='snowtrader.v1';
   let save={wallet:0,best:{},board:0,owned:[0],runs:0,track:0,muted:false,rider:3};
   try{ Object.assign(save,JSON.parse(localStorage.getItem(KEY)||'{}')); }catch(e){}
+  if(save.ver!==2){ save.ver=2; save.rider=3; }   // v2: the Mixamo rider is the default, overriding the old saved choice (the original figure)
   const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} };
 
   /* ---------- state ---------- */
