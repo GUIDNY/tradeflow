@@ -184,7 +184,7 @@
     let low=1e9; ['FootL','FootR'].forEach(kk=>{ if(R.bones[kk]){ R.bones[kk].getWorldPosition(_v); R.model.parent.worldToLocal(_v); low=Math.min(low,_v.y); } });
     if(low<1e8) R.model.position.y=.205-low;
     // angulation: the board rolls onto its edge further than the body leans; the hips push inside the turn
-    const roll=-ln*R.rollMax; rig.rotation.z=-roll*.58*(1-k); rig.position.x=ln*(.04+.06*Math.abs(ln))*(1-k);
+    rig.rotation.z=((R.edge||0)-(R.body||0))*(1-k); rig.position.x=ln*(.04+.06*Math.abs(ln))*(1-k);
     if(boardObj) boardObj.rotation.y=-tw*.012*(1-k);   // in a spin the board follows the shoulders a beat later
   };
 

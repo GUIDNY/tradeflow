@@ -170,11 +170,12 @@
       const gy=World.groundY(P.x,P.z); P.vy-=G*dt; P.y+=P.vy*dt; if(P.y<gy){ P.y=gy; P.vy=P.vy<-3?-P.vy*.35:0; P.grounded=true; }
       P.fl+=P.wfl*dt; P.sp+=P.wfl*.35*dt; P.s=-P.z; if(P.tumble<=0) respawn(); return; }
     if(P.grounded){
-      const vr=track.vref||24, turn=lerp(2.2,1.15,clamp(speed/(vr*1.4),0,1));
+      const vr=track.vref||24, turn=Math.min(lerp(2.2,1.15,clamp(speed/(vr*1.4),0,1)),10.5/Math.max(speed,5));   // never more than ~1.07 g sideways
+      const hdPrev=P.hd;
       P.tuck=damp(P.tuck,iy<-.35?1:0,10,dt);
       if(P.stun<=0) P.hd+=sx*turn*dt;
       if(Math.abs(sx)<.1) P.hd=lerpAngle(P.hd,trackAng,1-Math.exp(-dt*.8));
-      P.hd=clamp(P.hd,trackAng-1.1,trackAng+1.1);
+      P.hd=clamp(P.hd,trackAng-1.1,trackAng+1.1); P.omegaS=damp(P.omegaS||0,(P.hd-hdPrev)/dt,9,dt);
       const dx=Math.sin(P.hd), dz=-Math.cos(P.hd);
       World.groundN(P.x,P.z,_n); const gX=-_n.x/_n.y, gZ=-_n.z/_n.y;
       P.vx+=-SLOPE_G*gX*dt; P.vz+=-SLOPE_G*gZ*dt;
@@ -250,12 +251,20 @@
 
   /* ---------- rider visuals ---------- */
   const _qa=new THREE.Quaternion(), _qb=new THREE.Quaternion(), _up=new THREE.Vector3(0,1,0), _ln=new THREE.Vector3(), _e=new THREE.Euler();
+  /* The lean follows the physics of the turn. The body is inclined by Phi, where tan(Phi)=v*omega/g (v^2/(g R) for a turn of radius R);
+     the board edge is inclined further, Psi = Phi + angulation. Angulation (ankle, knee, hip bent so the weight sits inside the boots)
+     is taken as 30% of the edge angle, so the body leans about 70% as far as the board. Both are capped for a recreational rider. */
+  const ANG=.30; let leanS=0;
+  function setLean(R,tan,dt){ const phi=Math.atan(Math.abs(tan))*Math.sign(tan), cap=.8, body=clamp(phi,-cap,cap), edge=clamp(body/(1-ANG),-1.15,1.15); leanS=dt?damp(leanS,0,5,dt):0;
+    R.rollG.rotation.z=-edge; R.edge=edge; R.body=body; P.lean=clamp(body/.6,-1,1);
+    // the board pivots on its inside edge, not its centre line: lift and shift it so that edge stays on the snow instead of sinking into it
+    const hw=.13, sg=Math.sign(edge); R.rollG.position.set(sg*hw*(1-Math.cos(edge)),hw*Math.abs(Math.sin(edge)),0); }
   function updateRider(dt,menu){
     const R=Rider; R.root.position.set(P.x,P.y,P.z); R.root.rotation.y=-P.hd; R.rollMax=lerp(.2,.56,clamp(P.speed/((track.vref||24)*1.25),0,1));   // board edge angle: 11 to 32 degrees
     if(P.grounded&&P.tumble<=0){ World.groundN(P.x,P.z,_n); _ln.copy(_n); _ln.applyAxisAngle(_up,P.hd);  // into the board's own frame (heading undone)
       _ln.set(_n.x*Math.cos(-P.hd)+_n.z*Math.sin(-P.hd)*0,0,0); const c=Math.cos(P.hd), s=Math.sin(P.hd); const lx=_n.x*c+_n.z*s, lz=-_n.x*s+_n.z*c; _ln.set(lx,_n.y,lz).normalize();
-      _qb.setFromUnitVectors(_up,_ln); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*14)); R.rollG.rotation.z=-P.lean*R.rollMax; }
-    else { _qb.identity(); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*6)); R.rollG.rotation.z*=Math.exp(-dt*5); }
+      _qb.setFromUnitVectors(_up,_ln); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*14)); setLean(R,P.speed*(P.omegaS||0)/9.81); }
+    else { _qb.identity(); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*6)); setLean(R,0,dt); }
     R.trick.rotation.order='YXZ'; R.trick.rotation.y=-P.sp; R.trick.rotation.x=P.fl;
     const air=!P.grounded&&P.tumble<=0; const tgt={crouch:menu?.25:P.grounded?clamp(.16+.2*clamp(P.speed/36,0,1)+P.tuck*.65+(P.jumpBuf>0?.3:0),0,1):(.58),
       air:air?1:0,grab:air&&P.grabbed?1:0,lean:P.lean,tuck:P.grounded?P.tuck*.7:(P.grabbed?0:.35),twist:air?clamp(P.wsp*-4,-30,30):0};
