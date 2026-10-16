@@ -132,7 +132,7 @@
         const sg=new THREE.Mesh(new THREE.PlaneGeometry(1.1,1.1),new THREE.MeshBasicMaterial({map:signTex(T.diff),side:THREE.DoubleSide})); sg.position.set(x,y+3.1,z); sg.rotation.y=PI/2+side*.15; grp.add(sg); }); }
     // buildings (only the chunk that owns the site builds it)
     R.sites(T).forEach((t,i)=>{ if(t.s<s0||t.s>=s0+L) return; let o;
-      if(i===0) o=chalet(1.0,'BASE LODGE','SNOW TRADER RESORT'); else if(i===1) o=chalet(.62,'CAFÉ','ESPRESSO · COCOA'); else if(i===2) o=chalet(.6,'FINISH ZONE','TAKE PROFIT'); else if(i===5) o=chalet(.62,'APRÈS SKI','BAR & GRILL'); else if(i===6) o=chalet(.6,'MOUNTAIN CAFÉ','WAFFLES'); else o=station();
+      if(i===0) o=chalet(1.0,'BASE LODGE','SNOW RUSH RESORT'); else if(i===1) o=chalet(.62,'CAFÉ','ESPRESSO · COCOA'); else if(i===2) o=chalet(.6,'FINISH ZONE','PHOTO · HOT DRINKS'); else if(i===5) o=chalet(.62,'APRÈS SKI','BAR & GRILL'); else if(i===6) o=chalet(.6,'MOUNTAIN CAFÉ','WAFFLES'); else o=station();
       if(i===0||i===1||i===5||i===6){ const tr=terrace(i===0?5:3,i); tr.position.set(0,.1,i===0?5:6); o.add(tr); }
       placeBuilding(grp,t,o,i<3||i>4); if(i<3||i>4) addSmoke(grp,o); guests(ci,i,o); });
     // spectators at the start gate: a row of guests either side of the line, cheering

@@ -1,0 +1,8 @@
+{
+  "name": "snow-rush-tests",
+  "private": true,
+  "type": "module",
+  "description": "Automated behaviour checks for Snow Rush (physics, IK, flow). See run.mjs.",
+  "scripts": { "test": "node run.mjs" },
+  "devDependencies": { "playwright-core": "^1.47.0" }
+}

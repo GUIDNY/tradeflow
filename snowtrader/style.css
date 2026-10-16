@@ -142,3 +142,12 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 #flare .fb{width:14vmin;height:14vmin;background:radial-gradient(circle,rgba(255,225,180,.16) 0,rgba(255,225,180,0) 70%)}
 #flare .fc{width:7vmin;height:7vmin;background:radial-gradient(circle,rgba(160,220,255,.55) 0,rgba(160,220,255,0) 70%)}
 #flare .fd{width:22vmin;height:22vmin;background:radial-gradient(circle,rgba(255,190,140,.10) 0,rgba(255,190,140,0) 70%)}
+
+/* H: hide the HUD for screenshots (the touch controls keep working, just invisible) */
+.hud-hidden #hud > *:not(#joyzone):not(#btns){visibility:hidden!important}
+.hud-hidden #joy,.hud-hidden #btns{opacity:0}
+
+/* approaching a kicker: is this speed right for its landing? */
+#jumpHint{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);padding:6px 12px;border-radius:10px;font:700 13px Rubik,sans-serif;color:#fff;background:rgba(10,14,30,.6);opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+#jumpHint.ok{background:rgba(22,170,100,.78)} #jumpHint.bad{background:rgba(220,40,60,.85)} #jumpHint.slow{background:rgba(230,150,20,.85)}
+@media (max-width:700px){ #jumpHint{bottom:96px;font-size:11px} }

@@ -54,7 +54,7 @@
       svg+=`<g transform="translate(${l[0]} ${l[1]})"><rect x="${-w/2}" y="-17" width="${w}" height="34" rx="17" fill="${sel?'#fff':'rgba(255,255,255,.92)'}" stroke="${col}" stroke-width="${sel?4:2.5}"/>${sym(lock?'blue':t.diff,-w/2+19,0,8)}${lock?`<text x="${-w/2+19}" y="5" font-size="13" text-anchor="middle">🔒</text>`:''}<text x="${12}" y="6" font-size="15" font-weight="800" text-anchor="middle" fill="#10131c" font-family="Rubik,sans-serif">${nm}</text></g>`;
       const b=st.best[t.id]; if(b){ svg+=`<text x="${l[0]}" y="${l[1]+34}" font-size="15" text-anchor="middle" fill="#ffb800" stroke="#fff" stroke-width=".6" font-weight="900">${'★'.repeat(b.stars)}${'☆'.repeat(3-b.stars)}</text>`; }
       svg+='</g>'; });
-    svg+=`<text x="500" y="494" font-size="12" font-weight="700" text-anchor="middle" fill="#5d6c85" letter-spacing="3" font-family="Rubik,sans-serif">SNOW TRADER RESORT · TRAIL MAP</text></svg>`;
+    svg+=`<text x="500" y="494" font-size="12" font-weight="700" text-anchor="middle" fill="#5d6c85" letter-spacing="3" font-family="Rubik,sans-serif">SNOW RUSH RESORT · TRAIL MAP</text></svg>`;
     el.innerHTML=svg; el.querySelectorAll('.run').forEach(g=>g.addEventListener('click',()=>onPick(+g.dataset.i)));
   }};
 })(window.ST);

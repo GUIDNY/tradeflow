@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d1a">
+<link rel="icon" href="data:,">
 <title>Snow Rush · סנובורד</title>
 <meta name="description" content="משחק סנובורד תלת־ממדי: יורדים במסלול, מבצעים תרגילים, אוספים גבישים וצוברים ניקוד.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,7 +18,7 @@
 <div id="flare"><i class="fa"></i><i class="fb"></i><i class="fc"></i><i class="fd"></i></div>
 
 <!-- loading -->
-<div id="loading"><div class="logo">SNOW<b>TRADER</b></div><div class="bar"><i id="loadbar"></i></div><div id="loadtxt">טוענים את ההר…</div></div>
+<div id="loading"><div class="logo">SNOW<b>RUSH</b></div><div class="bar"><i id="loadbar"></i></div><div id="loadtxt">טוענים את ההר…</div></div>
 
 <!-- main menu -->
 <div id="menu" hidden>
@@ -31,7 +32,7 @@
     <div class="sect"><h3>הלוח שלכם</h3><div id="boardCards"></div></div>
     <button id="playBtn" class="cta">יוצאים לדרך</button>
   </div>
-  <div class="howto"><span>🕹️ גררו כדי לסוב</span><span>⬆️ קפיצה</span><span>🌀 באוויר: סיבוב, סלטה, תפיסה</span></div>
+  <div class="howto"><span>🕹️ גררו לפנייה · למטה בלימה · למעלה כפיפה</span><span>⬆️ החזיקו קפיצה ושחררו</span><span>🌀 באוויר: סיבוב, סלטה, תפיסה + כיוון</span><span>⌨️ C מצלמה · H בלי ממשק · R מחדש</span></div>
 </div>
 
 <!-- HUD -->
@@ -76,8 +77,10 @@
 <script src="js/world.js"></script>
 <script src="js/people.js"></script>
 <script src="js/rider.js"></script>
+<script src="js/physics.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/trailmap.js"></script>
 <script src="js/main.js"></script>
+<script src="js/debug.js"></script>
 </body>
 </html>
