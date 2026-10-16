@@ -448,7 +448,8 @@
   function stationHum(){ const tw=ST.Resort.towers&&ST.Resort.towers(); if(!tw||!tw.length) return 0; const c=camera.position; let best=1e9; [tw[0],tw[tw.length-1]].forEach(w=>{ const d=Math.hypot(c.x-w.x,c.z-w.z); if(d<best) best=d; }); return clamp(1-(best-8)/45,0,1); }
   function toMenu(){ mode='menu'; bellT=Math.min(bellT,4); el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.menu.hidden=false; Audio.music(false); menuScene(); renderMenuCards(); gr('uDesat',0); }
   function togglePause(){ if(mode==='play'){ mode='pause'; el.pause.hidden=false; } else if(mode==='pause'){ mode='play'; el.pause.hidden=true; last=performance.now(); } }
-  $('#playBtn').onclick=()=>{ if(!save.ctlSeen) showControls(startRun); else startRun(); };   // the controls before the very first run $('#againBtn').onclick=startRun; $('#menuBtn').onclick=toMenu; $('#pause').onclick=togglePause; $('#resumeBtn').onclick=togglePause; $('#restartBtn').onclick=startRun; $('#quitBtn').onclick=toMenu;
+  $('#playBtn').onclick=()=>{ if(!save.ctlSeen) showControls(startRun); else startRun(); };   // the controls before the very first run
+  $('#againBtn').onclick=startRun; $('#menuBtn').onclick=toMenu; $('#pause').onclick=togglePause; $('#resumeBtn').onclick=togglePause; $('#restartBtn').onclick=startRun; $('#quitBtn').onclick=toMenu;
   $('#mute').onclick=()=>{ save.muted=!save.muted; Audio.setMuted(save.muted); $('#mute').textContent=save.muted?'🔇':'🔊'; persist(); };
   $('#mute').textContent=save.muted?'🔇':'🔊';
   /* control scheme: buttons (default) or the joystick; the short how-to follows it */
