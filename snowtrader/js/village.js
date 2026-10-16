@@ -91,6 +91,10 @@
   Batch.prototype.geo=function(g,m,col,k){ const P=g.attributes.position, N=g.attributes.normal, v=this.v; _nm.getNormalMatrix(m);
     for(let i=0;i<P.count;i++){ _gv.fromBufferAttribute(P,i).applyMatrix4(m); _gn.fromBufferAttribute(N,i).applyMatrix3(_nm).normalize(); pushV(this,_gv.x,_gv.y,_gv.z,_gn.x,_gn.y,_gn.z,col,k); if(this.uv) this.uv.push(0,0); }
     if(g.index) for(let i=0;i<g.index.count;i++) this.i.push(v+g.index.getX(i)); else for(let i=0;i<P.count;i++) this.i.push(v+i); this.v+=P.count; return this; };
+  /* a geometry that brings its own vertex colours (the World's conifers) */
+  Batch.prototype.geoC=function(g,m,k){ const P=g.attributes.position, N=g.attributes.normal, Cc=g.attributes.color, v=this.v; _nm.getNormalMatrix(m); const col=[0,0,0];
+    for(let i=0;i<P.count;i++){ _gv.fromBufferAttribute(P,i).applyMatrix4(m); _gn.fromBufferAttribute(N,i).applyMatrix3(_nm).normalize(); col[0]=Cc.getX(i); col[1]=Cc.getY(i); col[2]=Cc.getZ(i); pushV(this,_gv.x,_gv.y,_gv.z,_gn.x,_gn.y,_gn.z,col,k); if(this.uv) this.uv.push(0,0); }
+    for(let i=0;i<g.index.count;i++) this.i.push(v+g.index.getX(i)); this.v+=P.count; return this; };
   Batch.prototype.mesh=function(mat){ if(!this.v) return null; const g=new THREE.BufferGeometry();
     g.setAttribute('position',new THREE.Float32BufferAttribute(this.p,3)); g.setAttribute('normal',new THREE.Float32BufferAttribute(this.n,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(this.c,3)); g.setAttribute('aK',new THREE.Float32BufferAttribute(this.k,1));
     if(this.uv) g.setAttribute('uv',new THREE.Float32BufferAttribute(this.uv,2)); g.setIndex(this.v>65535?new THREE.Uint32BufferAttribute(this.i,1):new THREE.Uint16BufferAttribute(this.i,1)); g.computeBoundingSphere(); return new THREE.Mesh(g,mat); };
@@ -151,6 +155,8 @@
     board('apres','Après Bar La Piste','LIVE MUSIC · 16:00',860,190,'#2a1638','#ff9ad8');
     board('school','Ski & Snowboard School','LESSONS · KIDS CLUB',1000,190,'#1d3e6e','#ffffff');
     board('rent','Sport & Rent','SKI · SNOWBOARD · SERVICE',900,190,'#7a1a1a','#ffffff');
+    board('summit','Summit Lodge','SNOW RUSH RESORT · RESTAURANT',1000,200,'#2b1a10','#f2c45a'); board('rcafe','Café','ESPRESSO · COCOA',700,190,'#5a1f1f','#f2d28a');
+    board('rapres','Après Ski','BAR & GRILL',760,190,'#2a1638','#ff9ad8'); board('rmcafe','Mountain Café','WAFFLES · SOUP',820,190,'#1f3a26','#f6e2a0');
     board('chalet1','Chalet Bergblick','',520,130); board('chalet2','Haus Tannenhof','',520,130); board('chalet3','Chalet Sonnhalde','',520,130); board('chalet4','Haus Gletscherblick','',560,130);
     // the lift's own sign: enamel blue
     add('lift',900,220,(g,W,H)=>{ g.fillStyle='#103d8c'; g.fillRect(0,0,W,H); g.strokeStyle='#fff'; g.lineWidth=10; g.strokeRect(14,14,W-28,H-28); g.fillStyle='#fff'; g.textAlign='center'; g.textBaseline='middle';
@@ -305,8 +311,7 @@
       sign(B,id,x-Math.cos(ry)*.012,y,z+Math.sin(ry)*.012,2.5,ry-PI/2); sign(B,id+'b',x+Math.cos(ry)*.012,y,z-Math.sin(ry)*.012,2.5,ry+PI/2); }); }   // both faces read the right way
   function flag(B,col,seed){ B.body.geo(cylG,M4(0,4,0,0,0,0,.05,8,.05),C('#d7dbe2'),K.metal); B.body.geo(sphG,M4(0,8.05,0,0,0,0,.09),PAL.gold,K.metal);
     for(let i=0;i<6;i++){ const x0=.06+i*.38, x1=x0+.38, z0=Math.sin(i*.9+seed)*.12, z1=Math.sin(i*.9+.9+seed)*.12; B.body.quad([x0,6.2,z0],[x1,6.2,z1],[x1,7.8,z1],[x0,7.8,z0],col,K.plain); B.body.quad([x1,6.2,z1],[x0,6.2,z0],[x0,7.8,z0],[x1,7.8,z1],col,K.plain); } }
-  function spruce(B,h,seed){ for(let i=0;i<6;i++){ const t=i/6, r=(1-t)*h*.28+.2, y0=.8+t*(h-1.4), hh=h*.26; B.body.geo(coneG,M4(0,y0+hh/2,0,0,i+seed,0,r,hh,r),C('#1f3a28'),K.plain); B.body.geo(coneG,M4(0,y0+hh*.66,0,0,i+seed+.4,0,r*.8,hh*.45,r*.8),PAL.snow,K.snow); }
-    B.body.geo(cylG,M4(0,.5,0,0,0,0,.18,1,.18),PAL.timber[2],K.wood); }
+  function spruce(B,h,seed){ const T=ST.World.TREE[seed%3===0?'fir':'spruce'].near, k=h/9.2; B.body.geoC(T,M4(0,0,0,0,seed*1.7,0,k,k*(.95+hash2(seed,3)*.15),k),K.plain); }
   function snowbank(B,len,seed){ const n=Math.max(1,Math.round(len/2.2)); for(let i=0;i<n;i++){ const x=-len/2+(i+.5)*len/n, r=.75+hash2(i,seed)*.5; B.body.geo(sphG,M4(x,0,0,0,hash2(i,seed+3)*3,0,r*1.4,r*.65,r),PAL.snow,K.snow); } }
   function fenceLine(B,ax,az,bx,bz,col){ const L=Math.hypot(bx-ax,bz-az), n=Math.max(1,Math.round(L/2.2)), ry=Math.atan2(bx-ax,bz-az);
     for(let i=0;i<=n;i++){ const t=i/n; B.body.geo(cylG,M4(ax+(bx-ax)*t,.55,az+(bz-az)*t,0,0,0,.04,1.1,.04),PAL.metal,K.metal); }
@@ -482,6 +487,9 @@
       for(let i=0;i<Q.n;i++){ const pd=(i)*.95+.6; Q.path.at(pd,_o); add({x:_o.x,z:_o.z},queueBeh,{ticket:i,pd}); } }
     return k; };
 
+  /* a building for the resort along the run (World chunks place it): the village's house, merged at its own origin */
+  V.makeHouse=function(o){ buildAtlas(); const B={body:new Batch(),glass:new Batch(),sign:new Batch(true),bulb:new Batch()}; place(0,0,0,0); const h=house(B,o), g=new THREE.Group();
+    SET.forEach(k=>{ const m=B[k].mesh(MAT[k]); if(!m) return; m.castShadow=k==='body'; m.receiveShadow=k!=='bulb'; m.userData.dyn=1; g.add(m); }); g.userData.h=h; return g; };
   V.dispose=function(){ if(!V.group) return; scene.remove(V.group); V.group.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); V.group=null; V.key=''; };
   /* windows and bulbs follow the time of day of the run (morning, sunset, blue hour, night) */
   V.applyLight=function(){ const n=V.night; MAT.glass.emissiveIntensity=.3+1.25*n; MAT.bulb.emissiveIntensity=1.1+2.2*n; MAT.sign.emissiveIntensity=.12+.55*n; };

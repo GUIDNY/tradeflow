@@ -141,10 +141,11 @@
     for(let s=Math.ceil((s0-20)/90)*90+45;s<s0+L;s+=90){ if(s<s0||s>LEN-30) continue; [-1,1].forEach(side=>{ const u=side*(hw(s)+.9), x=W.cx(s)+u, z=-s, y=W.groundY(x,z); cyl(.05,.06,3.2,M.steel,x,y+1.5,z,grp,6);
         const sg=new THREE.Mesh(new THREE.PlaneGeometry(1.1,1.1),new THREE.MeshBasicMaterial({map:signTex(T.diff),side:THREE.DoubleSide})); sg.position.set(x,y+3.1,z); sg.rotation.y=PI/2+side*.15; grp.add(sg); }); }
     // buildings (only the chunk that owns the site builds it)
-    R.sites(T).forEach((t,i)=>{ if(t.s<s0||t.s>=s0+L) return; let o; const k=t.k, house=k!=='station';
-      if(k==='lodge') o=chalet(1.0,'SUMMIT LODGE','SNOW RUSH RESORT'); else if(k==='cafe') o=chalet(.62,'CAFÉ','ESPRESSO · COCOA'); else if(k==='apres') o=chalet(.62,'APRÈS SKI','BAR & GRILL'); else if(k==='mcafe') o=chalet(.6,'MOUNTAIN CAFÉ','WAFFLES'); else o=station();
-      if(house){ const tr=terrace(k==='lodge'?5:3,i); tr.position.set(0,.1,k==='lodge'?5:6); o.add(tr); }
-      placeBuilding(grp,t,o,house); if(house) addSmoke(grp,o); guests(ci,k,o); });
+    R.sites(T).forEach((t,i)=>{ if(t.s<s0||t.s>=s0+L) return; let o; const k=t.k, house=k!=='station', V=ST.Village;
+      if(house&&V&&V.makeHouse){ const spec=HOUSES[k]; o=V.makeHouse(spec); const tr=terrace(k==='lodge'?5:3,i), tk=k==='lodge'?.9:.62; tr.scale.setScalar(tk); tr.position.set(0,-.05,spec.d/2-.6*tk); o.add(tr);   // the deck stays on the cut terrace
+        placeBuilding(grp,t,o,true); o.position.y+=.95; o.updateMatrixWorld(true); addSmoke(grp,o,new THREE.Vector3(spec.w*.22*(spec.seed%2?1:-1),o.userData.h+1.6,-spec.d*.18)); }
+      else { o=house?chalet(.62,k.toUpperCase(),''):station(); placeBuilding(grp,t,o,house); if(house) addSmoke(grp,o); }
+      guests(ci,k,o); });
     // spectators at the start gate: a row of guests either side of the line, cheering
     if(s0===0&&ST.People){ const P=ST.People; for(let k=0;k<12;k++){ const side=k%2?1:-1, ss=3+Math.floor(k/2)*1.9+hash2(k,3)*.8, w=hw(ss), u=side*(w*.62+hash2(k,5)*w*.22), x=W.cx(ss)+u, z=-ss; P.add(ci,{x,z,type:k%3===0?'Idle':'Wave',ry:-side*PI/2+(hash2(k,7)-.5)*.5}); } }
     // cannons
@@ -155,7 +156,12 @@
   };
   const neonNet=new THREE.MeshBasicMaterial({color:0xff3df2,transparent:true,opacity:.55,side:THREE.DoubleSide});
   R.disposeChunk=function(ci){ if(ST.People) ST.People.clear(ci); (chunkGeos[ci]||[]).forEach(g=>g.dispose()); delete chunkGeos[ci]; delete chunkPlumes[ci]; };
-  function addSmoke(grp,o){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:plumeTex,transparent:true,depthWrite:false,opacity:.35,color:0xdfe3ea,fog:true})); const p=new THREE.Vector3(-6,14,-1).applyMatrix4(o.matrixWorld.identity().compose(o.position,new THREE.Quaternion().setFromEuler(o.rotation),o.scale)); sp.position.copy(p); sp.scale.set(5,7,1); sp.userData.smoke=1; sp.userData.by=p.y; grp.add(sp); (chunkPlumes.smoke=chunkPlumes.smoke||[]); }
+  /* the lodges and cafés along the run: the village's houses (js/village.js), with a terrace in front */
+  const warmL=[[1,.8,.45],[1,.7,.35]], HOUSES={lodge:{w:22,d:13,floors:3,top:'wood',woodFloors:1,balc:2,sign:'summit',signW:9.5,quoins:true,lights:warmL,seed:31,litP:.7},
+    cafe:{w:13,d:10,floors:2,top:'wood',sign:'rcafe',signW:6.8,seed:32,lights:warmL,shop:{awning:[[.6,.04,.03],[.92,.88,.82]]}},
+    apres:{w:13,d:10,floors:2,top:'wood',sign:'rapres',signW:7.2,seed:33,lights:[[1,.82,.45],[1,.3,.25],[.4,.8,1],[1,.75,.2]],shop:{awning:[[.12,.03,.18],[.03,.03,.04]]}},
+    mcafe:{w:12,d:10,floors:2,top:'wood',ridge:'z',sign:'rmcafe',signW:7,seed:34,lights:warmL}};
+  function addSmoke(grp,o,at){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:plumeTex,transparent:true,depthWrite:false,opacity:.35,color:0xdfe3ea,fog:true})); const p=(at||new THREE.Vector3(-6,14,-1)).clone().applyMatrix4(o.matrixWorld.identity().compose(o.position,new THREE.Quaternion().setFromEuler(o.rotation),o.scale)); sp.position.copy(p); sp.scale.set(5,7,1); sp.userData.smoke=1; sp.userData.by=p.y; grp.add(sp); (chunkPlumes.smoke=chunkPlumes.smoke||[]); }
 
   /* ---------- moving chairs ---------- */
   const CH_N=110, CHS=16, CSPEED=5;

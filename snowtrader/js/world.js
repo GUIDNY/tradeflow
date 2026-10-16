@@ -19,7 +19,7 @@
   ST.LAB={id:'lab',name:'מעבדת בדיקות',en:'TEST LAB',diff:'green',diffName:'בדיקות',blurb:'מדרון רחב וריק לבדיקת הרוכב והפיזיקה.',len:900,vref:11,slope:.2,halfW:32,bend:[10,4],rampStart:170,rampEvery:150,rampH:[.8,1.2],jump:{Hm:3,face:26,b:.1,Tb:6},redRate:0,goals:[1000,3000],par:120,net:false,snowfall:.1,noItems:true,
     sky:{zen:0x2f6fcf,mid:0x86bdf0,hor:0xe3f0fb,sun:0xfff7ea,sunDir:[-.30,.50,-.80],fog:0xc3d9ee,fogNear:90,fogFar:460,snow:0xf4f8ff,hemiS:0x9cc4ff,hemiG:0xcfdcf2,hemiI:1.0,sunI:1.6,exp:.9,stars:0,mount:[0xffffff,0x6f86a8],neon:0}};
 
-  const L=48, U=64, NU=65, NS=49;           // chunk length (m), half width, columns, rows
+  const L=48, U=64, NU=65, NS=49, L_CH=L;    // chunk length (m), half width, columns, rows
   let T=ST.TRACKS[0], cx0=0;
   const S=z=>-z;                              // forward distance from a world z
 
@@ -103,7 +103,10 @@
       varying vec3 vWP; varying float vGroom; uniform float uSparkle; varying float vGlow; uniform float uGlowK;
       float sh1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }`)
       .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
-      { float dd=length(vViewPosition); float fade=vGroom*smoothstep(70.,6.,dd); float st=sin(vWP.x*30.0+sin(vWP.z*.07)*5.0)*.6+sin(vWP.x*61.0+1.3)*.4; normal=normalize(normal+vec3(st*.11*fade,0.,0.)); diffuseColor.rgb*=1.-.045*st*fade; }`)
+      { float dd=length(vViewPosition); float fade=max(vGroom,0.)*smoothstep(70.,6.,dd); float st=sin(vWP.x*30.0+sin(vWP.z*.07)*5.0)*.6+sin(vWP.x*61.0+1.3)*.4; normal=normalize(normal+vec3(st*.11*fade,0.,0.)); diffuseColor.rgb*=1.-.045*st*fade;
+        // deep snow off the run: wind ripples (sastrugi) that wander, and a touch brighter than the packed run
+        float off=1.-abs(vGroom), rf=off*smoothstep(55.,5.,dd); vec2 wd=vec2(.82,.57); float ph=dot(vWP.xz,wd)*4.6+sin(vWP.x*.29+vWP.z*.21)*2.2+sin(vWP.x*1.3-vWP.z*.9)*.6;
+        vec3 tilt=vec3(wd.x,0.,wd.y)*cos(ph)*.16*rf; normal=normalize(normal+(viewMatrix*vec4(tilt,0.)).xyz); diffuseColor.rgb*=1.+.035*off; }`)
       .replace('vec3 outgoingLight =',`{
         vec2 cell=floor(vWP.xz*34.0); float k=sh1(cell);
         vec3 vd=normalize(cameraPosition-vWP);
@@ -129,15 +132,31 @@
   }
   function paint(g,fn){ const p=g.attributes.position, c=new Float32Array(p.count*3), col=new THREE.Color(); for(let i=0;i<p.count;i++){ fn(p.getX(i),p.getY(i),p.getZ(i),col,i); c[i*3]=col.r; c[i*3+1]=col.g; c[i*3+2]=col.b; } g.setAttribute('color',new THREE.BufferAttribute(c,3)); return g; }
 
-  /* pine: trunk + three snow-dusted tiers, one merged geometry, instanced per chunk */
-  function pineGeo(){
-    const parts=[], trunk=new THREE.CylinderGeometry(.22,.34,2.2,7); trunk.translate(0,1.1,0); paint(trunk,(x,y,z,c)=>c.setRGB(.2,.12,.08)); parts.push(trunk);
-    [[3.3,5.4,1.8],[2.7,4.8,4.0],[1.9,4.0,6.0]].forEach(([r,h,y0],i)=>{
-      const g=new THREE.ConeGeometry(r,h,9,3); g.translate(0,y0+h/2,0);
-      paint(g,(x,y,z,c)=>{ const t=(y-y0)/h, n=hash2(Math.round(x*9),Math.round(z*9))*.12; const snow=smooth(.38,.78,t+Math.hypot(x,z)/r*-.25+n);
-        c.setRGB(.05+n*.5,.2+n,.14+n*.6).lerp(new THREE.Color(.92,.95,1),snow*.85); }); parts.push(g); });
-    return mergeGeos(parts);
-  }
+  /* Conifers like the Alps' own (Norway spruce, silver fir): whorls of drooping branches whose rims are star-shaped, so
+     the crown has a ragged edge of branch tips; snow lies on the upper side of each whorl (where it faces the sky) and the
+     needles stay dark beneath; a trunk below the lowest whorl and a thin leader on top. Each kind comes as a full version
+     for the near chunks (~330 triangles) and a light one for the far chunks (~80), swapped by distance (World.follow).
+     aSnow marks the snowy vertices, which keep their white when a tree's green is tinted per instance. */
+  const PI=Math.PI, NEEDLE=[.042,.1,.058], NEEDLE_D=[.016,.036,.025], SNOWC=[.86,.9,.97], BARK=[.13,.08,.055];
+  function conifer(o,lod){ const far=lod==='far', K=far?5:o.K, nL=far?Math.ceil(o.layers*.55):o.layers, P=[], C=[], A=[], I=[]; let v=0;
+    const vtx=(x,y,z,c,a)=>{ P.push(x,y,z); C.push(c[0],c[1],c[2]); A.push(a); return v++; };
+    { const n=far?4:6, r0=o.trunk, r1=o.trunk*.55, top=o.H*.55; for(let i=0;i<n;i++){ const a0=i/n*PI*2, a1=(i+1)/n*PI*2, b=v;   // trunk
+        vtx(Math.cos(a0)*r0,0,Math.sin(a0)*r0,BARK,0); vtx(Math.cos(a1)*r0,0,Math.sin(a1)*r0,BARK,0); vtx(Math.cos(a1)*r1,top,Math.sin(a1)*r1,BARK,0); vtx(Math.cos(a0)*r1,top,Math.sin(a0)*r1,BARK,0);
+        I.push(b,b+2,b+1,b,b+3,b+2); } }
+    const tops=[];
+    for(let i=0;i<nL;i++){ const t=i/nL, y=o.y0+(o.H-o.y0-.6)*Math.pow(t,.92), R=o.R*Math.pow(1-t,1.08)+.32, droop=o.droop*(1-t*.6)*(.8+R/o.R*.4), up=R*.42, rot=hash2(o.seed+i,7)*PI*2;
+      const g=.85+hash2(o.seed+i,11)*.3, ndl=[NEEDLE[0]*g,NEEDLE[1]*g,NEEDLE[2]*g];
+      const ap=o.snow*(.55+hash2(o.seed,i)*.3), apex=vtx(0,y+up,0,[ndl[0]+(SNOWC[0]-ndl[0])*ap,ndl[1]+(SNOWC[1]-ndl[1])*ap,ndl[2]+(SNOWC[2]-ndl[2])*ap],ap), under=vtx(0,y-droop*.35,0,NEEDLE_D,0), ring=[], rb=[];
+      for(let j=0;j<2*K;j++){ const tip=j%2===0, a=rot+j/(2*K)*PI*2+(hash2(o.seed*13+i,j)-.5)*.25, r=R*(tip?1:.6)*(.88+hash2(o.seed+i*7,j)*.24), yy=y-droop*(tip?1:.55)+(hash2(i,j+o.seed)-.5)*.12;
+        const x=Math.cos(a)*r, z=Math.sin(a)*r; ring.push(vtx(x,yy,z,ndl,0)); tops.push(ring[ring.length-1]); if(!far) rb.push(vtx(x,yy-.04,z,NEEDLE_D,0)); }
+      for(let j=0;j<2*K;j++){ const a=ring[j], b=ring[(j+1)%(2*K)]; I.push(apex,b,a); if(!far){ const c=rb[j], d=rb[(j+1)%(2*K)]; I.push(under,c,d); } } }
+    { const y=o.H-.9, b=v; vtx(0,o.H,0,NEEDLE,0); for(let j=0;j<4;j++){ const a=j/4*PI*2; vtx(Math.cos(a)*.22,y,Math.sin(a)*.22,NEEDLE_D,0); } for(let j=0;j<4;j++) I.push(b,b+1+((j+1)%4),b+1+j); }   // the leader
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setIndex(I); g.computeVertexNormals();
+    // snow on the parts of each whorl that face the sky: more near the trunk, thinning out to the drooping tips
+    const nr=g.attributes.normal; for(const k of tops){ const ny=nr.getY(k), s=clamp((ny-.6)*1.7+(hash2(k,o.seed)-.5)*.9,0,1)*o.snow; A[k]=s; C[k*3]+= (SNOWC[0]-C[k*3])*s; C[k*3+1]+=(SNOWC[1]-C[k*3+1])*s; C[k*3+2]+=(SNOWC[2]-C[k*3+2])*s; }
+    g.setAttribute('color',new THREE.Float32BufferAttribute(C,3)); g.setAttribute('aSnow',new THREE.Float32BufferAttribute(A,1)); g.computeBoundingSphere(); return g; }
+  const CONIFERS={spruce:{H:9.5,R:2.5,y0:1.4,layers:12,K:8,droop:.55,snow:.62,trunk:.24,seed:3},fir:{H:8.6,R:3.0,y0:1.1,layers:10,K:7,droop:.75,snow:.8,trunk:.27,seed:9}};
+  const TREE={}; for(const k in CONIFERS) TREE[k]={near:conifer(CONIFERS[k],'near'),far:conifer(CONIFERS[k],'far')};
   function rockGeo(){ const g=new THREE.IcosahedronGeometry(1,1); const p=g.attributes.position; for(let i=0;i<p.count;i++){ const x=p.getX(i),y=p.getY(i),z=p.getZ(i), k=1+hash2(Math.round(x*7),Math.round(z*7+y*3))*.45; p.setXYZ(i,x*k*1.25,y*k*.8,z*k); }
     g.computeVertexNormals(); return paint(g,(x,y,z,c)=>{ const s=smooth(.15,.65,y); c.setRGB(.26,.25,.3).lerp(new THREE.Color(.93,.95,1),s*.9); }); }
   function firGeo(){
@@ -147,7 +166,11 @@
         c.setRGB(.04+n*.4,.14+n,.12+n*.5).lerp(new THREE.Color(.93,.96,1),snow*.9); }); parts.push(g); }
     return mergeGeos(parts);
   }
-  const GEO={pine:pineGeo(),fir:firGeo(),rock:rockGeo()};
+  const GEO={rock:rockGeo()};
+  // trees: tinted per instance (instanceColor), but the snowy vertices keep their white
+  const treeMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.9,metalness:0});
+  treeMat.onBeforeCompile=sh=>{ sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float aSnow;').replace('#include <color_vertex>','#include <color_vertex>\n vColor.rgb=mix(vColor.rgb,color.rgb,aSnow);'); };
+  treeMat.customProgramCacheKey=()=>'st-tree';
   const MATS={tree:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92,metalness:0}),
     coin:new THREE.MeshStandardMaterial({color:0xffc83a,metalness:.9,roughness:.25,emissive:0xff9d00,emissiveIntensity:.9}),
     green:new THREE.MeshStandardMaterial({color:0x2fd6ff,roughness:.2,metalness:.1,emissive:0x1ab8ff,emissiveIntensity:1.4}),
@@ -197,7 +220,7 @@
         cA.copy(snow).multiplyScalar(.93+nz+n.y*.07); cA.lerp(cR,steep*.75);
         if(a>0) cA.multiplyScalar(1-smooth(0,26,a)*.16);
         let gm=1-smooth(-4,1.5,a);
-        if(VG){ const vk=VG.k(s); if(vk>0){ gm*=1-smooth(.3,.9,vk); const sh=VG.shade(s,u);   // village: no corduroy, packed streets, wall shadows, lamp light
+        if(VG){ const vk=VG.k(s); if(vk>0){ gm=lerp(gm,-1,smooth(.3,.9,vk)); const sh=VG.shade(s,u);   // -1: the village floor (neither groomed nor wind-blown)   // village: no corduroy, packed streets, wall shadows, lamp light
             if(sh.k>0){ const pn=vnoise(x*.35,z*.35)*.5+.5; cA.multiply(_st.setRGB(1-.15*sh.k-.1*sh.k*pn,1-.15*sh.k-.09*sh.k*pn,1-.12*sh.k-.06*sh.k*pn)); }
             if(sh.ao>0) cA.multiplyScalar(1-sh.ao);
             glow[o]=Math.min(1.4,sh.glow); } }
@@ -224,8 +247,12 @@
     { const nG=T.id==='ridge'?4:T.id==='bear'?3:T.id==='ipo'?3:T.id==='bull'?2:1; for(let n2=0;n2<nG;n2++){ const s=s0+hash2(ci,n2*11+900)*L, w=halfW(s), side=hash2(ci,n2*11+901)<.5?-1:1, u=side*(w+14+hash2(ci,n2*11+902)*34), x=cx(s)+u, z=-s, sc=6+hash2(ci,n2*11+903)*12;
         if(ST.Resort&&ST.Resort.blocked(s,u)||VG&&VG.blocked(s,u)) continue; rocks.push({x,y:groundY(x,z)-sc*.25,z,sc,sy:1.5+hash2(ci,n2*11+904)*1.3,r:hash2(ci,n2*11+905)*6.28,giant:1}); } }
     const dummy=new THREE.Object3D();
-    if(trees.length){ const firs=trees.filter((t,i)=>hash2(i,ci+77)<.45), pines=trees.filter((t,i)=>!(hash2(i,ci+77)<.45));
-      [[GEO.pine,pines],[GEO.fir,firs]].forEach(([geo,arr])=>{ if(!arr.length) return; const im=new THREE.InstancedMesh(geo,MATS.tree,arr.length); arr.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); const k=geo===GEO.fir?t.sc*1.05:t.sc; dummy.scale.set(k*(geo===GEO.fir?.9:1),k*(.9+hash2(i,ci)*.45)*(geo===GEO.fir?1.25:1),k*(geo===GEO.fir?.9:1)); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); }); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); }); trees.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+7) items.push({type:'tree',x:t.x,z:t.z,y:t.y,r:.8*t.sc}); }); }
+    if(trees.length){ const firs=trees.filter((t,i)=>hash2(i,ci+77)<.4), spruces=trees.filter((t,i)=>!(hash2(i,ci+77)<.4)), lod={near:[],far:[]}, tint=new THREE.Color();
+      [[TREE.spruce,spruces],[TREE.fir,firs]].forEach(([T2,arr])=>{ if(!arr.length) return; ['near','far'].forEach(L=>{ const im=new THREE.InstancedMesh(T2[L],treeMat,arr.length);
+          arr.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); const k=t.sc*1.12, w=.9+hash2(i,ci+5)*.25; dummy.scale.set(k*w,k*(.88+hash2(i,ci)*.4),k*w); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix);
+            const h=hash2(i,ci+31); im.setColorAt(i,tint.setRGB(.8+h*.45,.85+hash2(i,ci+32)*.35,.8+hash2(i,ci+33)*.3)); });
+          im.castShadow=L==='near'; im.receiveShadow=true; im.frustumCulled=false; im.visible=L==='near'; grp.add(im); lod[L].push(im); }); });
+      grp.userData.treeLod=lod; trees.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+7) items.push({type:'tree',x:t.x,z:t.z,y:t.y,r:.8*t.sc}); }); }
     if(rocks.length&&ASSET.rocks.length){ const groups=ASSET.rocks.map(()=>[]); rocks.forEach(t=>{ const pick=t.giant?(hash2(t.x|0,t.z|0)<.5?3:2):(hash2(t.x|0,(t.z|0)+5)<.5?0:1); groups[pick%ASSET.rocks.length].push(t); });
       groups.forEach((arr,gi)=>{ if(!arr.length) return; const A=ASSET.rocks[gi], im=new THREE.InstancedMesh(A.geo,A.mat,arr.length); arr.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); const k=t.giant?(A.name==='rock_face_01'?3.2:2.4):2.3, sy=t.giant?(t.sy||1)*.9:1; dummy.scale.set(t.sc*k,t.sc*k*sy,t.sc*k); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); }); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); });
       rocks.forEach(t=>{ if(!t.giant&&Math.abs(t.x-cx(-t.z))<halfW(-t.z)+2) items.push({type:'rock',x:t.x,z:t.z,y:t.y,r:1.1*t.sc}); }); }
@@ -316,29 +343,48 @@
   const clouds=[0,1].map(i=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(2600,2600),new THREE.MeshBasicMaterial({map:cloudTex.clone(),transparent:true,depthWrite:false,fog:false,opacity:i?.8:.95})); m.material.map.needsUpdate=true; m.material.map.repeat.set(3.5+i,3.5+i); m.rotation.x=-Math.PI/2; m.renderOrder=-6+i; m.frustumCulled=false; scene.add(m); return m; });
   const mount=new THREE.Group(); scene.add(mount);
   const plumeSprites=[]; const plumeTex2=(()=>{ const c=document.createElement('canvas'); c.width=256; c.height=64; const g=c.getContext('2d'); const gr=g.createRadialGradient(128,32,0,128,32,128); gr.addColorStop(0,'rgba(255,255,255,.9)'); gr.addColorStop(.5,'rgba(255,255,255,.35)'); gr.addColorStop(1,'rgba(255,255,255,0)'); g.save(); g.scale(1,.25); g.translate(0,96); g.fillStyle=gr; g.fillRect(0,-96,256,256); g.restore(); const t=new THREE.CanvasTexture(c); return t; })();
+  /* The mountains around: three rings of real relief (polar height fields of ridged noise: peaks, crests, gullies), so the
+     sun can light them. Shaded per pixel: rock with strata where it is steep, snow where it is gentle enough to hold it,
+     broken up by noise; sun and sky light; haze growing with distance and toward the cloud sea they rise out of. */
+  const MOUNT_FRAG=`uniform vec3 sunD,sunC,skyC,grdC,fogC,snowC,rockA,rockB; uniform float haze,Hmax,snowK; varying vec3 vP; varying vec3 vN;
+    float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float vn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h2(i),h2(i+vec2(1.,0.)),f.x),mix(h2(i+vec2(0.,1.)),h2(i+vec2(1.,1.)),f.x),f.y); }
+    void main(){
+      vec3 n=normalize(vN); vec2 q=vec2(vP.x*.035+vP.y*.029,vP.z*.035-vP.y*.023);         // varies down a cliff as well as across it
+      float d1=vn(q)*.55+vn(q*2.3)*.3+vn(q*5.1)*.15, d2=vn(q*9.+3.7)*.6+vn(q*21.)*.4;
+      vec3 b=vec3(d2-.5,0.,d1-.5); n=normalize(n+b*.55);                                   // rocky relief finer than the mesh
+      float hf=clamp((vP.y+60.)/(Hmax+60.),0.,1.);
+      float snow=smoothstep(.2,.4,n.y*.9+hf*.24+(d1-.5)*.5+snowK);                       // winter: snow wherever it can hold, rock on the cliffs
+      float strata=sin(vP.y*.42+d1*7.)*.5+.5;
+      vec3 rock=mix(rockA,rockB,clamp(d2*.75+strata*.35-.1,0.,1.));
+      vec3 alb=mix(rock,snowC,snow);
+      float dif=max(dot(n,sunD)*.8+.2,0.);                                                  // wrapped: faces turned from the sun still read
+      vec3 col=alb*(sunC*dif+mix(grdC,skyC,n.y*.5+.5)*.85);
+      col=mix(col,fogC,clamp(haze+smoothstep(30.,-90.,vP.y)*.8,0.,1.));
+      gl_FragColor=vec4(col,1.);
+      #include <tonemapping_fragment>
+      #include <encodings_fragment>
+    }`;
+  const MOUNT_VERT='varying vec3 vP; varying vec3 vN; void main(){ vP=position; vN=normal; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }';
   function buildMountains(palette,sunDir,fogC){
     plumeSprites.length=0; while(mount.children.length){ const o=mount.children.pop(); if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }
-    const sunV=new THREE.Vector3(...sunDir).normalize(), lo=new THREE.Color(palette[1]).convertSRGBToLinear(), hi=new THREE.Color(palette[0]).convertSRGBToLinear(), fc=new THREE.Color(fogC).convertSRGBToLinear();
-    const rockC=new THREE.Color(0x7a6d66).convertSRGBToLinear(), rockD=new THREE.Color(0x3d3a45).convertSRGBToLinear();
-    [[860,520,0.5,11],[620,300,0.4,23],[470,150,0.3,41]].forEach(([R,H,sn,seed],layer)=>{
-      const N=300, M=18, pos=[], idx=[];
-      for(let i=0;i<=N;i++){ const a=i/N*Math.PI*2; const rid=(f,s)=>1-Math.abs(vnoise(Math.cos(a)*f+s,Math.sin(a)*f));   // ridged noise: sharp crests
-        const ridge=Math.pow(rid(1.8,seed),2.4)*.6+Math.pow(rid(5,seed+3),2.8)*.3+Math.pow(rid(13,seed+7),3)*.1;
-        const hh=H*(.12+ridge*1.2);
-        for(let j=0;j<=M;j++){ const t=j/M, r=R-t*40-Math.pow(t,3)*60, y=-90+t*(hh+90); pos.push(Math.cos(a)*r,y,Math.sin(a)*r); } }
-      for(let i=0;i<N;i++) for(let j=0;j<M;j++){ const a=i*(M+1)+j,b=a+1,c=a+(M+1),d=c+1; idx.push(a,c,b,b,c,d); }
+    const k=T.sky, lin=c=>new THREE.Color(c).convertSRGBToLinear(), sunV=new THREE.Vector3(...sunDir).normalize();
+    const U={sunD:{value:sunV},sunC:{value:lin(k.sun).multiplyScalar(k.sunI*.62)},skyC:{value:lin(k.hemiS).multiplyScalar(k.hemiI*.85)},grdC:{value:lin(k.hemiG).multiplyScalar(k.hemiI*.55)},fogC:{value:lin(fogC)},
+      snowC:{value:lin(palette[0]).multiplyScalar(.9)},rockA:{value:lin(0x8a7f78)},rockB:{value:lin(0x4b4752)}};
+    // radii stay inside the camera's far plane (900 m)
+    [[760,880,560,.5,11],[580,720,330,.32,23],[450,560,170,.16,41]].forEach(([R0,R1,H,haze,seed],layer)=>{
+      const N=420, M=26, pos=[], idx=[], tops=new Float32Array(N+1), rid=(x,z,f,sd)=>1-Math.abs(vnoise(x*f+sd,z*f-sd*1.7));
+      for(let i=0;i<=N;i++){ const a=i/N*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a);
+        for(let j=0;j<=M;j++){ const t=j/M, r=R0+(R1-R0)*t, x=ca*r, z=sa*r;
+          const big=Math.pow(rid(x,z,.0021,seed),2.2), mid=Math.pow(rid(x,z,.0063,seed+3),2.6), fine=Math.pow(rid(x,z,.019,seed+7),3);
+          const h=H*(.1+big*.95+mid*.38+fine*.09)*smooth(0,.38,t)*(1-smooth(.82,1,t)*.25), y=-90+h; pos.push(x,y,z); if(y>tops[i]) tops[i]=y; } }
+      for(let i=0;i<N;i++) for(let j=0;j<M;j++){ const a=i*(M+1)+j,b=a+1,c=a+(M+1),d=c+1; idx.push(a,c,b,b,c,d); }   // faces up
       const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals();
-      const p=g.attributes.position, nr=g.attributes.normal, col=new Float32Array(p.count*3), cc=new THREE.Color();
-      for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), z=p.getZ(i), ang=Math.atan2(z,x);
-        // snow settles on the high, gentle parts; cliffs and gullies stay bare rock
-        const patch=vnoise(ang*38+layer*5,y*.03)*.5+vnoise(ang*110,y*.09)*.25+.5, hf=smooth(H*.18,H*.55,y), snow=smooth(.46,.76,patch*.62+hf*.42);
-        cc.copy(rockC).lerp(rockD,smooth(.4,.9,vnoise(ang*70,y*.05)*.5+.5)); cc.lerp(hi,snow);
-        const sh=clamp(.5+.6*(nr.getX(i)*sunV.x+nr.getY(i)*sunV.y+nr.getZ(i)*sunV.z),.28,1.1), sc=clamp((sh-.28)/.82,0,1);
-        cc.r*=lerp(.58,1.05,sc); cc.g*=lerp(.7,1.0,sc); cc.b*=lerp(.95,.97,sc);
-        const haze=(layer===0?.36:layer===1?.2:.08)+smooth(60,-80,y)*.7; cc.lerp(fc,clamp(haze,0,1)); col[i*3]=cc.r; col[i*3+1]=cc.g; col[i*3+2]=cc.b; }
-      g.setAttribute('color',new THREE.BufferAttribute(col,3));
-      if(layer<2){ const hs=[]; for(let i=0;i<=N;i++) hs.push(pos[(i*(M+1)+M)*3+1]); let cnt=0; for(let i=4;i<N-4&&cnt<(layer?5:7);i++){ if(hs[i]>H*.62&&hs[i]>=hs[i-3]&&hs[i]>=hs[i+3]&&hs[i]>=hs[i-1]&&hs[i]>=hs[i+1]){ const a=i/N*Math.PI*2, r=R-40-60; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:plumeTex2,transparent:true,depthWrite:false,fog:false,opacity:.5,color:0xffffff})); sp.position.set(Math.cos(a)*r*.99,hs[i]+8,Math.sin(a)*r*.99); sp.scale.set(layer?150:260,layer?50:90,1); sp.userData.ph=i; plumeSprites.push(sp); mount.add(sp); cnt++; i+=14; } } }
-      const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,fog:false,side:THREE.DoubleSide,toneMapped:true})); m.frustumCulled=false; mount.add(m); });
+      const mat=new THREE.ShaderMaterial({uniforms:Object.assign({},U,{haze:{value:haze},Hmax:{value:H*1.1},snowK:{value:(T.id==='ridge'?.08:T.id==='bunny'?.03:0)}}),vertexShader:MOUNT_VERT,fragmentShader:MOUNT_FRAG,side:THREE.DoubleSide,fog:false});
+      const m=new THREE.Mesh(g,mat); m.frustumCulled=false; m.renderOrder=-5+layer; mount.add(m);
+      // snow plumes blown off the highest summits of the two far rings
+      if(layer<2){ let cnt=0; for(let i=4;i<N-4&&cnt<(layer?5:7);i++){ const h=tops[i]; if(h>H*.72-90&&h>=tops[i-3]&&h>=tops[i+3]&&h>=tops[i-1]&&h>=tops[i+1]){ const a=i/N*Math.PI*2, r=(R0+R1)/2;
+          const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:plumeTex2,transparent:true,depthWrite:false,fog:false,opacity:.5,color:0xffffff})); sp.position.set(Math.cos(a)*r,h+8,Math.sin(a)*r); sp.scale.set(layer?150:260,layer?50:90,1); sp.userData.ph=i; plumeSprites.push(sp); mount.add(sp); cnt++; i+=14; } } } });
   }
 
   /* falling snow: a box of flakes that wraps around the camera */
@@ -406,10 +452,14 @@
     if(ST.Park) ST.Park.build(T);
     if(ST.Village) ST.Village.build(T);
   }
-  function follow(p,t){ plumeSprites.forEach(sp=>{ const ph=sp.userData.ph; sp.material.opacity=.42+.18*Math.sin(t*.35+ph); sp.scale.x=(sp.scale.y>60?260:150)*(1+.08*Math.sin(t*.2+ph*1.3)); });
+  /* the forest's level of detail: chunks near the camera get the full trees (and their shadows), far ones the light trees */
+  const TREE_NEAR=120;
+  function treeLod(cam){ chunks.forEach(c=>{ const L=c.group.userData.treeLod; if(!L) return; const s=c.idx*L_CH+L_CH/2, dx=cam.x-cx(s), dz=cam.z+s, near=dx*dx+dz*dz<TREE_NEAR*TREE_NEAR;
+      if(c.treeNear===near) return; c.treeNear=near; L.near.forEach(m=>m.visible=near); L.far.forEach(m=>m.visible=!near); }); }
+  function follow(p,t){ treeLod(camera.position); plumeSprites.forEach(sp=>{ const ph=sp.userData.ph; sp.material.opacity=.42+.18*Math.sin(t*.35+ph); sp.scale.x=(sp.scale.y>60?260:150)*(1+.08*Math.sin(t*.2+ph*1.3)); });
     clouds.forEach((m,i)=>{ m.position.set(camera.position.x,p.y-175+i*52,camera.position.z); m.material.map.offset.set(t*.004*(i?1.6:1),t*.002); });
     sky.position.copy(camera.position); sky.material.uniforms.time.value=t; mount.position.set(camera.position.x,p.y-30,camera.position.z);
     const sd=T.sky.sunDir; sun.position.set(p.x-sd[0]*0+sd[0]*120,p.y+sd[1]*120+30,p.z+sd[2]*120); sun.target.position.set(p.x,p.y,p.z); sun.target.updateMatrixWorld(); }
 
-  ST.World={loadAssets,ensureSky,get T(){return T;},baseGround,groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,forRamps,lipNear,flightLine,jumpWindow,updateCoins,L,BUILD,flakes,reset,rampProfile};
+  ST.World={TREE,treeMat,loadAssets,ensureSky,get T(){return T;},baseGround,groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,forRamps,lipNear,flightLine,jumpWindow,updateCoins,L,BUILD,flakes,reset,rampProfile};
 })(window.ST);
