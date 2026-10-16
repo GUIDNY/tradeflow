@@ -169,11 +169,13 @@
       if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s, y=groundY(x,z); trees.push({x,y:y-.2,z,sc:.5+hash2(ci,n2+500)*.7+(off>w+18?.35:0),r:hash2(ci,n2+900)*6.28}); }
     for(let n2=0;n2<9;n2++){ const s=s0+hash2(ci,n2*5+700)*L, w=halfW(s), side=hash2(ci,n2*5+701)<.5?-1:1, u=side*(w*.8+hash2(ci,n2*5+702)*14);
       if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s; rocks.push({x,y:groundY(x,z)-.15,z,sc:.9+hash2(ci,n2+333)*1.8,r:hash2(ci,n2+444)*6.28}); }
+    { const nG=T.id==='ridge'?4:T.id==='bear'?3:T.id==='ipo'?3:T.id==='bull'?2:1; for(let n2=0;n2<nG;n2++){ const s=s0+hash2(ci,n2*11+900)*L, w=halfW(s), side=hash2(ci,n2*11+901)<.5?-1:1, u=side*(w+14+hash2(ci,n2*11+902)*34), x=cx(s)+u, z=-s, sc=6+hash2(ci,n2*11+903)*12;
+        if(ST.Resort&&ST.Resort.blocked(s,u)) continue; rocks.push({x,y:groundY(x,z)-sc*.25,z,sc,sy:1.5+hash2(ci,n2*11+904)*1.3,r:hash2(ci,n2*11+905)*6.28,giant:1}); } }
     const dummy=new THREE.Object3D();
     if(trees.length){ const firs=trees.filter((t,i)=>hash2(i,ci+77)<.45), pines=trees.filter((t,i)=>!(hash2(i,ci+77)<.45));
       [[GEO.pine,pines],[GEO.fir,firs]].forEach(([geo,arr])=>{ if(!arr.length) return; const im=new THREE.InstancedMesh(geo,MATS.tree,arr.length); arr.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); const k=geo===GEO.fir?t.sc*1.05:t.sc; dummy.scale.set(k*(geo===GEO.fir?.9:1),k*(.9+hash2(i,ci)*.45)*(geo===GEO.fir?1.25:1),k*(geo===GEO.fir?.9:1)); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); }); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); }); trees.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+7) items.push({type:'tree',x:t.x,z:t.z,y:t.y,r:.8*t.sc}); }); }
-    if(rocks.length){ const im=new THREE.InstancedMesh(GEO.rock,MATS.tree,rocks.length); rocks.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); dummy.scale.setScalar(t.sc); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
-      im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); rocks.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+2) items.push({type:'rock',x:t.x,z:t.z,y:t.y,r:1.1*t.sc}); }); }
+    if(rocks.length){ const im=new THREE.InstancedMesh(GEO.rock,MATS.tree,rocks.length); rocks.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); dummy.scale.set(t.sc,t.sc*(t.sy||1),t.sc); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); });
+      im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); rocks.forEach(t=>{ if(!t.giant&&Math.abs(t.x-cx(-t.z))<halfW(-t.z)+2) items.push({type:'rock',x:t.x,z:t.z,y:t.y,r:1.1*t.sc}); }); }
 
     // pickups and hazards: one pattern per 24 m cell
     const cellL=24, c0=Math.floor(s0/cellL);
@@ -241,6 +243,12 @@
       }`}));
   sky.renderOrder=-10; sky.frustumCulled=false; scene.add(sky);
 
+  /* cloud sea: two soft cloud layers far below the peaks, so the ridges rise out of cloud like the alpine reference */
+  const cloudTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=512; const g=c.getContext('2d'), im=g.createImageData(512,512);
+    for(let y=0;y<512;y++) for(let x=0;x<512;x++){ let v=0,a=.5,f=3; for(let o=0;o<5;o++){ v+=a*(vnoise(x/512*f+o*9.1,y/512*f+o*4.7)*.5+.5); a*=.5; f*=2; }
+      const edge=Math.min(x,y,511-x,511-y)/60, al=clamp((v-.42)*3.2,0,1)*clamp(edge,0,1); const i=(y*512+x)*4; im.data[i]=255; im.data[i+1]=255; im.data[i+2]=255; im.data[i+3]=al*235; }
+    g.putImageData(im,0,0); const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t; })();
+  const clouds=[0,1].map(i=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(2600,2600),new THREE.MeshBasicMaterial({map:cloudTex.clone(),transparent:true,depthWrite:false,fog:false,opacity:i?.8:.95})); m.material.map.needsUpdate=true; m.material.map.repeat.set(3.5+i,3.5+i); m.rotation.x=-Math.PI/2; m.renderOrder=-6+i; m.frustumCulled=false; scene.add(m); return m; });
   const mount=new THREE.Group(); scene.add(mount);
   function buildMountains(palette,sunDir,fogC){
     while(mount.children.length){ const o=mount.children.pop(); o.geometry.dispose(); o.material.dispose(); }
@@ -293,12 +301,14 @@
     hemi.color.set(k.hemiS); hemi.groundColor.set(k.hemiG); hemi.intensity=k.hemiI; sun.color.set(k.sun); sun.intensity=k.sunI; ST.renderer.toneMappingExposure=k.exp;
     ST.bloomStrength=k.neon?.75:.26; if(ST.GFX.bloom) ST.GFX.bloom.strength=ST.bloomStrength;
     SNOW_UNI.uSparkle.value=k.neon?.7:1; MATS.coin.emissiveIntensity=k.neon?1.4:.9;
+    { const cc=new THREE.Color(k.hor).lerp(new THREE.Color(0xffffff),.45).convertSRGBToLinear(); clouds.forEach(m=>m.material.color.copy(cc)); clouds.forEach(m=>m.visible=true); }
     buildMountains(k.mount,k.sunDir,k.fog);
     setSites(ST.Resort?ST.Resort.sites(T):[]); if(ST.Resort) ST.Resort.setTrack(T);
     flakeMat.uniforms.alpha.value=.5+.4*T.snowfall; flakeGeo.setDrawRange(0,Math.round(FL*(.2+.8*T.snowfall)));
     reset();
   }
-  function follow(p,t){ sky.position.copy(camera.position); sky.material.uniforms.time.value=t; mount.position.set(camera.position.x,p.y-30,camera.position.z);
+  function follow(p,t){ clouds.forEach((m,i)=>{ m.position.set(camera.position.x,p.y-175+i*52,camera.position.z); m.material.map.offset.set(t*.004*(i?1.6:1),t*.002); });
+    sky.position.copy(camera.position); sky.material.uniforms.time.value=t; mount.position.set(camera.position.x,p.y-30,camera.position.z);
     const sd=T.sky.sunDir; sun.position.set(p.x-sd[0]*0+sd[0]*120,p.y+sd[1]*120+30,p.z+sd[2]*120); sun.target.position.set(p.x,p.y,p.z); sun.target.updateMatrixWorld(); }
 
   ST.World={get T(){return T;},baseGround,groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,L,RL,flakes,reset,rampProfile};

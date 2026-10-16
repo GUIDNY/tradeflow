@@ -134,7 +134,7 @@
     let pts=0, parts=[];
     if(spins){ pts+=spins*130*(1+(spins-1)*.45); parts.push((spins*180)+'°'); }
     if(flips){ pts+=flips*480*(1+(flips-1)*.5); parts.push(P.fl>0?(flips>1?flips+'× BACKFLIP':'BACKFLIP'):(flips>1?flips+'× FRONTFLIP':'FRONTFLIP')); }
-    if(grab>.35){ pts+=Math.min(grab,3.5)*100; parts.push('INDY GRAB'); }
+    if(grab>.35){ pts+=Math.min(grab,3.5)*100; parts.push((P.grabName||'INDY')+' GRAB'); }
     if(P.airT>1.0) pts+=(P.airT-1)*90;
     if(P.perfectPop){ pts+=60; }
     P.perfectPop=false;
@@ -199,7 +199,7 @@
       P.airT+=dt; P.vy-=G*dt;
       P.x+=P.vx*dt; P.z+=P.vz*dt; P.y+=P.vy*dt; P.s=-P.z; P.vx*=Math.exp(-dt*.03); P.vz*=Math.exp(-dt*.03);
       P.wsp=damp(P.wsp,sx*9.4,7,dt); P.wfl=damp(P.wfl,iy*7.2,7,dt); P.sp+=P.wsp*dt; P.fl+=P.wfl*dt;
-      if(input.grab){ P.grabT+=dt; } else P.grabT=Math.max(0,P.grabT-dt*.5*0);
+      if(input.grab){ if(P.grabT===0){ P.grabName=Math.abs(sx)>Math.abs(iy)?(sx>0?'MUTE':'INDY'):(iy<0?'METHOD':'STALEFISH'); } P.grabT+=dt; }
       P.grabbed=input.grab; P.lean=damp(P.lean,0,6,dt);
       if(P.airT>.35) tip('air','באוויר: ימינה/שמאלה = ספין · למעלה/למטה = סלטה · החזיקו תפיסה',5200);
       const gy=World.groundY(P.x,P.z);
@@ -225,14 +225,15 @@
   }
 
   /* ---------- camera ---------- */
-  let camHd=0, camSnap=true; const camPos=new THREE.Vector3(), camLook=new THREE.Vector3(), _f=new THREE.Vector3(), _ft=new THREE.Vector3(), _g=new THREE.Vector3(), _gl=new THREE.Vector3();
+  let camHd=0, camSnap=true, heroK=0, heroSide=0; const camPos=new THREE.Vector3(), camLook=new THREE.Vector3(), _f=new THREE.Vector3(), _ft=new THREE.Vector3(), _g=new THREE.Vector3(), _gl=new THREE.Vector3();
   function camReset(){ camSnap=true; camHd=P.hd; }
   function updateCamera(dt){
     if(camera.view&&camera.view.enabled) camera.clearViewOffset();
     const sp=P.speed, air=!P.grounded;
     camHd=lerpAngle(camHd,P.hd,1-Math.exp(-dt*(air?1.2:3.1)));
-    const fx=Math.sin(camHd), fz=-Math.cos(camHd);
-    const vq=clamp(sp/((track.vref||24)*1.3),0,1), dist=lerp(5.4,7.4,vq)+(air?.7:0), h=lerp(2.1,2.9,vq)+(air?.8:0)+P.tuck*-.3;
+    const heroOn=air&&P.airT>.4&&P.tumble<=0; heroK=damp(heroK,heroOn?1:0,heroOn?2.2:3.5,dt); if(heroOn&&!heroSide) heroSide=Math.random()<.5?-1:1; if(!heroOn&&heroK<.02) heroSide=0;
+    const camA=camHd+(heroSide||1)*heroK*.85, fx=Math.sin(camA), fz=-Math.cos(camA);
+    const vq=clamp(sp/((track.vref||24)*1.3),0,1), dist=(lerp(5.4,7.4,vq)+(air?.7:0))*(1-.28*heroK), h=(lerp(2.1,2.9,vq)+(air?.8:0)+P.tuck*-.3)*(1-.35*heroK);
     const tx=P.x-fx*dist, tz=P.z-fz*dist; let ty=P.y+h;
     const gy=World.groundY(tx,tz)+1.3; if(ty<gy) ty=gy;
     _f.set(tx,ty,tz); if(camSnap){ camPos.copy(_f); camSnap=false; } else { const k=1-Math.exp(-dt*(air?6:11)); camPos.lerp(_f,k); }
@@ -242,7 +243,7 @@
       _g.set(P.x+Math.sin(th)*r*Math.cos(P.hd)+Math.sin(P.hd)*0, 0, P.z+Math.cos(th)*r); _g.y=Math.max(P.y+ch,World.groundY(_g.x,_g.z)+1.0); _gl.set(P.x,P.y+1.3,P.z); _gl.lerp(camLook,e); _g.lerp(camPos,e*e*e); }
     camera.position.copy(mode==='countdown'?_g:camPos); if(P.shake>0){ const s=P.shake*P.shake*.5; camera.position.x+=(Math.random()-.5)*s; camera.position.y+=(Math.random()-.5)*s; }
     camera.lookAt(mode==='countdown'?_gl:camLook); camera.rotateZ(-P.lean*.045-(P.tumble>0?Math.sin(P.t*20)*.03:0));
-    const base=ST.baseFov||62; const f=base+clamp((sp/(track.vref||24)-.35)/1.0,0,1)*14+(P.boost>0?3:0); if(Math.abs(camera.fov-f)>.05){ camera.fov=damp(camera.fov,f,4,dt); camera.updateProjectionMatrix(); }
+    const base=ST.baseFov||62; const f=base+clamp((sp/(track.vref||24)-.35)/1.0,0,1)*14+(P.boost>0?3:0)+heroK*5; if(Math.abs(camera.fov-f)>.05){ camera.fov=damp(camera.fov,f,4,dt); camera.updateProjectionMatrix(); }
   }
   function menuCamera(t){ const W=innerWidth,H=innerHeight; if(W>H*1.1) camera.setViewOffset(W,H,W*.2,0,W,H); else if(camera.view&&camera.view.enabled) camera.clearViewOffset(); const a=PI+Math.sin(t*.15)*.9+.4, r=4.3; camera.position.set(P.x+Math.sin(a)*r*.6-1.2,P.y+1.45,P.z+Math.cos(a)*r); camera.lookAt(P.x,P.y+.95,P.z); camera.fov=ST.baseFov||62; camera.updateProjectionMatrix(); }
 
