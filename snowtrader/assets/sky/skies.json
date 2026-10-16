@@ -1,0 +1,102 @@
+{
+ "horn-koppe_snow": {
+  "file": "horn-koppe_snow.jpg",
+  "hdr": "horn-koppe_snow_1k.hdr",
+  "sunDir": [
+   0.515,
+   0.4761,
+   -0.7128
+  ],
+  "sunColor": [
+   0.874,
+   0.914,
+   1.0
+  ],
+  "horizon": [
+   0.48,
+   0.579,
+   0.69
+  ],
+  "zenith": [
+   0.189,
+   0.237,
+   0.35
+  ],
+  "sunElev": 28.4
+ },
+ "stierberg_sunrise": {
+  "file": "stierberg_sunrise.jpg",
+  "hdr": "stierberg_sunrise_1k.hdr",
+  "sunDir": [
+   0.5859,
+   0.0581,
+   -0.8083
+  ],
+  "sunColor": [
+   1.0,
+   0.689,
+   0.245
+  ],
+  "horizon": [
+   0.51,
+   0.574,
+   0.61
+  ],
+  "zenith": [
+   0.244,
+   0.366,
+   0.526
+  ],
+  "sunElev": 3.3
+ },
+ "lago_disola": {
+  "file": "lago_disola.jpg",
+  "hdr": "lago_disola_1k.hdr",
+  "sunDir": [
+   0.3744,
+   0.7675,
+   -0.5204
+  ],
+  "sunColor": [
+   1.0,
+   0.817,
+   0.683
+  ],
+  "horizon": [
+   0.258,
+   0.261,
+   0.245
+  ],
+  "zenith": [
+   0.418,
+   0.521,
+   0.659
+  ],
+  "sunElev": 50.1
+ },
+ "snowy_hillside": {
+  "file": "snowy_hillside.jpg",
+  "hdr": "snowy_hillside_1k.hdr",
+  "sunDir": [
+   0.5515,
+   0.3436,
+   -0.7601
+  ],
+  "sunColor": [
+   1.0,
+   0.827,
+   0.778
+  ],
+  "horizon": [
+   0.336,
+   0.324,
+   0.324
+  ],
+  "zenith": [
+   0.409,
+   0.424,
+   0.498
+  ],
+  "sunElev": 20.1
+ }
+}

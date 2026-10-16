@@ -380,8 +380,8 @@
   /* ---------- boot ---------- */
   async function boot(){
     const bar=$('#loadbar'), txt=$('#loadtxt'); const set=(p,t)=>{ bar.style.width=p+'%'; if(t) txt.textContent=t; };
-    set(10,'בונים את ההר…'); ST.onResize(); ST.qApply(ST.Q.lv);
-    const qt=new URLSearchParams(location.search).get('track'); const qi=ST.TRACKS.findIndex(t=>t.id===qt); if(qi>=0) save.track=qi; else if(!(save.track>=0&&save.track<ST.TRACKS.length)||!unlocked(save.track)) save.track=0; track=ST.TRACKS[save.track]; trackIdx=ST.TRACKS.indexOf(track); World.setTrack(track); set(35,'מלבישים את הרוכב…');
+    set(10,'בונים את ההר…'); ST.onResize(); ST.qApply(ST.Q.lv); await World.loadAssets();
+    const qt=new URLSearchParams(location.search).get('track'); const qi=ST.TRACKS.findIndex(t=>t.id===qt); if(qi>=0) save.track=qi; else if(!(save.track>=0&&save.track<ST.TRACKS.length)||!unlocked(save.track)) save.track=0; track=ST.TRACKS[save.track]; trackIdx=ST.TRACKS.indexOf(track); World.setTrack(track); await World.ensureSky(track); set(35,'מלבישים את הרוכב…');
     try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
     set(80,'מחממים את השוק…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=3; if(save.rider>0&&Rider.choices[save.rider]){ ST.People.template(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
     set(100); await new Promise(r=>setTimeout(r,250));
