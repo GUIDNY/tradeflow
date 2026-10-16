@@ -44,7 +44,7 @@
   function forRamps(sA,sB,fn){
     if(T.jumpList){ for(let k=0;k<T.jumpList.length;k++){ const r=rampAt(k); if(r.s-BUILD<=sB&&r.s+r.L+r.Tb+r.LL+8>=sA) fn(r,k); } return; }
     if(!T.rampEvery) return; const k0=Math.floor((sA-T.rampStart)/T.rampEvery)-1, k1=Math.ceil((sB-T.rampStart)/T.rampEvery)+1;
-    for(let k=Math.max(0,k0);k<=k1;k++){ const r=rampAt(k); if(r.s-BUILD<=sB&&r.s+r.L+r.Tb+r.LL+8>=sA) fn(r,k); } }
+    for(let k=Math.max(0,k0);k<=k1;k++){ const r=rampAt(k); if(r.s>=T.len) break; if(r.s-BUILD<=sB&&r.s+r.L+r.Tb+r.LL+8>=sA) fn(r,k); } }   // none past the finish line
   /* the table and its landing: flat over the fall line, then a straight face at the landing angle, knuckle and runout rounded */
   const sr=(u,rad)=>(u+Math.sqrt(u*u+rad*rad))/2;
   function tableProfile(d,r){ if(d<-BUILD||d>r.L+r.Tb+r.LL+8) return 0; if(d<=0) return r.Hm*smooth(-BUILD,0,d);
@@ -72,10 +72,13 @@
     const out=[]; for(let i=1;i<=n;i++){ const p=pts[Math.floor(i*(pts.length-1)/(n+1))]; if(p) out.push(p); } return out; }
   let sites=[];
   function baseGround(x,z){
-    const s=S(z), c=cx(s), u=x-c, w=halfW(s), a=Math.abs(u)-w;
-    let y=fall(s);
+    const s=S(z), c=cx(s), u=x-c, Vg=ST.Village, w=Vg?Vg.width(s,halfW(s)):halfW(s), a=Math.abs(u)-w, vk=Vg?Vg.k(s):0;
+    let y=vk>0?Vg.floor(s):fall(s);
     if(a>0) y+=a*a*.05+a*.18;
-    y+=vnoise(x*.02,z*.02)*(a>0?3.2:1.5)*(T.park&&a<0?.35:1)+vnoise(x*.1,z*.1)*(a>0?.5:.16)*(T.park&&a<0?.3:1);   // a park is groomed smoother
+    // the noise is rougher off the run than on it (a park and the village floor are groomed smoother); the change is blended
+    // over a few metres so the run's edge is a slope, not a step
+    const off=smooth(-1.5,4,a), inK=(T.park?.35:1)*(1-.85*vk), in2=(T.park?.3:1)*(1-.7*vk);
+    y+=vnoise(x*.02,z*.02)*lerp(1.5*inK,3.2,off)+vnoise(x*.1,z*.1)*lerp(.16*in2,.5,off);
     return y+rampH(u,s)+(ST.Park?ST.Park.terrain(s,u):0);
   }
   function groundY(x,z){ let y=baseGround(x,z); if(sites.length){ const s=S(z); for(let i=0;i<sites.length;i++){ const t=sites[i], dx=x-(cx(t.s)+t.u), dz=s-t.s, d=Math.hypot(dx,dz); if(d<t.r+9){ const m=1-smooth(t.r-2,t.r+9,d); y=y+(t.y-y)*m; } } } return y; }
@@ -92,12 +95,12 @@
       im.data[i]=clamp(128-dx*220,0,255); im.data[i+1]=clamp(128-dy*220,0,255); im.data[i+2]=235; im.data[i+3]=255; }
     g.putImageData(im,0,0); const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=renderer.capabilities.getMaxAnisotropy(); return t;
   }
-  const SNOW_UNI={uSparkle:{value:1}};
+  const SNOW_UNI={uSparkle:{value:1},uGlowK:{value:0}};
   function snowPatch(sh){
     Object.assign(sh.uniforms,SNOW_UNI);
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP; attribute float aGroom; varying float vGroom;').replace('#include <begin_vertex>','#include <begin_vertex>\n vWP=(modelMatrix*vec4(transformed,1.0)).xyz; vGroom=aGroom;');
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP; attribute float aGroom; varying float vGroom; attribute float aGlow; varying float vGlow;').replace('#include <begin_vertex>','#include <begin_vertex>\n vWP=(modelMatrix*vec4(transformed,1.0)).xyz; vGroom=aGroom; vGlow=aGlow;');
     sh.fragmentShader=sh.fragmentShader.replace('#include <common>',`#include <common>
-      varying vec3 vWP; varying float vGroom; uniform float uSparkle;
+      varying vec3 vWP; varying float vGroom; uniform float uSparkle; varying float vGlow; uniform float uGlowK;
       float sh1(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }`)
       .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
       { float dd=length(vViewPosition); float fade=vGroom*smoothstep(70.,6.,dd); float st=sin(vWP.x*30.0+sin(vWP.z*.07)*5.0)*.6+sin(vWP.x*61.0+1.3)*.4; normal=normalize(normal+vec3(st*.11*fade,0.,0.)); diffuseColor.rgb*=1.-.045*st*fade; }`)
@@ -107,6 +110,7 @@
         float ph=dot(vd,vec3(sh1(cell+3.1)-.5,.35,sh1(cell+7.7)-.5))*95.0+k*60.0;
         float gl=step(.972,k)*pow(max(sin(ph),0.0),22.0);
         reflectedLight.directSpecular+=vec3(gl*1.6*uSparkle);
+        totalEmissiveRadiance+=vec3(1.,.58,.26)*vGlow*uGlowK;   // pools of lamplight on the village snow after dark
       }
       vec3 outgoingLight =`);
   }
@@ -180,10 +184,11 @@
   const world=new THREE.Group(); scene.add(world);
   const ctx={snow:new THREE.Color()};
 
+  const _st=new THREE.Color();
   function buildChunk(ci){
-    const grp=new THREE.Group(), items=[], s0=ci*L;
+    const grp=new THREE.Group(), items=[], s0=ci*L, VG=ST.Village&&ST.Village.T===T?ST.Village:null;
     // terrain
-    const pos=new Float32Array(NU*NS*3), col=new Float32Array(NU*NS*3), uv=new Float32Array(NU*NS*2), nor=new Float32Array(NU*NS*3), groom=new Float32Array(NU*NS);
+    const pos=new Float32Array(NU*NS*3), col=new Float32Array(NU*NS*3), uv=new Float32Array(NU*NS*2), nor=new Float32Array(NU*NS*3), groom=new Float32Array(NU*NS), glow=new Float32Array(NU*NS);
     const snow=ctx.snow, cA=new THREE.Color(), cR=new THREE.Color(0x4a4655), n=new THREE.Vector3();
     for(let j=0;j<NS;j++){ const s=s0+j*(L/(NS-1)); const c=cx(s);
       for(let i=0;i<NU;i++){ const u=-U+i*(2*U/(NU-1)), x=c+u, z=-s, y=groundY(x,z), o=j*NU+i;
@@ -191,10 +196,15 @@
         groundN(x,z,n); const a=Math.abs(u)-halfW(s), steep=smooth(.62,.86,1-n.y), nz=vnoise(x*.05,z*.05)*.04;
         cA.copy(snow).multiplyScalar(.93+nz+n.y*.07); cA.lerp(cR,steep*.75);
         if(a>0) cA.multiplyScalar(1-smooth(0,26,a)*.16);
-        groom[o]=1-smooth(-4,1.5,a)*1; col[o*3]=cA.r; col[o*3+1]=cA.g; col[o*3+2]=cA.b; nor[o*3]=n.x; nor[o*3+1]=n.y; nor[o*3+2]=n.z; } }
+        let gm=1-smooth(-4,1.5,a);
+        if(VG){ const vk=VG.k(s); if(vk>0){ gm*=1-smooth(.3,.9,vk); const sh=VG.shade(s,u);   // village: no corduroy, packed streets, wall shadows, lamp light
+            if(sh.k>0){ const pn=vnoise(x*.35,z*.35)*.5+.5; cA.multiply(_st.setRGB(1-.15*sh.k-.1*sh.k*pn,1-.15*sh.k-.09*sh.k*pn,1-.12*sh.k-.06*sh.k*pn)); }
+            if(sh.ao>0) cA.multiplyScalar(1-sh.ao);
+            glow[o]=Math.min(1.4,sh.glow); } }
+        groom[o]=gm; col[o*3]=cA.r; col[o*3+1]=cA.g; col[o*3+2]=cA.b; nor[o*3]=n.x; nor[o*3+1]=n.y; nor[o*3+2]=n.z; } }
     const idx=new Uint32Array((NU-1)*(NS-1)*6); let k=0;
     for(let j=0;j<NS-1;j++) for(let i=0;i<NU-1;i++){ const a=j*NU+i,b=a+1,c=a+NU,d=c+1; idx[k++]=a; idx[k++]=b; idx[k++]=c; idx[k++]=b; idx[k++]=d; idx[k++]=c; }
-    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.BufferAttribute(nor,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setAttribute('uv',new THREE.BufferAttribute(uv,2)); g.setAttribute('aGroom',new THREE.BufferAttribute(groom,1)); g.setIndex(new THREE.BufferAttribute(idx,1));
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.BufferAttribute(nor,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setAttribute('uv',new THREE.BufferAttribute(uv,2)); g.setAttribute('aGroom',new THREE.BufferAttribute(groom,1)); g.setAttribute('aGlow',new THREE.BufferAttribute(glow,1)); g.setIndex(new THREE.BufferAttribute(idx,1));
     g.computeBoundingSphere();
     const mesh=new THREE.Mesh(g,terrainMat); mesh.receiveShadow=true; grp.add(mesh);
 
@@ -202,16 +212,17 @@
     const trees=[], rocks=[];
     for(let n2=0;n2<150;n2++){ const s=s0+hash2(ci,n2*3+1)*L, w=halfW(s), side=hash2(ci,n2*3+2)<.5?-1:1, off=w+6+Math.pow(hash2(ci,n2*3+3),1.4)*(U-w-9), u=side*off;
       const dense=1-smooth(0,28,off-w); if(hash2(ci*7,n2)>.25+dense*.7*0+ (off<w+14?.5:.35)) continue;
-      if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s, y=groundY(x,z); trees.push({x,y:y-.2,z,sc:.5+hash2(ci,n2+500)*.7+(off>w+18?.35:0),r:hash2(ci,n2+900)*6.28}); }
+      if(ST.Resort&&ST.Resort.blocked(s,u)||VG&&VG.blocked(s,u)) continue; const x=cx(s)+u, z=-s, y=groundY(x,z); trees.push({x,y:y-.2,z,sc:.5+hash2(ci,n2+500)*.7+(off>w+18?.35:0),r:hash2(ci,n2+900)*6.28}); }
+    if(VG){ const ex=[]; VG.extraTrees(s0,L,ex); ex.forEach((t,i)=>{ if(ST.Resort&&ST.Resort.blocked(t.s,t.u)) return; const x=cx(t.s)+t.u, z=-t.s; trees.push({x,y:groundY(x,z)-.2,z,sc:t.sc,r:hash2(ci,i+1300)*6.28}); }); }
     for(let n2=0;n2<9;n2++){ const s=s0+hash2(ci,n2*5+700)*L, w=halfW(s), side=hash2(ci,n2*5+701)<.5?-1:1, u=side*(w*.8+hash2(ci,n2*5+702)*14);
-      if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s; rocks.push({x,y:groundY(x,z)-.15,z,sc:.9+hash2(ci,n2+333)*1.8,r:hash2(ci,n2+444)*6.28}); }
+      if(ST.Resort&&ST.Resort.blocked(s,u)||VG&&VG.blocked(s,u)) continue; const x=cx(s)+u, z=-s; rocks.push({x,y:groundY(x,z)-.15,z,sc:.9+hash2(ci,n2+333)*1.8,r:hash2(ci,n2+444)*6.28}); }
     // contact shadows: snow darkens (and cools) under every tree and rock
     { const ds=L/(NS-1), du=2*U/(NU-1), blob=(x,z,rad,k)=>{ const s=-z, j0=Math.round((s-s0)/ds), c=cx(s), i0=Math.round((x-c+U)/du), rj=Math.ceil(rad/ds)+1, ri=Math.ceil(rad/du)+1;
         for(let j=j0-rj;j<=j0+rj;j++){ if(j<0||j>=NS) continue; for(let i=i0-ri;i<=i0+ri;i++){ if(i<0||i>=NU) continue; const o=j*NU+i, px=pos[o*3], pz=pos[o*3+2], d=Math.hypot(px-x,pz-z); if(d>=rad) continue; const f=(1-d/rad), m=1-k*f*f*(3-2*f);
             col[o*3]*=m*.97; col[o*3+1]*=m*.985; col[o*3+2]*=Math.min(1,m*1.02); } } };
       trees.forEach(t=>blob(t.x,t.z,3.4*t.sc+.8,.38)); rocks.forEach(t=>blob(t.x,t.z,t.sc*1.5+.8,.3)); g.attributes.color.needsUpdate=true; }
     { const nG=T.id==='ridge'?4:T.id==='bear'?3:T.id==='ipo'?3:T.id==='bull'?2:1; for(let n2=0;n2<nG;n2++){ const s=s0+hash2(ci,n2*11+900)*L, w=halfW(s), side=hash2(ci,n2*11+901)<.5?-1:1, u=side*(w+14+hash2(ci,n2*11+902)*34), x=cx(s)+u, z=-s, sc=6+hash2(ci,n2*11+903)*12;
-        if(ST.Resort&&ST.Resort.blocked(s,u)) continue; rocks.push({x,y:groundY(x,z)-sc*.25,z,sc,sy:1.5+hash2(ci,n2*11+904)*1.3,r:hash2(ci,n2*11+905)*6.28,giant:1}); } }
+        if(ST.Resort&&ST.Resort.blocked(s,u)||VG&&VG.blocked(s,u)) continue; rocks.push({x,y:groundY(x,z)-sc*.25,z,sc,sy:1.5+hash2(ci,n2*11+904)*1.3,r:hash2(ci,n2*11+905)*6.28,giant:1}); } }
     const dummy=new THREE.Object3D();
     if(trees.length){ const firs=trees.filter((t,i)=>hash2(i,ci+77)<.45), pines=trees.filter((t,i)=>!(hash2(i,ci+77)<.45));
       [[GEO.pine,pines],[GEO.fir,firs]].forEach(([geo,arr])=>{ if(!arr.length) return; const im=new THREE.InstancedMesh(geo,MATS.tree,arr.length); arr.forEach((t,i)=>{ dummy.position.set(t.x,t.y,t.z); dummy.rotation.set(0,t.r,0); const k=geo===GEO.fir?t.sc*1.05:t.sc; dummy.scale.set(k*(geo===GEO.fir?.9:1),k*(.9+hash2(i,ci)*.45)*(geo===GEO.fir?1.25:1),k*(geo===GEO.fir?.9:1)); dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); }); im.castShadow=true; im.receiveShadow=true; im.frustumCulled=false; grp.add(im); }); trees.forEach(t=>{ if(Math.abs(t.x-cx(-t.z))<halfW(-t.z)+7) items.push({type:'tree',x:t.x,z:t.z,y:t.y,r:.8*t.sc}); }); }
@@ -260,10 +271,11 @@
     const bar=new THREE.Mesh(new THREE.BoxGeometry(w*2+1,.6,.8),MATS.metal); bar.position.set(x,y+13.1,z); grp.add(bar); }
   function disposeChunk(c){ if(ST.Resort) ST.Resort.disposeChunk(c.idx); world.remove(c.group); c.group.traverse(o=>{ if(o===c.group) return; if(o.geometry&&o.geometry===c.geo) o.geometry.dispose(); }); (c.baked||[]).forEach(g=>g.dispose()); }
 
-  let lastCi=null;
-  function update(playerS,force){
-    const ci=Math.floor(playerS/L); if(!force&&ci===lastCi) return; lastCi=ci;
-    const want=new Set(); for(let i=ci-1;i<=ci+7;i++){ if(i<-1||i*L>T.len+160) continue; want.add(i); }
+  let lastKey=null;
+  /* chunks from `back` behind to `ahead` in front of s (the run looks downhill; the village menu looks both ways) */
+  function update(playerS,force,back,ahead){
+    const ci=Math.floor(playerS/L), b=back==null?1:back, a=ahead==null?7:ahead, key=ci+':'+b+':'+a; if(!force&&key===lastKey) return; lastKey=key;
+    const want=new Set(); for(let i=ci-b;i<=ci+a;i++){ if(i<-1||i*L>T.len+250) continue; want.add(i); }
     want.forEach(i=>{ if(!chunks.has(i)) chunks.set(i,buildChunk(i)); });
     chunks.forEach((c,i)=>{ if(!want.has(i)){ disposeChunk(c); chunks.delete(i); } });
   }
@@ -273,7 +285,7 @@
         _cq.setFromAxisAngle(_cy,t*3.4+it.x); _cp.set(it.x,it.y,it.z); _cs.set(k,k,k); _cm.compose(_cp,_cq,_cs); im.setMatrixAt(it.ii,_cm); }
       if(im) im.instanceMatrix.needsUpdate=true; } }
   function nearItems(s,fn){ const ci=Math.floor(s/L); for(let i=ci-1;i<=ci+1;i++){ const c=chunks.get(i); if(c) c.items.forEach(fn); } }
-  function reset(){ chunks.forEach(disposeChunk); chunks.clear(); lastCi=null; }
+  function reset(){ chunks.forEach(disposeChunk); chunks.clear(); lastKey=null; }
 
   /* ---------- sky, mountains, weather ---------- */
   const sky=new THREE.Mesh(new THREE.SphereGeometry(700,32,20),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
@@ -378,6 +390,7 @@
   function setTrack(tr){ ST.gradeCfg=GRADES[tr.id]||GRADES.bull; ST.applyGrade();
     T=tr; cx0=0; cx0=cxRaw(0); rampCache.clear(); const k=T.sky;
     if(ST.Park){ const PL=ST.Park.layoutFor(T.id); if(PL&&PL.jumps) T.jumpList=PL.jumps; ST.Park.setTrack(T); }
+    if(ST.Village){ ST.Village.setTrack(T); SNOW_UNI.uGlowK.value=ST.Village.night*.6; }
     ctx.snow.set(k.snow); ctx.snow.convertSRGBToLinear();
     const u=sky.material.uniforms; u.zen.value.set(k.zen); u.mid.value.set(k.mid); u.hor.value.set(k.hor); u.sunC.value.set(k.sun); u.sunD.value.set(...k.sunDir); u.stars.value=k.stars; u.fogC.value.set(k.fog);
     [u.zen,u.mid,u.hor,u.sunC,u.fogC].forEach(c=>c.value.convertSRGBToLinear());
@@ -391,6 +404,7 @@
     flakeMat.uniforms.alpha.value=.5+.4*T.snowfall; flakeGeo.setDrawRange(0,Math.round(FL*(.2+.8*T.snowfall)));
     sky.material.uniforms.uHas.value=0; reset(); ensureSky(tr);
     if(ST.Park) ST.Park.build(T);
+    if(ST.Village) ST.Village.build(T);
   }
   function follow(p,t){ plumeSprites.forEach(sp=>{ const ph=sp.userData.ph; sp.material.opacity=.42+.18*Math.sin(t*.35+ph); sp.scale.x=(sp.scale.y>60?260:150)*(1+.08*Math.sin(t*.2+ph*1.3)); });
     clouds.forEach((m,i)=>{ m.position.set(camera.position.x,p.y-175+i*52,camera.position.z); m.material.map.offset.set(t*.004*(i?1.6:1),t*.002); });

@@ -1,11 +1,16 @@
 /* Snow Rush: real people. Nine Mixamo characters (textured, rigged, ~14k triangles each) plus Mixamo's Idle / Walk /
-   Run / Wave clips, carried over to each skeleton bone by bone (the retarget method of the BuyToday mall game).
-   Guests are spawned only near the player (and removed when far), so the crowd never costs more than ~20 figures. */
+   Run / Wave clips, carried over to each skeleton bone by bone (the retarget method of the BuyToday mall game), and a
+   sitting pose made here from the Idle pose (thighs forward, shins down).
+   Level of detail: every registered person can be shown two ways. The nearest few (14 on a desktop, 7 on a phone) are full
+   skinned figures; everyone else within ~230 m is a 360-triangle stand-in drawn with all the others in one instanced mesh,
+   in the same jacket, trousers and hat, legs and arms swinging when they walk. A person can have a behaviour (beh) that
+   moves it each frame (village walkers, the lift queue...); the figure, whichever it is, just follows. */
 (function(ST){
-  const {hash2}=ST; const {scene}=ST;
+  const {hash2,clamp}=ST; const {scene}=ST;
   const NAMES=['Ch02','Ch03','Ch07','Ch12','Ch21','Ch22','Ch26','Ch27','Ch33'];
   const P={names:NAMES,tpl:{},pend:{},anims:null,regs:[],active:[],ready:false,count:0};
-  const coarse=matchMedia('(pointer:coarse)').matches; const MAXA=coarse?7:14;   // figures alive at once near the player
+  const coarse=matchMedia('(pointer:coarse)').matches; const MAXA=coarse?7:14;   // full figures alive at once (the nearest)
+  const R_DET=coarse?60:95, R_IMP=coarse?170:240;                               // full figures within R_DET, stand-ins within R_IMP
 
   function loadGLTF(url){ return new Promise((res,rej)=>{ const L=new THREE.GLTFLoader(); if(window.MeshoptDecoder) L.setMeshoptDecoder(window.MeshoptDecoder); L.load(url,res,undefined,rej); }); }
   function mixRetarget(clip,srcRoot,tgtRoot){
@@ -33,6 +38,16 @@
       const clips={}; ['Idle','Walk','Run','Wave'].forEach(n=>{ const c=an.animations.find(a=>a.name===n); if(c) clips[n]=mixRetarget(c,an.scene,m); });
       splitOutfit(m); mergeParts(m); const T={name,scene:m,clips,k,y:-(fy-.09)*k}; P.tpl[name]=T; P.ready=true; return T; }));
   };
+  /* sitting: the Idle pose with each thigh turned forward and each shin back down (turns made in world space, so they suit
+     every skeleton); the figure is lowered so its feet stay on the ground (T.sitY) */
+  function sitClip(T){ if(T.sit) return T.sit; const m=THREE.SkeletonUtils.clone(T.scene), mx=new THREE.AnimationMixer(m); mx.clipAction(T.clips.Idle).play(); mx.update(0); m.updateMatrixWorld(true);
+    const X=new THREE.Vector3(1,0,0), _a=new THREE.Quaternion(), _b=new THREE.Quaternion(), _c=new THREE.Quaternion(), v=new THREE.Vector3();
+    const turn=(n,ang)=>{ const b=bone(m,n); if(!b) return; _a.setFromAxisAngle(X,ang); b.getWorldQuaternion(_b); _a.multiply(_b); b.parent.getWorldQuaternion(_c); b.quaternion.copy(_c.invert().multiply(_a)); b.updateMatrixWorld(true); };
+    const footY=()=>{ m.updateMatrixWorld(true); return Math.min(bone(m,'LeftFoot').getWorldPosition(v).y,bone(m,'RightFoot').getWorldPosition(v).y); }, f0=footY();
+    ['Left','Right'].forEach(sd=>{ turn(sd+'UpLeg',-1.48); turn(sd+'Leg',1.42); turn(sd+'Arm',-.42); turn(sd+'ForeArm',-.75); }); turn('Spine1',.08);
+    T.sitY=-(footY()-f0)*T.k;   // metres to lower the figure
+    const tracks=[]; m.traverse(o=>{ if(o.isBone){ const q=o.quaternion; tracks.push(new THREE.QuaternionKeyframeTrack(o.name+'.quaternion',[0,1],[q.x,q.y,q.z,q.w,q.x,q.y,q.z,q.w])); } });
+    mx.stopAllAction(); return T.sit=new THREE.AnimationClip('Sit',1,tracks); }
   P.preload=async function(n){ for(const nm of NAMES.slice(0,n||5)){ try{ await P.template(nm); }catch(e){ console.warn('people',nm,e); } await new Promise(r=>setTimeout(r,60)); } };
 
 
@@ -114,26 +129,94 @@
     const T=P.tpl[r.ch]; if(!T) return null;
     const m=THREE.SkeletonUtils.clone(T.scene), g=new THREE.Group(); g.add(m); dressOutfit(m,JACKETS[Math.floor(hash2(r.id,13)*JACKETS.length)],PANTS[Math.floor(hash2(r.id,17)*PANTS.length)]); m.scale.multiplyScalar(T.k*(r.sc||1)); m.position.y=T.y*(r.sc||1); scene.add(g);
     const mixer=new THREE.AnimationMixer(m), acts={}; Object.keys(T.clips).forEach(n=>{ const a=mixer.clipAction(T.clips[n]); a.setLoop(THREE.LoopRepeat,Infinity); acts[n]=a; });
-    const a=acts[r.type]||acts.Idle; a.play(); a.time=hash2(r.id,5)*a.getClip().duration; mixer.update(0);
-    g.position.set(r.x,r.y,r.z); g.rotation.y=r.ry||0; g.updateMatrixWorld(true); winterize(m,r.id);
-    return {r,g,m,mixer,t:Math.random()*10,dir:1}; }
+    const want=r.anim||r.type; if(want==='Sit') acts.Sit=mixer.clipAction(sitClip(T)); const a=acts[want]||acts.Idle; a.play(); a.time=hash2(r.id,5)*a.getClip().duration; mixer.update(0);
+    g.position.set(r.x,r.y+(want==='Sit'?T.sitY:0),r.z); g.rotation.y=r.ry||0; g.updateMatrixWorld(true); winterize(m,r.id);
+    return {r,g,m,mixer,acts,T,cur:acts[want]?want:'Idle',t:Math.random()*10,dir:1}; }
+  function setAnim(a,name){ if(a.cur===name) return; if(name==='Sit'&&!a.acts.Sit) a.acts.Sit=a.mixer.clipAction(sitClip(a.T)); const act=a.acts[name]||a.acts.Idle, prev=a.acts[a.cur];
+    act.reset(); act.setLoop(THREE.LoopRepeat,Infinity); act.play(); if(prev&&prev!==act) prev.crossFadeTo(act,name==='Sit'||a.cur==='Sit'?.2:.35,false); a.cur=name; }
   function kill(a){ try{ a.mixer.stopAllAction(); a.mixer.uncacheRoot(a.m); }catch(e){} scene.remove(a.g); a.g.traverse(o=>{ if(o.isMesh&&o.geometry&&o.geometry.userData.hat){ o.geometry.dispose(); if(o.parent) o.parent.remove(o); } }); }
   let rid=1;
-  P.add=function(ci,spec){ const W=ST.World; spec.id=rid++; spec.ci=ci; spec.y=W.groundY(spec.x,spec.z); spec.ch=NAMES[Math.floor(hash2(spec.id,9)*NAMES.length)]; P.regs.push(spec); };
+  P.add=function(ci,spec){ const W=ST.World; spec.id=rid++; spec.ci=ci; spec.y=spec.yFix!=null?spec.yFix:W.groundY(spec.x,spec.z); spec.ch=NAMES[Math.floor(hash2(spec.id,9)*NAMES.length)]; P.regs.push(spec); };
   P.clear=function(ci){ P.regs=P.regs.filter(r=>{ if(r.ci===ci){ if(r.act){ kill(r.act); P.active=P.active.filter(x=>x!==r.act); } return false; } return true; }); };
   P.reset=function(){ P.active.forEach(kill); P.active=[]; P.regs=[]; };
-  let warm=0;
+  /* the old guests' walk: back and forth along a segment from where they were placed */
+  function segWalk(r,dt){ if(r.x0===undefined){ r.x0=r.x; r.z0=r.z; r.st=0; r.sd=1; } r.st+=dt*1.15*r.sd; const L=Math.hypot(r.seg[0],r.seg[1]); let u=r.st/L; if(u>1){ r.sd=-1; r.st=L; u=1; } if(u<0){ r.sd=1; r.st=0; u=0; }
+    r.x=r.x0+r.seg[0]*u; r.z=r.z0+r.seg[1]*u; r.y=ST.World.groundY(r.x,r.z); r.ry=Math.atan2(r.seg[0]*r.sd,r.seg[1]*r.sd); r.spd=1.15; r.anim='Walk'; }
+  let rankT=0;
   P.update=function(dt,px,pz){
-    // spawn near, despawn far
-    for(let i=0;i<P.regs.length;i++){ const r=P.regs[i], d=Math.hypot(r.x-px,r.z-pz);
-      if(!r.act&&d<(coarse?90:140)&&P.active.length<MAXA){ if(!P.tpl[r.ch]){ const any=Object.keys(P.tpl)[0]; if(!any){ P.template(r.ch).catch(()=>{}); continue; } r.ch=any; } r.act=spawn(r); if(r.act) P.active.push(r.act); }
-      else if(r.act&&d>200){ kill(r.act); P.active=P.active.filter(x=>x!==r.act); r.act=null; } }
-    P.frame=(P.frame||0)+1;
-    for(let i=0;i<P.active.length;i++){ const a=P.active[i], r=a.r, d=Math.hypot(r.x-px,r.z-pz), every=d<45?1:d<90?2:3;
+    P.frame=(P.frame||0)+1; P.time=(P.time||0)+dt;
+    for(let i=0;i<P.regs.length;i++){ const r=P.regs[i]; if(r.beh) r.beh(r,dt,P.time); else if(r.type==='Walk'&&r.seg) segWalk(r,dt); const dx=r.x-px, dz=r.z-pz; r.d2=dx*dx+dz*dz; }
+    // who gets a full figure: the nearest MAXA within R_DET (one that has a figure keeps it until it is ~20% farther than a rival)
+    rankT-=dt; if(rankT<=0||!P.want){ rankT=.3; const cand=[]; for(const r of P.regs) if(!r.hide&&r.d2<R_DET*R_DET) cand.push(r);
+      cand.sort((a,b)=>(a.act?a.d2*.7:a.d2)-(b.act?b.d2*.7:b.d2)); P.want=new Set(cand.slice(0,MAXA));
+      for(const r of P.regs){ if(r.act&&!P.want.has(r)){ kill(r.act); P.active=P.active.filter(x=>x!==r.act); r.act=null; } } }
+    let budget=2;   // cloning a figure costs a few ms: at most two a frame
+    for(const r of P.want){ if(budget<=0) break; if(r.act||r.hide) continue; if(!P.tpl[r.ch]){ const any=Object.keys(P.tpl)[0]; if(!any){ P.template(r.ch).catch(()=>{}); break; } r.ch=any; } r.act=spawn(r); if(r.act){ P.active.push(r.act); budget--; } }
+    for(let i=0;i<P.active.length;i++){ const a=P.active[i], r=a.r, d=Math.sqrt(r.d2), every=d<45?1:d<90?2:3, an=r.anim||r.type;
+      a.g.visible=!r.hide; if(r.hide) continue; setAnim(a,an); a.g.position.set(r.x,r.y+(a.cur==='Sit'?a.T.sitY||0:0),r.z); a.g.rotation.y=r.ry||0;
+      if(a.cur==='Walk') a.acts.Walk.timeScale=clamp((r.spd||1.15)/1.2,.6,1.5);
       a.acc=(a.acc||0)+dt; if(P.frame%every===0){ a.mixer.update(a.acc); a.acc=0; }
-      const sh=d<32; if(a.sh!==sh){ a.sh=sh; a.m.traverse(o=>{ if(o.isMesh) o.castShadow=sh; }); }
-      if(r.type==='Walk'&&r.seg){ a.t+=dt*1.15*a.dir; const L=Math.hypot(r.seg[0],r.seg[1]); let u=a.t/L; if(u>1){ a.dir=-1; a.t=L; u=1; } if(u<0){ a.dir=1; a.t=0; u=0; }
-        const x=r.x+r.seg[0]*u, z=r.z+r.seg[1]*u; a.g.position.set(x,ST.World.groundY(x,z),z); a.g.rotation.y=Math.atan2(r.seg[0]*a.dir,r.seg[1]*a.dir); } }
+      const sh=d<32; if(a.sh!==sh){ a.sh=sh; a.m.traverse(o=>{ if(o.isMesh) o.castShadow=sh; }); } }
+    updateStandIns(dt);
   };
+  /* ---------- stand-ins: one instanced mesh for every distant person (and one for the seated) ----------
+     A box-and-sphere figure 1.78 m tall. Vertex attribute grp = what moves (0 body, 1/2 legs, 3/4 arms), col = what colour
+     (0 jacket, 1 trousers, 2 skin, 3 hat, 4 boots and gloves); per instance: jacket, trousers, hat colours and the walk phase. */
+  function figureGeo(sit,board){ const parts=[], add=(g,grp,col)=>{ const n=g.attributes.position.count; g.setAttribute('grp',new THREE.Float32BufferAttribute(new Array(n).fill(grp),1)); g.setAttribute('col',new THREE.Float32BufferAttribute(new Array(n).fill(col),1)); if(g.index) g=g.toNonIndexed(); parts.push(g); };
+    const bx=(w,h,d,x,y,z,grp,col,rx)=>{ const g=new THREE.BoxGeometry(w,h,d); if(rx) g.rotateX(rx); g.translate(x,y,z); add(g,grp,col); };
+    const hipY=sit?.5:.92, dy=hipY-.92;
+    [[1,.1],[2,-.1]].forEach(([grp,x])=>{ if(sit){ bx(.16,.17,.46,x,hipY,.2,grp,1); bx(.15,.46,.17,x,.25,.42,grp,1); bx(.16,.12,.27,x,.06,.46,grp,4); }
+      else { bx(.16,.84,.18,x,.5,0,grp,1); bx(.16,.12,.27,x,.06,.04,grp,4); } });
+    bx(.37,.32,.23,0,1.0+dy,0,0,0); bx(.44,.4,.26,0,1.32+dy,0,0,0); bx(.2,.08,.2,0,1.54+dy,0,0,0);
+    [[3,.27],[4,-.27]].forEach(([grp,x])=>{ if(sit){ bx(.11,.32,.12,x,1.32+dy,.02,grp,0); bx(.1,.12,.3,x,1.12+dy,.16,grp,0); bx(.09,.1,.1,x,1.1+dy,.33,grp,4); }
+      else { bx(.11,.33,.12,x,1.33,0,grp,0); bx(.1,.29,.11,x,1.04,0,grp,0); bx(.09,.1,.09,x,.85,0,grp,4); } });
+    const hd=new THREE.SphereGeometry(.115,10,8); hd.translate(0,1.66+dy,.01); add(hd,0,2); const hat=new THREE.SphereGeometry(.125,10,6,0,Math.PI*2,0,Math.PI*.5); hat.translate(0,1.69+dy,0); add(hat,0,3);
+    const pom=new THREE.SphereGeometry(.045,6,5); pom.translate(0,1.83+dy,0); add(pom,0,3);
+    if(board){ bx(1.45,.035,.27,0,-.01,.46,0,4); bx(.2,.06,.25,.25,.03,.46,0,3); bx(.2,.06,.25,-.25,.03,.46,0,3); }   // a snowboard hanging from the boots (bindings in the hat colour)
+    let n=0; parts.forEach(g=>n+=g.attributes.position.count); const pos=new Float32Array(n*3), nor=new Float32Array(n*3), gr=new Float32Array(n), cl=new Float32Array(n); let o=0;
+    parts.forEach(g=>{ const c=g.attributes.position.count; pos.set(g.attributes.position.array,o*3); nor.set(g.attributes.normal.array,o*3); gr.set(g.attributes.grp.array,o); cl.set(g.attributes.col.array,o); o+=c; });
+    const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(pos,3)); geo.setAttribute('normal',new THREE.BufferAttribute(nor,3)); geo.setAttribute('grp',new THREE.BufferAttribute(gr,1)); geo.setAttribute('col',new THREE.BufferAttribute(cl,1)); return geo; }
+  function standInMat(){ const m=new THREE.MeshStandardMaterial({roughness:.75,metalness:0});
+    m.onBeforeCompile=sh=>{ sh.vertexShader=sh.vertexShader.replace('#include <common>',`#include <common>
+        attribute float grp; attribute float col; attribute vec3 iJ; attribute vec3 iP; attribute vec3 iH; attribute vec2 iW; varying vec3 vPC;
+        vec3 swingX(vec3 p,float py,float a){ p.y-=py; float c=cos(a), s=sin(a); return vec3(p.x,p.y*c-p.z*s,p.y*s+p.z*c)+vec3(0.,py,0.); }`)
+      .replace('#include <begin_vertex>',`#include <begin_vertex>
+        float sw=sin(iW.x)*iW.y;
+        if(grp==1.) transformed=swingX(transformed,.92,sw); else if(grp==2.) transformed=swingX(transformed,.92,-sw);
+        else if(grp==3.) transformed=swingX(transformed,1.46,-sw*.8); else if(grp==4.) transformed=swingX(transformed,1.46,sw*.8);
+        transformed.y+=abs(cos(iW.x))*.035*step(.01,iW.y);
+        vPC=col<.5?iJ:col<1.5?iP:col<2.5?vec3(.86,.62,.47):col<3.5?iH:vec3(.035,.035,.04);`);
+      sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vPC;').replace('#include <color_fragment>','#include <color_fragment>\n diffuseColor.rgb*=vPC;'); };
+    m.customProgramCacheKey=()=>'st-standin'; return m; }
+  const SI=[false,true].map(sit=>{ const N=sit?48:180, geo=figureGeo(sit), mk=n=>new THREE.InstancedBufferAttribute(new Float32Array(N*n),n);
+    geo.setAttribute('iJ',mk(3)); geo.setAttribute('iP',mk(3)); geo.setAttribute('iH',mk(3)); geo.setAttribute('iW',mk(2));
+    const im=new THREE.InstancedMesh(geo,standInMat(),N); im.count=0; im.frustumCulled=false; im.castShadow=false; im.receiveShadow=true; scene.add(im); return {im,geo,N}; });
+  const _m=new THREE.Matrix4(), _q=new THREE.Quaternion(), _p=new THREE.Vector3(), _s=new THREE.Vector3(1,1,1), _y=new THREE.Vector3(0,1,0), _cc=new THREE.Color();
+  const lin=(hex,arr,i)=>{ _cc.setHex(hex).convertSRGBToLinear(); arr[i*3]=_cc.r; arr[i*3+1]=_cc.g; arr[i*3+2]=_cc.b; };
+  function updateStandIns(dt){ const cnt=[0,0];
+    for(const r of P.regs){ if(r.act&&r.act.g.visible||r.hide||r.d2>R_IMP*R_IMP) continue; const sit=(r.anim||r.type)==='Sit'?1:0, S=SI[sit], i=cnt[sit]; if(i>=S.N) continue; cnt[sit]++;
+      _q.setFromAxisAngle(_y,r.ry||0); _p.set(r.x,r.y,r.z); _m.compose(_p,_q,_s); S.im.setMatrixAt(i,_m);
+      const g=S.geo.attributes; lin(JACKETS[Math.floor(hash2(r.id,13)*JACKETS.length)],g.iJ.array,i); lin(PANTS[Math.floor(hash2(r.id,17)*PANTS.length)],g.iP.array,i); lin(BEAN[r.id%BEAN.length],g.iH.array,i);
+      const walk=(r.anim||r.type)==='Walk'; r.wph=(r.wph||hash2(r.id,3)*6.28)+(walk?(r.spd||1.15)*dt*4.4:0); g.iW.array[i*2]=r.wph; g.iW.array[i*2+1]=walk?.42:0; }
+    SI.forEach((S,k)=>{ S.im.count=cnt[k]; S.im.instanceMatrix.needsUpdate=true; ['iJ','iP','iH','iW'].forEach(n=>S.geo.attributes[n].needsUpdate=true); }); }
+  P.standIns=()=>SI.map(S=>S.im.count);
+  /* a snowboarder in a riding stance: board along +Z, body side-on facing +X (a goofy rider; turn it round for a regular one) */
+  function riderGeo(){ const parts=[], add=(g,col)=>{ const n=g.attributes.position.count; g.setAttribute('grp',new THREE.Float32BufferAttribute(new Array(n).fill(0),1)); g.setAttribute('col',new THREE.Float32BufferAttribute(new Array(n).fill(col),1)); if(g.index) g=g.toNonIndexed(); parts.push(g); };
+    const bx=(w,h,d,x,y,z,col,rz,rx)=>{ const g=new THREE.BoxGeometry(w,h,d); if(rx) g.rotateX(rx); if(rz) g.rotateZ(rz); g.translate(x,y,z); add(g,col); };
+    bx(.28,.03,1.55,0,.02,0,3); [-1,1].forEach(sd=>{ bx(.27,.13,.15,0,.1,sd*.24,4); bx(.14,.46,.15,.09,.37,sd*.22,1,-.4); bx(.15,.42,.16,.07,.72,sd*.17,1,.55);
+      bx(.11,.11,.48,.05,1.24,sd*.4,0,0,sd*.35); bx(.1,.1,.1,.05,1.12,sd*.62,4); });
+    bx(.24,.2,.36,-.02,.93,0,1); bx(.27,.5,.42,.05,1.2,0,0,-.2); bx(.12,.08,.12,.1,1.47,0,2);
+    const hd=new THREE.SphereGeometry(.115,10,8); hd.translate(.11,1.58,0); add(hd,2); const hat=new THREE.SphereGeometry(.125,10,6,0,Math.PI*2,0,Math.PI*.5); hat.translate(.11,1.61,0); add(hat,3);
+    let n=0; parts.forEach(g=>n+=g.attributes.position.count); const pos=new Float32Array(n*3), nor=new Float32Array(n*3), gr=new Float32Array(n), cl=new Float32Array(n); let o=0;
+    parts.forEach(g=>{ const c=g.attributes.position.count; pos.set(g.attributes.position.array,o*3); nor.set(g.attributes.normal.array,o*3); gr.set(g.attributes.grp.array,o); cl.set(g.attributes.col.array,o); o+=c; });
+    const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(pos,3)); geo.setAttribute('normal',new THREE.BufferAttribute(nor,3)); geo.setAttribute('grp',new THREE.BufferAttribute(gr,1)); geo.setAttribute('col',new THREE.BufferAttribute(cl,1)); return geo; }
+  function instSet(geo,N,shadow){ const mk=n=>new THREE.InstancedBufferAttribute(new Float32Array(N*n),n); geo.setAttribute('iJ',mk(3)); geo.setAttribute('iP',mk(3)); geo.setAttribute('iH',mk(3)); geo.setAttribute('iW',mk(2));
+    const im=new THREE.InstancedMesh(geo,standInMat(),N); im.count=0; im.frustumCulled=false; im.castShadow=!!shadow; scene.add(im); const a=geo.attributes;
+    return {im,set(i,p,q,seed){ _m.compose(p,q,_s); im.setMatrixAt(i,_m); lin(JACKETS[Math.floor(hash2(seed,13)*JACKETS.length)],a.iJ.array,i); lin(PANTS[Math.floor(hash2(seed,17)*PANTS.length)],a.iP.array,i); lin(BEAN[seed%BEAN.length],a.iH.array,i); },
+      done(n){ im.count=n; im.instanceMatrix.needsUpdate=true; a.iJ.needsUpdate=a.iP.needsUpdate=a.iH.needsUpdate=true; }}; }
+  P.slopeRiders=N=>instSet(riderGeo(),N,true);
+  /* seated riders for the chairlift, boards on their feet: set(i, position, quaternion, seed) then done(n) */
+  P.seatedRiders=N=>instSet(figureGeo(true,true),N,true);
+
   ST.People=P;
 })(window.ST);

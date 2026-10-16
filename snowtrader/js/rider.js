@@ -284,7 +284,9 @@
     const bp=R.bones;
     if(seated){ R.order.forEach(kk=>applyAbs(kk,Fb)); R.model.updateMatrixWorld(true);
       let low=1e9; ['FootL','FootR'].forEach(kk=>{ if(bp[kk]){ bp[kk].getWorldPosition(_v); rig.worldToLocal(_v); low=Math.min(low,_v.y); } });
-      if(low<1e8) R.model.position.y=.205-low; R.ik={on:false,state:'seated (FK)'}; finishBoard(P,0); return; }
+      // centre the hips over the seat too: a model can carry its skeleton far from its own origin (the Meshy rider does)
+      const hp=bp.Hips?rig.worldToLocal(bp.Hips.getWorldPosition(new THREE.Vector3())):null;
+      if(low<1e8) R.model.position.set(hp?-hp.x:0,.205-low,hp?-hp.z:0); R.ik={on:false,state:'seated (FK)'}; finishBoard(P,0); return; }
     // legs start each frame from a neutral bend (so IK never inherits yesterday's twist); feet sit on their bindings
     const kL=dir>0?R._legs.kF:R._legs.kB, kR=dir>0?R._legs.kB:R._legs.kF, yawL=20, yawR=-8;
     R.drive.UpperLegL=new THREE.Quaternion().setFromEuler(new THREE.Euler(-(kL*.6+6)*RAD,yawL*RAD,4*RAD,'ZYX')); R.drive.LowerLegL=new THREE.Quaternion().setFromEuler(new THREE.Euler(kL*RAD,yawL*RAD,0,'ZYX'));

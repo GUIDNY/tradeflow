@@ -103,12 +103,12 @@
     tr.geo.setDrawRange(0,ic); tr.geo.attributes.position.needsUpdate=true; tr.geo.attributes.across.needsUpdate=true; tr.geo.attributes.alpha.needsUpdate=true; tr.geo.index.needsUpdate=true; }
 
   /* ---------- run setup ---------- */
-  function resetPlayer(){
+  function resetPlayer(menu){
     World.setTrack(track); const T=track;
     ST.Physics.reset(P,World.cx(0),0,Math.atan2(World.dcx(0),1));
     P.money=0; P.shown=0; P.combo=0; P.comboT=0; P.tricks=0; P.best=null; P.coins=0; P.greens=0; P.reds=0; P.wipes=0; P.wipeLog=[];
     P.t=0; P.history=[{s:0,m:0,v:0}]; P.histS=0; P.finished=false; P.fin=0; P.lean=0; P.shake=0; P.autoSkate=0; acc=0;
-    tr.pts.length=0; rebuildTrail(); runT=0; World.update(0,true);
+    tr.pts.length=0; rebuildTrail(); runT=0; if(!menu) World.update(0,true);
     Rider.setBoard(save.board); applyLook();
   }
   function applyLook(){ const k=track.id; Rider.setLook({jacket:k==='bull'?0xffc21a:k==='bear'?0x2f8bff:k==='ipo'?0xff3dd8:0xffc21a,pants:k==='ipo'?0x1b1033:0x1fa35a,helmet:0x0d0e12});
@@ -119,19 +119,20 @@
   function startLift(){
     Audio.init(); Audio.music(!save.muted);
     resetPlayer(); mode='lift'; el.menu.hidden=true; el.end.hidden=true; el.hud.hidden=false; el.hud.classList.add('lifting'); el.pause.hidden=true; $('#liftHud').hidden=false; el.tip.hidden=true; tipShown={};
-    ST.Resort.liftMode=true; lift.t=0; lift.s0=track.len+34; lift.s1=-26; lift.on=true; lift.fact=-1; P.s=lift.s0; P.z=-P.s; World.update(P.s-150,true);
+    ST.Resort.towers(); ST.Resort.liftMode=true; lift.t=0; lift.s0=ST.Resort.sLoad||track.len+34; lift.s1=-26; lift.on=true; lift.fact=-1; P.s=lift.s0; P.z=-P.s; World.update(P.s-150,true);   // the ride starts at the load line in the village
     const R=Rider; R.model.rotation.y=PI; R.P.sit=1; R.P.swing=1; R.root.visible=true; ST.Resort.playerChair.visible=true; lift.cam.set(0,0,0); lift.first=true; subtitle(track.en,2000);
   }
   function endLift(){
     lift.on=false; ST.Resort.liftMode=false; const R=Rider; R.model.rotation.y=PI/2; R.P.sit=0; R.P.swing=0; ST.Resort.playerChair.visible=false; el.hud.classList.remove('lifting'); $('#liftHud').hidden=true; beginCountdown();
   }
-  const _tq=new THREE.Quaternion();
+  const _tq=new THREE.Quaternion(), _tv=new THREE.Vector3();
   function updateLift(dt){
     lift.t+=dt; const u=clamp(lift.t/lift.T,0,1), e=u*u*u*(u*(6*u-15)+10); const s=lerp(lift.s0,lift.s1,e); P.s=s; P.z=-s;
     const Rs=ST.Resort, p=Rs.cablePoint(s,-1), p2=Rs.cablePoint(s-1.5,-1); const tx=p2.x-p.x, tz=p2.z-p.z, tl=Math.hypot(tx,tz)||1, tdx=tx/tl, tdz=tz/tl, yaw=Math.atan2(tx,tz);
     const sway=Math.sin(lift.t*1.7)*.035, sway2=Math.sin(lift.t*1.1)*.03; _e.set(sway2,yaw,sway,'YXZ'); Rs.playerChair.quaternion.setFromEuler(_e); Rs.playerChair.position.set(p.x,p.y,p.z);
     const R=Rider; R.root.position.set(p.x,p.y-3.28,p.z); R.root.rotation.set(0,yaw+PI,0); R.tilt.quaternion.identity(); R.tilt.quaternion.setFromEuler(_e.set(sway2,0,sway,'YXZ')); R.trick.rotation.set(0,0,0);
     R.P.t=lift.t; R.P.look=Math.sin(lift.t*.7)*28; Object.assign(R.P,{crouch:0,air:0,grab:0,tuck:0,body:0,edge:0,fa:0,om:0,charge:0,brake:0,skid:0,absorb:0,ext:0,rough:0,wobble:0,skate:0,ground:0,getup:0,dir:1}); R.pose({});
+    if(R.bones.Hips){ R.root.updateMatrixWorld(true); const hy=R.bones.Hips.getWorldPosition(_tv).y; R.root.position.y+=(p.y-2.29+.1)-hy; }   // the hips on the seat, whatever the rider's legs
     // three shots: from the track side, from behind looking up the line, from the top station looking back
     const dirT=Rs.liftSide(); let cx,cy,cz,lx,ly,lz;
     if(u<.34){ cx=p.x+dirT*4.2; cy=p.y-1.8; cz=p.z; lx=p.x; ly=p.y-1.9; lz=p.z; }
@@ -378,7 +379,7 @@
 
   /* ---------- end of run ---------- */
   function finishRun(){
-    mode='finish'; P.fin=0; Audio.win(); bigText('FINISH','gold'); flash('#ffffff',.35); subtitle('חוצים את קו הסיום…',1800);
+    mode='finish'; P.fin=0; Audio.win(); bigText('FINISH','gold'); flash('#ffffff',.35); subtitle('חוצים את קו הסיום…',1800); ST.Village.cheer();
     setTimeout(()=>showResults(),2300);
   }
   function showResults(){
@@ -435,7 +436,10 @@
         document.querySelectorAll('#boardCards .card').forEach(c=>c.onclick=()=>{ const i=+c.dataset.b, b=Rider.BOARDS[i]; if(!save.owned.includes(i)){ if(save.wallet<b.price){ c.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:220}); return; } save.wallet-=b.price; save.owned.push(i); }
       save.board=i; persist(); Rider.setBoard(i); renderMenuCards(); });
   }
-  function menuScene(){ resetPlayer(); P.hd=0; ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.yC; mode='menu'; }
+  /* the menu stands the rider on the village square (the Christmas tree, the hotels and the lift behind) */
+  function menuScene(){ resetPlayer(true); const V=ST.Village, M=V&&V.spots&&V.spots.menu;
+    if(M){ const s=track.len+M.d; ST.Physics.reset(P,World.cx(s)+M.u,-s,M.hd||0); } else P.hd=0;
+    ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.yC; World.update(P.s,true,4,4); mode='menu'; }
   function toMenu(){ mode='menu'; el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.menu.hidden=false; Audio.music(false); menuScene(); renderMenuCards(); gr('uDesat',0); }
   function togglePause(){ if(mode==='play'){ mode='pause'; el.pause.hidden=false; } else if(mode==='pause'){ mode='play'; el.pause.hidden=true; last=performance.now(); } }
   $('#playBtn').onclick=startRun; $('#againBtn').onclick=startRun; $('#menuBtn').onclick=toMenu; $('#pause').onclick=togglePause; $('#resumeBtn').onclick=togglePause; $('#restartBtn').onclick=startRun; $('#quitBtn').onclick=toMenu;
@@ -466,12 +470,12 @@
     tAcc+=dt; frame++; updateFlare();
     if(mode==='pause') return;
     ST.People.update(dt,camera.position.x,camera.position.z);
-    if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
-    if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); ST.Resort.update(tAcc,P.s+40); World.update(P.s); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); return; }
+    if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); ST.Village.update(dt); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
+    if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); ST.Resort.update(tAcc,P.s,240,120); World.update(P.s,false,4,4); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); ST.Village.update(dt); return; }
     if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.autoSkate=1.5; P.vx=Math.sin(P.hd)*.8; P.vz=-Math.cos(P.hd)*.8; subtitle(useJoy()?'גררו לפנייה · החזיקו קפיצה ושחררו · משכו למטה לבלימה':'◀ ▶ פנייה · החזיקו קפיצה ושחררו · באוויר: סיבוב ותפיסה',3800); } }
       updateRider(dt,true); updateCamera(dt); }
     else if(mode==='play'||mode==='finish'){
-      if(mode==='finish') P.fin+=dt;
+      if(mode==='finish'){ P.fin+=dt; ST.Village.keepOut(P); }
       dt*=stepTimeScale(dt);
       runPhysics(dt);
       // equity history
@@ -486,7 +490,7 @@
         if(ST.Park.pipes.some(pp=>pp.s0-P.s>0&&pp.s0-P.s<45)) tip('pipe','חצי צינור: גלשו אל הקיר באלכסון כדי לעוף מעל השפה · סיבוב באוויר = 180',6000);
         if(P.s>40&&P.speed>4) tip('press',BT?'באוויר: סיבוב + תפיסה, ולחיצה נוספת על תפיסה = תפיסה אחרת · על מעקה: מהירות = לחיצה על האף':'על השלג: תפיסה + קדימה = לחיצה על האף (אחורה = הזנב) · היגוי תוך כדי = באטר עם סיבוב',6000); }
     }
-    ST.Resort.update(tAcc,P.s); updateSpray(dt); World.update(P.s); World.follow({x:P.x,y:P.y,z:P.z},tAcc);
+    ST.Resort.update(tAcc,P.s,undefined,undefined,P.x); ST.Village.update(dt); updateSpray(dt); World.update(P.s); World.follow({x:P.x,y:P.y,z:P.z},tAcc);
     World.updateFlakes(tAcc,camera.position,{x:P.vx,y:0,z:P.vz});
     ST.renderer.getPixelRatio(); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900;
     // HUD

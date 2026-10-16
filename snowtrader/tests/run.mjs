@@ -85,12 +85,24 @@ await test('fall',async()=>{ const r=await page.evaluate(()=>{ T.start('lab'); T
     return {phases:[...seen],secondsToRecover:+(k/60).toFixed(1),riding:!P.fall,speed:+(P.speed*3.6).toFixed(1)}; });
   return {ok:['lose','down','slide','getup','recover'].every(p=>r.phases.includes(p))&&r.riding,detail:JSON.stringify(r)}; });
 
-await test('lift',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug; D.setTrack('bunny'); D.startLift(); const m1=D.mode; for(let k=0;k<60;k++) D.tick(1/60); const seated=ST.Rider.ik&&ST.Rider.ik.on===false;
-    D.endLift(); const m2=D.mode; for(let k=0;k<200;k++) D.tick(1/60); return {lift:m1,seated,after:m2,then:D.mode}; });
-  return {ok:r.lift==='lift'&&r.seated&&r.after==='countdown'&&r.then==='play',detail:JSON.stringify(r)}; });
+await test('lift',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug, R=ST.Resort; D.setTrack('bunny'); D.startLift(); const m1=D.mode, startD=+(D.P.s-ST.World.T.len).toFixed(1); for(let k=0;k<60;k++) D.tick(1/60); const seated=ST.Rider.ik&&ST.Rider.ik.on===false;
+    // the rider's hips on the chair's seat (2.29 m under the rope, between its arms), whichever character is riding
+    const ch=R.playerChair; ch.updateMatrixWorld(true); const h=ST.Rider.bones.Hips.getWorldPosition(new THREE.Vector3()), seat=new THREE.Vector3(0,-2.2,0).applyMatrix4(ch.matrixWorld), offSeat=+h.distanceTo(seat).toFixed(2);
+    D.endLift(); const m2=D.mode; for(let k=0;k<200;k++) D.tick(1/60); return {lift:m1,startsInVillage:startD,seated,hipsFromSeatM:offSeat,after:m2,then:D.mode}; });
+  return {ok:r.lift==='lift'&&r.seated&&r.startsInVillage>30&&r.hipsFromSeatM<.35&&r.after==='countdown'&&r.then==='play',detail:JSON.stringify(r)}; });
 
-await test('town',async()=>{ const r=await page.evaluate(()=>{ ST.debug.setTrack('bunny'); ST.World.update(0,true); let lodges=0, people=ST.People.regs.length; ST.scene.traverse(o=>{ if(o.isMesh&&o.material&&o.material.map&&o.geometry&&o.geometry.type==='PlaneGeometry') lodges++; }); return {signs:lodges,peopleRegistered:people}; });
-  return {ok:r.signs>0&&r.peopleRegistered>0,detail:JSON.stringify(r)+' (resort around the start; the full town is Phase 3)'}; });
+await test('town',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug, W=ST.World, V=ST.Village, R=ST.Resort, PP=ST.People; D.setTrack('bunny'); const L=W.T.len;
+    // the valley floor: downhill all the way from the finish line to the church, gentle in the village, flat across
+    let up=-9, grade=0, prev=null; for(let d=0;d<=190;d++){ const s=L+d, y=W.groundY(W.cx(s),-s); if(prev!==null){ up=Math.max(up,y-prev); if(d>45) grade=Math.max(grade,prev-y); } prev=y; }
+    const across=d=>{ const s=L+d; let a=1e9,b=-1e9; for(let u=-40;u<=40;u+=2){ const y=W.groundY(W.cx(s)+u,-s); a=Math.min(a,y); b=Math.max(b,y); } return +(b-a).toFixed(2); };
+    let kick=0; W.forRamps(L,L+300,()=>kick++);
+    let meshes=0, tris=0; V.group.traverse(o=>{ if(o.isMesh){ meshes++; tris+=o.geometry.index.count/3; } });
+    // the lift comes down to loading height: the bullwheel ~3.1 m up, a chair's seat ~1 m over the snow at the load line
+    const tw=R.towers(), bw=tw[tw.length-1], cl=R.cablePoint(R.sLoad,-1), seat=cl.y-2.35-W.groundY(cl.x,cl.z);
+    const s0=V.Q.served; for(let i=0;i<600;i++) D.tick(1/30);   // 20 s of village life
+    return {upPerM:+up.toFixed(3),grade:+grade.toFixed(3),across70:across(70),across140:across(140),kickersPastFinish:kick,meshes,ktris:Math.round(tris/1000),wheelH:+(bw.y-bw.gy).toFixed(2),seatAboveSnow:+seat.toFixed(2),
+      people:PP.regs.filter(r=>r.ci==='village').length,full:PP.active.length,standIns:PP.standIns(),sitting:PP.regs.filter(r=>r.anim==='Sit').length,walking:PP.regs.filter(r=>r.anim==='Walk').length,boarded20s:V.Q.served-s0,menuOnSquare:D.P.s>L+60,atlasH:V.atlasH}; });
+  return {ok:r.upPerM<0&&r.grade<.06&&r.across70<.5&&r.across140<.5&&r.kickersPastFinish===0&&r.meshes>=8&&r.ktris<700&&Math.abs(r.wheelH-3.1)<.05&&r.seatAboveSnow>.6&&r.seatAboveSnow<1.3&&r.people>=50&&r.full<=14&&r.standIns[0]>0&&r.sitting>=6&&r.walking>=5&&r.boarded20s>=6&&r.menuOnSquare&&r.atlasH<=2048,detail:JSON.stringify(r)}; });
 
 await test('tracks',async()=>{ const all=[]; for(const id of ['bunny','bull','bear','ridge','ipo']){ const r=await page.evaluate((id)=>{ const D=ST.debug, W=ST.World, I=D.input, P=D.P; T.start(id); const Tr=D.track(); let t=0;
       while(D.mode==='play'&&t<300){ const s=P.s, u=P.x-W.cx(s); let target=W.cx(s+14), best=1e9;
