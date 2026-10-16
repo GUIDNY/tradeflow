@@ -169,6 +169,11 @@
       if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s, y=groundY(x,z); trees.push({x,y:y-.2,z,sc:.5+hash2(ci,n2+500)*.7+(off>w+18?.35:0),r:hash2(ci,n2+900)*6.28}); }
     for(let n2=0;n2<9;n2++){ const s=s0+hash2(ci,n2*5+700)*L, w=halfW(s), side=hash2(ci,n2*5+701)<.5?-1:1, u=side*(w*.8+hash2(ci,n2*5+702)*14);
       if(ST.Resort&&ST.Resort.blocked(s,u)) continue; const x=cx(s)+u, z=-s; rocks.push({x,y:groundY(x,z)-.15,z,sc:.9+hash2(ci,n2+333)*1.8,r:hash2(ci,n2+444)*6.28}); }
+    // contact shadows: snow darkens (and cools) under every tree and rock
+    { const ds=L/(NS-1), du=2*U/(NU-1), blob=(x,z,rad,k)=>{ const s=-z, j0=Math.round((s-s0)/ds), c=cx(s), i0=Math.round((x-c+U)/du), rj=Math.ceil(rad/ds)+1, ri=Math.ceil(rad/du)+1;
+        for(let j=j0-rj;j<=j0+rj;j++){ if(j<0||j>=NS) continue; for(let i=i0-ri;i<=i0+ri;i++){ if(i<0||i>=NU) continue; const o=j*NU+i, px=pos[o*3], pz=pos[o*3+2], d=Math.hypot(px-x,pz-z); if(d>=rad) continue; const f=(1-d/rad), m=1-k*f*f*(3-2*f);
+            col[o*3]*=m*.97; col[o*3+1]*=m*.985; col[o*3+2]*=Math.min(1,m*1.02); } } };
+      trees.forEach(t=>blob(t.x,t.z,3.4*t.sc+.8,.38)); rocks.forEach(t=>blob(t.x,t.z,t.sc*1.5+.8,.3)); g.attributes.color.needsUpdate=true; }
     { const nG=T.id==='ridge'?4:T.id==='bear'?3:T.id==='ipo'?3:T.id==='bull'?2:1; for(let n2=0;n2<nG;n2++){ const s=s0+hash2(ci,n2*11+900)*L, w=halfW(s), side=hash2(ci,n2*11+901)<.5?-1:1, u=side*(w+14+hash2(ci,n2*11+902)*34), x=cx(s)+u, z=-s, sc=6+hash2(ci,n2*11+903)*12;
         if(ST.Resort&&ST.Resort.blocked(s,u)) continue; rocks.push({x,y:groundY(x,z)-sc*.25,z,sc,sy:1.5+hash2(ci,n2*11+904)*1.3,r:hash2(ci,n2*11+905)*6.28,giant:1}); } }
     const dummy=new THREE.Object3D();
