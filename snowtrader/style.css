@@ -71,7 +71,20 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 #joy{position:absolute;width:116px;height:116px;margin:-58px 0 0 -58px;border-radius:50%;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.4);transition:opacity .2s}
 #joyzone.idle #joy{opacity:.55}
 #knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 4px 14px rgba(0,0,0,.4)}
-#btns{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:none}
+#btns{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:none;direction:ltr}   /* ltr: "end" is the right edge, so FLIP sits above SPIN */
+#btns .row{display:flex;align-items:flex-end;gap:14px;direction:ltr}
+/* buttons change meaning in the air: ground labels (.g) and air labels (.a) */
+.act .a{display:none} #hud.air .act .g{display:none} #hud.air .act .a{display:inline}
+#hud.air #btnJump{background:linear-gradient(180deg,rgba(255,170,40,.85),rgba(255,110,20,.8))} #hud.air #btnGrab{background:linear-gradient(180deg,rgba(90,160,255,.8),rgba(40,100,240,.8))}
+#btnFlip{visibility:hidden} #hud.air #btnFlip{visibility:visible}
+.act.small{width:64px;height:64px;font-size:15px}
+#steer{position:absolute;left:max(16px,env(safe-area-inset-left));bottom:max(22px,env(safe-area-inset-bottom));display:flex;gap:16px;align-items:flex-end;pointer-events:auto;touch-action:none;direction:ltr;padding:10px;margin:-10px}
+#steer .act{width:96px;height:96px;font-size:34px;font-family:sans-serif;pointer-events:none}
+#steer .hint{position:absolute;left:0;right:0;bottom:-16px;text-align:center;font:600 10px Rubik,sans-serif;opacity:.55;letter-spacing:.05em}
+#steer.both .act{background:rgba(255,80,80,.45);border-color:#ffb0b0}
+/* control scheme: buttons (default) or the old joystick */
+body:not(.ctl-joy) #joyzone{display:none} body.ctl-joy #steer{display:none}
+body.ctl-joy #btnFlip{display:none}
 .act{pointer-events:auto;width:84px;height:84px;border-radius:50%;font-family:var(--display);font-size:18px;letter-spacing:.06em;background:rgba(255,255,255,.14);border:3px solid rgba(255,255,255,.7);backdrop-filter:blur(8px);text-shadow:0 2px 0 #000;box-shadow:0 6px 18px rgba(0,0,0,.35)}
 .act.big{width:112px;height:112px;font-size:24px;background:linear-gradient(180deg,rgba(39,240,160,.75),rgba(15,189,114,.75));border-color:#fff}
 .act:active,.act.on{transform:scale(.93);filter:brightness(1.25)}
@@ -92,8 +105,8 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 .endbtns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}.endbtns .cta,.endbtns .ghost{margin:6px 0 0}
 .endbtns .cta{font-size:24px;padding:10px 30px 8px}
 #rotate{position:fixed;inset:0;z-index:60;background:#0b0d1a;display:flex;align-items:center;justify-content:center;text-align:center;font-size:20px;line-height:2;flex-direction:column}
-@media (max-width:700px){.radar{width:84px;height:84px;top:10px;left:10px}#pause{left:106px;top:10px}#mute{left:156px;top:10px}.money{top:8px;right:10px}.prog{top:12px;width:30vw}.act{width:70px;height:70px;font-size:15px}.act.big{width:96px;height:96px}.logo{font-size:36px}.card{min-width:150px}}
-@media (max-height:480px){.radar{width:82px;height:82px}.act{width:64px;height:64px}.act.big{width:88px;height:88px}.mbody{gap:6px}.card .bl{display:none}.cta{font-size:22px;padding:8px 36px 6px}.logo.big{font-size:44px}.howto{display:none}.sect h3{display:none}.panel{padding:12px}}
+@media (max-width:700px){#steer .act{width:80px;height:80px;font-size:28px}#steer{gap:12px}.radar{width:84px;height:84px;top:10px;left:10px}#pause{left:106px;top:10px}#mute{left:156px;top:10px}.money{top:8px;right:10px}.prog{top:12px;width:30vw}.act{width:70px;height:70px;font-size:15px}.act.big{width:96px;height:96px}.logo{font-size:36px}.card{min-width:150px}}
+@media (max-height:480px){#steer .act{width:76px;height:76px}.act.small{width:54px;height:54px;font-size:13px}.radar{width:82px;height:82px}.act{width:64px;height:64px}.act.big{width:88px;height:88px}.mbody{gap:6px}.card .bl{display:none}.cta{font-size:22px;padding:8px 36px 6px}.logo.big{font-size:44px}.howto{display:none}.sect h3{display:none}.panel{padding:12px}}
 
 @media (max-height:480px) and (orientation:landscape){
   .panel.result{display:grid;grid-template-columns:1fr 1fr;column-gap:14px;width:min(96vw,780px);align-items:center;padding:10px 16px}
@@ -124,7 +137,7 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 .mbody .cta:active{transform:translateY(4px)}
 #mnote{position:fixed;left:50%;bottom:90px;transform:translate(-50%,20px);background:rgba(10,12,26,.92);border:1px solid rgba(255,255,255,.3);padding:10px 18px;border-radius:12px;font-weight:700;z-index:40;opacity:0;transition:.25s;pointer-events:none}#mnote.show{opacity:1;transform:translate(-50%,0)}
 
-#hud.lifting .money,#hud.lifting #btns,#hud.lifting .radar,#hud.lifting .prog,#hud.lifting #combo,#hud.lifting #joyzone,#hud.lifting #toast,#hud.lifting #subtitle{display:none}
+#hud.lifting .money,#hud.lifting #btns,#hud.lifting .radar,#hud.lifting .prog,#hud.lifting #combo,#hud.lifting #joyzone,#hud.lifting #steer,#hud.lifting #toast,#hud.lifting #subtitle{display:none}
 #liftHud{position:absolute;left:0;right:0;bottom:7%;display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none;text-align:center;padding:0 18px}
 #liftHud .lt{font-family:var(--display);letter-spacing:.1em;font-size:26px;text-shadow:0 3px 0 #000;direction:rtl}
 #liftHud .lt b{color:var(--gold);font-weight:400;margin-inline-end:8px}
@@ -144,8 +157,8 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 #flare .fd{width:22vmin;height:22vmin;background:radial-gradient(circle,rgba(255,190,140,.10) 0,rgba(255,190,140,0) 70%)}
 
 /* H: hide the HUD for screenshots (the touch controls keep working, just invisible) */
-.hud-hidden #hud > *:not(#joyzone):not(#btns){visibility:hidden!important}
-.hud-hidden #joy,.hud-hidden #btns{opacity:0}
+.hud-hidden #hud > *:not(#joyzone):not(#btns):not(#steer){visibility:hidden!important}
+.hud-hidden #joy,.hud-hidden #btns,.hud-hidden #steer{opacity:0}
 
 /* approaching a kicker: is this speed right for its landing? */
 #jumpHint{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);padding:6px 12px;border-radius:10px;font:700 13px Rubik,sans-serif;color:#fff;background:rgba(10,14,30,.6);opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
@@ -160,3 +173,9 @@ button{font-family:var(--font);cursor:pointer;border:0;color:#fff}
 #balance.warn i{background:#ff3b57;animation:balw .25s infinite alternate}
 @keyframes balw{to{transform:scaleY(1.25)}}
 #hud.lifting #balance{display:none}
+
+/* menu: control scheme and how to play */
+.howto #howtoTxt{display:contents}
+.mtop .ctlbtn{pointer-events:auto;font:700 12px Rubik,sans-serif;padding:6px 12px;border-radius:999px;align-self:center;white-space:nowrap}
+/* narrow portrait phones: smaller buttons with room between the two thumbs' clusters */
+@media (max-width:440px) and (orientation:portrait){ #steer .act{width:68px;height:68px;font-size:24px} #steer{gap:10px} .act{width:60px;height:60px;font-size:13px} .act.big{width:82px;height:82px;font-size:18px} #btns .row{gap:10px} .act.small{width:52px;height:52px;font-size:12px} }

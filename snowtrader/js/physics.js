@@ -63,7 +63,7 @@
     Object.assign(P,{x,z,hd,vx:0,vz:0,vy:0,om:0,omegaS:0,grounded:true,fresh:true,speed:0,speed3:0,vh:hd,slip:0,skid:0,edge:0,body:0,fa:0,
       axF:0,azF:0,ayF:0,charge:0,charging:false,relBuf:0,tuck:0,braking:false,brakeK:0,brakeSide:0,sw:false,fall:null,skate:null,skateK:0,
       airT:0,sp:0,fl:0,wsp:0,wfl:0,grabT:0,grabbed:false,grabName:'',airPitch:0,popT:9,popKind:'',landT:9,landAbs:0,landOut:'',stumble:0,stun:0,invuln:0,boost:0,lipPop:false,
-      grind:null,grindCool:0,press:0,pressK:0,butter:null,forceFall:false,vyT:null,spU:0,unwind:null,wallAir:false});
+      grind:null,grindCool:0,press:0,pressK:0,butter:null,forceFall:false,vyT:null,spU:0,unwind:null,wallAir:false,spinT:null,grabSeq:0,grabList:[]});
     P.gc=contact(x,z,hd,P.gc); P.y=P.gc.yC; P.s=-z; }
 
   /* ---------- one step ---------- */
@@ -192,7 +192,7 @@
     if(!P.fresh&&s2>3.5&&h<P.y+vT0*dt-.5*C.g*dt*dt-.012){ takeoff(P,vT0,null,ev); return; }
     bend(P,gAx,gAz,gc); P.vyT=gc.gx*P.vx+gc.gz*P.vz;
     if(release&&!noInput){ const lip=W().lipNear(-P.z,P.x,1.7,.35), pop=lerp(C.popTap,C.popFull,P.charge)+(lip?C.popLip:0);
-      P.y=h; takeoff(P,P.vyT+pop,{kind:fwd<-.4?'nollie':'ollie',lip:!!lip,charge:P.charge},ev); P.charge=0; return; }
+      P.y=h; takeoff(P,P.vyT+pop,{kind:fwd<-.4?'nollie':'ollie',lip:!!lip,charge:P.charge,wind:Math.abs(ctl.steer)>.3?ctl.steer:0},ev); P.charge=0; return; }
     P.vy=(h-P.y)/dt; P.y=h; P.fresh=false;
   }
   /* The snow curves under the board (a kicker, a transition, a bump): the velocity turns with it and keeps its speed, because the
@@ -215,7 +215,8 @@
     P.wallAir=false;
     if(side&&vy>2){ const dc=Wd.dcx(su), n=Math.hypot(1,dc), lx=1/n, lz=dc/n, vl=P.vx*lx+P.vz*lz;   // across the run, +u
       if(vl*side>0){ const want=-side*.35; P.vx+=lx*(want-vl); P.vz+=lz*(want-vl); P.wallAir=true; } }
-    P.grounded=false; P.vy=vy; P.airT=0; P.sp=0; P.spU=0; P.unwind=null; P.fl=0; P.wsp=0; P.wfl=0; P.grabT=0; P.grabbed=false; P.grabName='';
+    P.grounded=false; P.vy=vy; P.airT=0; P.sp=0; P.spU=0; P.unwind=null; P.spinT=null; P.fl=0; P.wfl=0; P.grabT=0; P.grabbed=false; P.grabName=''; P.grabSeq=0; P.grabList=[];
+    P.wsp=pop&&pop.wind?pop.wind*C.spinRate*.55:0;   // let go of a loaded jump while turning: the spin starts with the pop (a wind-up)
     P.airPitch=P.gc.pitch; P.popKind=pop?pop.kind:'drop'; P.popT=0; P.lipPop=!!(pop&&pop.lip); P.charge=0; P.charging=false; P.skate=null; P.braking=false;
     if(P.wallAir) P.airPitch=clamp(Math.atan2(vy,Math.hypot(P.vx,P.vz)),-1,1.05);   // off a wall the board leaves pointing along its velocity, nose up
     P.airStart=P.y; P.swTake=P.sw; ev.push({type:'takeoff',pop:!!pop,kind:P.popKind,lip:P.lipPop,charge:pop?pop.charge:0}); }
@@ -226,15 +227,31 @@
     P.vy-=C.g*dt;
     const sp=Math.hypot(P.vx,P.vz), k=Math.exp(-(T.dq||.006)*sp*dt*.6); P.vx*=k; P.vz*=k;
     P.x+=P.vx*dt; P.z+=P.vz*dt; P.y+=P.vy*dt;
-    // spins and flips follow the stick; a grab is chosen by where the stick points when the grab starts
-    P.wsp=damp(P.wsp,ctl.steer*C.spinRate,7,dt); P.wfl=damp(P.wfl,P.grabbed?0:ctl.flip*C.flipRate,7,dt); P.sp+=P.wsp*dt; P.fl+=P.wfl*dt;
+    /* Spins: the stick, or the SPIN button (turning the way the rider steers, or last turned on the snow), drives the rotation.
+       When the spin input stops the rider spots the landing and times the rest of the turn to come down square: the target is
+       the half turn nearest to where the rotation was heading (the angle a third of a second on at the present rate), reached
+       just as the board meets the snow. A fast spin let go at 270 carries round to 360; a slow 20-degree drift comes back to
+       straight; with too little air left it does not get there, and the landing shows it. */
+    const spinIn=ctl.spin?(ctl.spinDir||1):ctl.steer, own0=P.sp-(P.spU||0);
+    if(Math.abs(spinIn)>.15){ P.spinT=null; P.wsp=damp(P.wsp,spinIn*C.spinRate,7,dt); }
+    else if(P.airT>.1&&(P.spinT!=null||Math.abs(own0)>.25||Math.abs(P.wsp)>1)){
+      const tl=Math.max(.05,timeToLand(P)-.05);
+      if(P.spinT==null) P.spinT=Math.round((own0+P.wsp*Math.min(tl,.33))/PI)*PI;
+      P.wsp=damp(P.wsp,clamp((P.spinT-own0)/tl,-C.spinRate*1.5,C.spinRate*1.5),16,dt); }
+    else P.wsp=damp(P.wsp,0,7,dt);
+    P.sp+=P.wsp*dt;
+    if(P.spinT!=null){ const own1=P.sp-(P.spU||0); if((P.spinT-own1)*(P.spinT-own0)<=0){ P.sp+=P.spinT-own1; P.wsp=0; } }   // arrived: no overshoot
+    P.wfl=damp(P.wfl,P.grabbed?0:ctl.flip*C.flipRate,7,dt); P.fl+=P.wfl*dt;
     // off a boardslide the rider turns the board back in line with the travel by itself (that part is not a spin)
     if(P.unwind!=null){ const d=(P.unwind-P.spU)*(1-Math.exp(-9*dt)); P.spU+=d; P.sp+=d; }
     // off a pipe wall the rider comes back down the same wall: the board is brought round to lie along the line it will land on
     // (the velocity along the wall below), either end first; like the spin unwind, that turn is not part of a trick
     if(P.wallAir){ const g0=P.gc, vn=P.vx*g0.nx+P.vy*g0.ny+P.vz*g0.nz, tx=P.vx-vn*g0.nx, tz=P.vz-vn*g0.nz;
       if(tx*tx+tz*tz>1){ const e=wrap(2*(Math.atan2(tx,-tz)-(P.hd+P.sp)))/2, d=e*(1-Math.exp(-3.5*dt)); P.sp+=d; P.spU=(P.spU||0)+d; } }
-    if(ctl.grab){ if(!P.grabbed){ P.grabName=Math.abs(ctl.steer)>Math.abs(ctl.flip)&&Math.abs(ctl.steer)>.35?(ctl.steer>0?'INDY':'MUTE'):ctl.flip>.35?'TAIL':ctl.flip<-.35?'NOSE':'INDY'; } P.grabbed=true; P.grabT+=dt; }
+    // grabs: the stick picks one (right Indy, left Mute, back Tail, forward Nose); with no direction each new grab in the same air
+    // is the next of Indy, Tail, Mute, Nose, so tapping grab again chains grabs
+    if(ctl.grab){ if(!P.grabbed){ const dg=Math.abs(ctl.steer)>Math.abs(ctl.flip)&&Math.abs(ctl.steer)>.35?(ctl.steer>0?'INDY':'MUTE'):ctl.flip>.35?'TAIL':ctl.flip<-.35?'NOSE':null;
+        P.grabName=dg||GRABS[(P.grabSeq||0)%GRABS.length]; P.grabSeq=(P.grabSeq||0)+1; if(P.grabList.indexOf(P.grabName)<0) P.grabList.push(P.grabName); } P.grabbed=true; P.grabT+=dt; }
     else P.grabbed=false;
     if(!ctl.jump&&P.charging){ P.charging=false; P.relBuf=C.relBuf; }               // let go just before landing: pop on touchdown
     P.relBuf=Math.max(0,P.relBuf-dt); if(ctl.jump&&!P.charging) P.charging=true;    // and a press in the air loads for the landing
@@ -244,6 +261,10 @@
     if(P.y<=g.yC) land(P,ctl,ev);
   }
 
+  const GRABS=['INDY','TAIL','MUTE','NOSE'];
+  /* time until the board meets the snow, with the snow taken as a plane under the rider (re-estimated every step, so it is good
+     where it matters: close to the landing) */
+  function timeToLand(P){ const g=P.gc, s=g.gx*P.vx+g.gz*P.vz, a=.5*C.g, b=s-P.vy, c=g.yC-P.y, d=b*b-4*a*c; return d<=0?0:(-b+Math.sqrt(d))/(2*a); }
   function land(P,ctl,ev){
     const g=contact(P.x,P.z,P.hd,P.gc);
     const vn=P.vx*g.nx+P.vy*g.ny+P.vz*g.nz, imp=Math.max(0,-vn);
@@ -259,8 +280,8 @@
     if(P.forceFall||imp>C.landFall||yawErr>C.yawFall||pitchErr>C.pitchFall) out='fall';
     else if(imp>C.landClean||yawErr>C.yawStumble||pitchErr>C.pitchStumble) out='stumble';
     P.forceFall=false; P.sw=!noseLeads; P.hd=wrap(lead); P.vyT=P.vy;
-    const air=P.airT, ev1={type:'land',imp,out,half,flips,spin:P.sp,flip:P.fl,yawErr,pitchErr,air,grab:P.grabT,grabName:P.grabName,kind:P.popKind,lip:P.lipPop,swTake:P.swTake,sw:P.sw};
-    P.sp=0; P.spU=0; P.unwind=null; P.fl=flipR; P.grounded=true; P.fresh=true; P.airT=0; P.wsp=P.wfl=0; P.grabbed=false; P.grabT=0; P.wallAir=false;
+    const air=P.airT, ev1={type:'land',imp,out,half,flips,spin:P.sp,flip:P.fl,yawErr,pitchErr,air,grab:P.grabT,grabName:P.grabName,grabs:P.grabList.slice(),kind:P.popKind,lip:P.lipPop,swTake:P.swTake,sw:P.sw};
+    P.sp=0; P.spU=0; P.unwind=null; P.spinT=null; P.fl=flipR; P.grounded=true; P.fresh=true; P.airT=0; P.wsp=P.wfl=0; P.grabbed=false; P.grabT=0; P.wallAir=false;
     P.landT=0; P.landAbs=clamp(imp/7.5,.15,1); P.landOut=out;
     if(out==='stumble'){ P.stumble=.7; P.vx*=.88; P.vz*=.88; }
     ev.push(ev1);

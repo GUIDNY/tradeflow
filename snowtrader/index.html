@@ -24,6 +24,7 @@
 <div id="menu" hidden>
   <div class="mtop">
     <div class="logo big">SNOW<b>RUSH</b><small>הר · לוח · מהירות</small></div>
+    <button id="ctlBtn" class="ghost ctlbtn"></button>
     <div class="wallet"><span>ניקוד כולל</span><b id="walletN">0</b></div>
   </div>
   <div class="mbody">
@@ -32,7 +33,7 @@
     <div class="sect"><h3>הלוח שלכם</h3><div id="boardCards"></div></div>
     <button id="playBtn" class="cta">יוצאים לדרך</button>
   </div>
-  <div class="howto"><span>🕹️ גררו לפנייה · למטה בלימה · למעלה כפיפה</span><span>⬆️ החזיקו קפיצה ושחררו</span><span>🌀 באוויר: סיבוב, סלטה, תפיסה + כיוון</span><span>🛹 מעקה וקופסה: גררו לאיזון · תפיסה + קדימה = לחיצה</span><span>⌨️ C מצלמה · H בלי ממשק · R מחדש</span></div>
+  <div class="howto"><span id="howtoTxt"></span></div>
 </div>
 
 <!-- HUD -->
@@ -47,7 +48,9 @@
   <div id="pause" class="iconbtn" title="השהיה">❚❚</div>
   <div id="mute" class="iconbtn" title="צליל">🔊</div>
   <div id="joyzone"><div id="joy"><div id="knob"></div></div></div>
-  <div id="btns"><button id="btnJump" class="act big">קפיצה</button><button id="btnGrab" class="act">תפיסה</button></div>
+  <!-- touch buttons: steer strip on the left thumb (slide across; both = brake), actions on the right thumb that change in the air -->
+  <div id="steer"><button id="btnL" class="act dir" aria-label="שמאלה">◀</button><button id="btnR" class="act dir" aria-label="ימינה">▶</button><span class="hint">שתיהן = בלימה</span></div>
+  <div id="btns"><button id="btnFlip" class="act small">סלטה</button><div class="row"><button id="btnGrab" class="act"><span class="g">מהירות</span><span class="a">תפיסה</span></button><button id="btnJump" class="act big"><span class="g">קפיצה</span><span class="a">סיבוב</span></button></div></div>
   <div id="tip" hidden></div>
   <div id="liftHud" hidden><div class="lt"><b>⏩ ×12</b> מעלית לפסגה</div><div id="liftFact"></div><button id="liftSkip" class="ghost">דלגו למעלה ›</button></div>
 </div>

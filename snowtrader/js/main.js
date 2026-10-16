@@ -40,11 +40,29 @@
   function moveJoy(e){ let dx=e.clientX-joyC.x, dy=e.clientY-joyC.y; const R=44, d=Math.hypot(dx,dy); if(d>R){ dx*=R/d; dy*=R/d; } input.joy.x=dx/R; input.joy.y=dy/R; knob.style.transform=`translate(${dx}px,${dy}px)`; }
   function endJoy(e){ if(e.pointerId!==input.joy.id) return; input.joy.id=null; input.joy.x=input.joy.y=0; knob.style.transform=''; zone.classList.add('idle'); joyHome(); }
   zone.addEventListener('pointerup',endJoy); zone.addEventListener('pointercancel',endJoy);
-  const bJ=$('#btnJump'), bG=$('#btnGrab');
-  bJ.addEventListener('pointerdown',e=>{ e.preventDefault(); Audio.init(); input.jump=true; input.jumpEdge=true; bJ.classList.add('on'); });
-  const upJ=()=>{ input.jump=false; bJ.classList.remove('on'); }; bJ.addEventListener('pointerup',upJ); bJ.addEventListener('pointercancel',upJ); bJ.addEventListener('pointerleave',upJ);
-  bG.addEventListener('pointerdown',e=>{ e.preventDefault(); Audio.init(); input.grab=true; bG.classList.add('on'); });
-  const upG=()=>{ input.grab=false; bG.classList.remove('on'); }; bG.addEventListener('pointerup',upG); bG.addEventListener('pointercancel',upG); bG.addEventListener('pointerleave',upG);
+  /* ---------- touch buttons (default; the joystick above is the alternative) ----------
+     Left thumb: a steer strip, ◀ and ▶. Slide across it; a thumb on the middle (or one finger on each side) brakes. Holding a side
+     turns harder the longer it is held, so a tap is a small correction and a hold is a carve.
+     Right thumb: JUMP (hold to load, let go to pop) and SPEED (tuck; skate when slow; on a rail, press the nose). In the air they
+     become SPIN and GRAB, and FLIP appears. A press keeps the meaning it had when it began: holding jump off the lip of a kicker
+     does not become a spin, and landing while holding spin does not load a jump. */
+  const tb={side:new Map(),l:false,r:false,brake:false,steer:0,spin:false,speed:false,flip:false,lastDir:1};
+  const stEl=$('#steer'), bL=$('#btnL'), bR=$('#btnR'), bJ=$('#btnJump'), bG=$('#btnGrab'), bF=$('#btnFlip');
+  const useJoy=()=>document.body.classList.contains('ctl-joy');
+  const airborne=()=>mode==='play'&&!P.grounded&&!P.fall&&P.airT>.08;
+  function stSide(e){ const r=stEl.getBoundingClientRect(), mid=r.left+r.width/2; return e.clientX<mid-20?'l':e.clientX>mid+20?'r':'b'; }
+  function stSync(){ let l=false,r=false; tb.side.forEach(v=>{ if(v==='l'||v==='b') l=true; if(v==='r'||v==='b') r=true; }); tb.l=l; tb.r=r; tb.brake=l&&r;
+    bL.classList.toggle('on',l); bR.classList.toggle('on',r); stEl.classList.toggle('both',tb.brake); }
+  stEl.addEventListener('pointerdown',e=>{ e.preventDefault(); Audio.init(); try{ stEl.setPointerCapture(e.pointerId); }catch(_){} tb.side.set(e.pointerId,stSide(e)); stSync(); });
+  stEl.addEventListener('pointermove',e=>{ if(tb.side.has(e.pointerId)){ tb.side.set(e.pointerId,stSide(e)); stSync(); } });
+  const stUp=e=>{ if(tb.side.delete(e.pointerId)) stSync(); }; stEl.addEventListener('pointerup',stUp); stEl.addEventListener('pointercancel',stUp);
+  function hold(btn,down,up){ const ids=new Set();
+    btn.addEventListener('pointerdown',e=>{ e.preventDefault(); Audio.init(); ids.add(e.pointerId); try{ btn.setPointerCapture(e.pointerId); }catch(_){} btn.classList.add('on'); if(ids.size===1) down(); });
+    const end=e=>{ if(ids.delete(e.pointerId)&&!ids.size){ btn.classList.remove('on'); up(); } }; btn.addEventListener('pointerup',end); btn.addEventListener('pointercancel',end); }
+  let jCtx=null, gCtx=null;
+  hold(bJ,()=>{ jCtx=!useJoy()&&airborne()?'spin':'jump'; if(jCtx==='spin') tb.spin=true; else { input.jump=true; input.jumpEdge=true; } },()=>{ input.jump=false; tb.spin=false; jCtx=null; });
+  hold(bG,()=>{ gCtx=useJoy()||airborne()?'grab':'speed'; if(gCtx==='grab') input.grab=true; else tb.speed=true; },()=>{ input.grab=false; tb.speed=false; gCtx=null; });
+  hold(bF,()=>{ tb.flip=true; },()=>{ tb.flip=false; });
   const KEYMAP={ArrowLeft:'l',KeyA:'l',ArrowRight:'r',KeyD:'r',ArrowUp:'u',KeyW:'u',ArrowDown:'d',KeyS:'d'};
   addEventListener('keydown',e=>{ if(e.repeat) return; Audio.init(); const k=KEYMAP[e.code]; if(k){ input.k[k]=true; e.preventDefault(); }
     if(e.code==='Space'){ e.preventDefault(); input.jump=true; input.jumpEdge=true; } if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=true;
@@ -52,7 +70,7 @@
     if(e.code==='KeyC') cycleCam(); if(e.code==='KeyH') document.body.classList.toggle('hud-hidden'); if(e.code==='KeyR'&&mode==='play') startRun(); });
   addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) input.k[k]=false; if(e.code==='Space') input.jump=false; if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=false; });
   document.addEventListener('visibilitychange',()=>{ if(document.hidden&&mode==='play') togglePause(); });
-  addEventListener('blur',()=>{ input.k={}; input.jump=input.grab=false; if(mode==='play') togglePause(); });
+  addEventListener('blur',()=>{ input.k={}; input.jump=input.grab=false; tb.side.clear(); stSync(); tb.spin=tb.speed=tb.flip=false; if(mode==='play') togglePause(); });
   const steerX=()=>clamp(input.joy.x*1.25+(input.k.r?1:0)-(input.k.l?1:0),-1,1);
   const steerY=()=>clamp(input.joy.y*1.25+(input.k.d?1:0)-(input.k.u?1:0),-1,1);
 
@@ -136,7 +154,8 @@
     let pts=0; const parts=[], half=Math.abs(e.half), flips=Math.abs(e.flips);
     if(half){ const side=((e.spin>0)!==!!e.swTake)?'BS':'FS'; parts.push(side+' '+(half*180)); pts+=half*130*(1+(half-1)*.45); }
     if(flips){ parts.push(e.flip>0?(flips>1?flips+'× BACKFLIP':'BACKFLIP'):(flips>1?flips+'× FRONTFLIP':'FRONTFLIP')); pts+=flips*480*(1+(flips-1)*.5); }
-    if(e.grab>.3){ parts.push(e.grabName+' GRAB'); pts+=Math.min(e.grab,3)*110; }
+    const grabs=(e.grabs&&e.grabs.length?e.grabs:[e.grabName]).filter(Boolean);
+    if(e.grab>.3){ parts.push(grabs.join(' + ')+' GRAB'); pts+=Math.min(e.grab,3)*110+(grabs.length-1)*140; }   // chained grabs in one air score extra
     if(!half&&!flips&&e.grab<=.3){ if(e.air>.75){ parts.push('STRAIGHT AIR'); pts+=40+e.air*40; } else if(e.kind==='ollie'||e.kind==='nollie'){ parts.push(e.kind==='nollie'?'NOLLIE':'OLLIE'); pts+=e.kind==='nollie'?45:30; } }
     else if(e.kind==='nollie') pts+=40;
     if(e.air>1) pts+=(e.air-1)*90;
@@ -144,8 +163,12 @@
     let name=parts.join(' + ')||'AIR'; if(e.swTake&&(half||flips||e.grab>.3)){ name='SWITCH '+name; pts*=1.15; }
     if(e.out==='stumble'){ pts*=.5; name+=' · SKETCHY'; P.shake=Math.max(P.shake,.35); }
     if(pts>=30){ P.combo++; P.comboT=6; const m=mult(), gain=Math.round(pts*m); P.tricks++; if(!P.best||gain>P.best.gain) P.best={name,gain};
-      addMoney(gain,'x'+m); toast(name,'+'+fmt(gain)+(m>1?'  ·  x'+m:''),e.out==='stumble'); Audio.trick(Math.min(P.combo,6)); P.boost+=Math.min(half+flips*2,4)*.8; }
+      addMoney(gain,'x'+m); toast(name,'+'+fmt(gain)+(m>1?'  ·  x'+m:''),e.out==='stumble'); Audio.trick(Math.min(P.combo,6)); P.boost+=Math.min(half+flips*2,4)*.8;
+      if(e.out==='clean'&&pts>=420) slowmo(pts>=900?.38:.5); }   // a big trick landed clean: a beat of slow motion
   }
+  /* slow motion: the world runs slower for a moment and eases back (physics, pose, camera and particles all use the scaled time) */
+  let tScale=1, slowT=0; function slowmo(k){ tScale=k; slowT=.32; }
+  function stepTimeScale(dt){ if(slowT>0){ slowT-=dt; } else tScale=Math.min(1,tScale+dt*1.8); return tScale; }
   function puff(p){ const n=Math.round(10+p*22); for(let i=0;i<n;i++){ const a=Math.random()*PI*2, s=2+Math.random()*5*p; emit(P.x+Math.cos(a)*.4,P.y+.2,P.z+Math.sin(a)*.4,Math.cos(a)*s,1.5+Math.random()*3*p,Math.sin(a)*s,.45+Math.random()*.5,.7+Math.random()*.4); } }
   function onFall(e){
     P.wipeLog=(P.wipeLog||[]); P.wipeLog.push((e.why||'?')+'@'+Math.round(P.s)); P.wipes++; P.combo=0; P.comboT=0; P.shake=1; Audio.wipe();
@@ -178,9 +201,16 @@
 
   /* ---------- the player: physics (js/physics.js) at a fixed 120 Hz, effects from its state ---------- */
   const Physics=ST.Physics, FIXED=1/120, EV=[]; let acc=0, stepN=0;
-  const ctl={steer:0,fwd:0,flip:0,jump:false,grab:false,brake:false};
   // stick back brakes; with grab held it presses the tail instead (stick forward + grab presses the nose)
-  function readControls(){ const sx=steerX(), iy=steerY(); ctl.steer=sx; ctl.fwd=-iy; ctl.flip=iy; ctl.jump=!!input.jump; ctl.grab=!!input.grab; ctl.brake=iy>.45&&!ctl.grab; return ctl; }
+  const ctl={steer:0,fwd:0,flip:0,jump:false,grab:false,brake:false,spin:false,spinDir:1};
+  function readControls(){ const iy=steerY(), h=FIXED;
+    // the touch strip eases in (a hold carves harder the longer it is held) and lets go faster than it bites
+    const tgt=tb.brake?0:tb.r?1:tb.l?-1:0; tb.steer=damp(tb.steer,tgt,tgt?7:12,h);
+    ctl.steer=clamp(steerX()+tb.steer,-1,1); ctl.fwd=clamp(-iy+(tb.speed?1:0),-1,1); ctl.flip=clamp(iy+(tb.flip?1:0),-1,1);
+    ctl.jump=!!input.jump; ctl.grab=!!input.grab; ctl.brake=(iy>.45&&!ctl.grab)||tb.brake;
+    // SPIN spins the way the rider is steering, or the way it last turned on the snow
+    if(P.grounded&&Math.abs(ctl.steer)>.3) tb.lastDir=Math.sign(ctl.steer);
+    ctl.spin=tb.spin; ctl.spinDir=tb.r&&!tb.l?1:tb.l&&!tb.r?-1:tb.lastDir; return ctl; }
   function runPhysics(dt){ acc+=dt; let n=0; while(acc>=FIXED&&n<12){ acc-=FIXED; n++; physicsStep(FIXED); } if(n>=12) acc=0; }
   function physicsStep(h){
     readControls(); EV.length=0;
@@ -200,6 +230,8 @@
       for(let i=0;i<n;i++){ const w=(.6+Math.random())*(1+P.skid*3); emit(P.x-rx*side*.12-dx*.25+(Math.random()-.5)*.7,P.y+.08,P.z-rz*side*.12-dz*.25+(Math.random()-.5)*.7,
           P.vx*.12+rx*side*w+(Math.random()-.5)*1.4, .5+Math.random()*1.8+sp*.03+P.skid*1.3, P.vz*.12+rz*side*w+(Math.random()-.5)*1.4, .3+Math.random()*.35+P.skid*.25,.4+Math.random()*.35); } }
     if(stepN%2===0&&sp>1.5&&!(P.fall&&P.fall.ph!=='lose')){ trailPush(P.x,P.y,P.z,P.hd,P._lastAir); P._lastAir=false; }
+    // the glove dragging through the snow on a deep carve throws its own spray
+    const hd=Rider.handDrag; if(hd&&hd.touch&&sp>5&&stepN%2===0){ for(let i=0;i<2;i++) emit(hd.pos.x+(Math.random()-.5)*.15,hd.pos.y+.02,hd.pos.z+(Math.random()-.5)*.15,P.vx*.25+(Math.random()-.5)*1.6,.6+Math.random()*1.4,P.vz*.25+(Math.random()-.5)*1.6,.22+Math.random()*.2,.35+Math.random()*.25); }
   }
 
   /* ---------- pickups and hazards ---------- */
@@ -299,6 +331,8 @@
     p.rough=damp(p.rough,P.grounded&&!F?clamp(sp/(vr*1.2),0,1)*(1-P.tuck*.4)*(P.grind?.2:1):0,4,dt);
     // presses (canonical: + = the leading end) and the balance on a jib
     p.press=damp(p.press||0,(P.press||0)*(P.pressK||0),10,dt); p.jib=damp(p.jib||0,P.grind?1:0,9,dt); p.bal=P.grind?P.grind.bal:damp(p.bal||0,0,6,dt);
+    // the wind-up while loading a jump and turning, and how far the rider has turned in the air (for spotting the landing)
+    p.windup=damp(p.windup||0,P.charging&&P.grounded?ctl.steer*P.charge:0,12,dt); p.spinA=air?(P.sp-(P.spU||0)):0;
     p.wobble=damp(p.wobble,(F&&F.ph==='lose'?1:0)+(P.stumble>0?.7:0),10,dt);
     p.skate=P.skateK; if(P.skate) p.skatePh=P.skate.ph;
     p.popKind=P.popKind; p.popT=P.popT; p.airT=P.airT;
@@ -388,6 +422,12 @@
   $('#playBtn').onclick=startRun; $('#againBtn').onclick=startRun; $('#menuBtn').onclick=toMenu; $('#pause').onclick=togglePause; $('#resumeBtn').onclick=togglePause; $('#restartBtn').onclick=startRun; $('#quitBtn').onclick=toMenu;
   $('#mute').onclick=()=>{ save.muted=!save.muted; Audio.setMuted(save.muted); $('#mute').textContent=save.muted?'🔇':'🔊'; persist(); };
   $('#mute').textContent=save.muted?'🔇':'🔊';
+  /* control scheme: buttons (default) or the joystick; the short how-to follows it */
+  const HOWTO={buttons:['◀ ▶ פנייה (החזיקו = קארב חזק יותר) · באמצע = בלימה','קפיצה: החזיקו לטעינה ושחררו · מהירות: כפיפה','באוויר: סיבוב · תפיסה (כל תפיסה נוספת = תפיסה אחרת) · סלטה','מעקה: ◀ ▶ לאיזון · מהירות = לחיצה על האף','⌨️ חיצים · רווח · Shift · C מצלמה · H בלי ממשק'],
+    joy:['🕹️ גררו לפנייה · למטה בלימה · למעלה כפיפה','⬆️ החזיקו קפיצה ושחררו','🌀 באוויר: סיבוב, סלטה, תפיסה + כיוון','🛹 מעקה וקופסה: גררו לאיזון · תפיסה + קדימה = לחיצה','⌨️ C מצלמה · H בלי ממשק · R מחדש']};
+  function applyCtl(){ const joy=save.ctl==='joy'; document.body.classList.toggle('ctl-joy',joy); $('#ctlBtn').textContent=joy?'שליטה: ג׳ויסטיק ⇄ כפתורים':'שליטה: כפתורים ⇄ ג׳ויסטיק';
+    $('#howtoTxt').innerHTML=HOWTO[joy?'joy':'buttons'].map(t=>'<span>'+t+'</span>').join(''); $('#btnGrab').querySelector('.g').textContent=joy?'תפיסה':'מהירות'; }
+  $('#ctlBtn').onclick=()=>{ save.ctl=save.ctl==='joy'?'buttons':'joy'; persist(); applyCtl(); }; applyCtl();
 
   /* ---------- main loop ---------- */
   let last=performance.now(), frame=0, tAcc=0;
@@ -409,21 +449,23 @@
     ST.People.update(dt,camera.position.x,camera.position.z);
     if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
     if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); ST.Resort.update(tAcc,P.s+40); World.update(P.s); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); return; }
-    if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.autoSkate=1.5; P.vx=Math.sin(P.hd)*.8; P.vz=-Math.cos(P.hd)*.8; subtitle('גררו לפנייה · החזיקו קפיצה ושחררו · משכו למטה לבלימה',3800); } }
+    if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.autoSkate=1.5; P.vx=Math.sin(P.hd)*.8; P.vz=-Math.cos(P.hd)*.8; subtitle(useJoy()?'גררו לפנייה · החזיקו קפיצה ושחררו · משכו למטה לבלימה':'◀ ▶ פנייה · החזיקו קפיצה ושחררו · באוויר: סיבוב ותפיסה',3800); } }
       updateRider(dt,true); updateCamera(dt); }
     else if(mode==='play'||mode==='finish'){
       if(mode==='finish') P.fin+=dt;
+      dt*=stepTimeScale(dt);
       runPhysics(dt);
       // equity history
       if(P.s>=P.histS+8){ P.histS=P.s; P.history.push({s:P.s,m:P.money,v:P.speed*3.6}); }
       updateRider(dt,false); updateCamera(dt);
-      if(P.s<60) tip('steer','גררו ימינה ושמאלה כדי לפנות · למטה = בלימה בהחלקה · למעלה = כפיפה למהירות',5200);
+      const BT=!useJoy();   // tips follow the control scheme
+      if(P.s<60) tip('steer',BT?'◀ ▶ לפנייה (החזיקו לקארב חזק) · אגודל באמצע = בלימה · מהירות = כפיפה':'גררו ימינה ושמאלה כדי לפנות · למטה = בלימה בהחלקה · למעלה = כפיפה למהירות',5200);
       { let rr=null; World.forRamps(P.s,P.s+45,r=>{ if(P.s>r.s-45&&P.s<r.s) rr=r; }); if(rr){ tip('ramp','החזיקו קפיצה כדי לטעון, ושחררו ממש בקצה הקיקר לקפיצה מושלמת',5200); } }
       // the park: how to ride what is coming up
       if(ST.Park&&ST.Park.rails.length){
-        if(ST.Park.rails.some(r=>r.sA-P.s>4&&r.sA-P.s<40)) tip('jib','מעקה או קופסה לפניכם: עלו ישר על הרמפה · גררו נגד המחוג כדי לשמור על איזון · קפצו באוויר וסובבו רבע סיבוב לבורדסלייד',6000);
+        if(ST.Park.rails.some(r=>r.sA-P.s>4&&r.sA-P.s<40)) tip('jib','מעקה או קופסה לפניכם: עלו ישר על הרמפה · '+(BT?'◀ ▶':'גררו')+' נגד המחוג כדי לשמור על איזון · קפצו וסובבו רבע סיבוב לבורדסלייד',6000);
         if(ST.Park.pipes.some(pp=>pp.s0-P.s>0&&pp.s0-P.s<45)) tip('pipe','חצי צינור: גלשו אל הקיר באלכסון כדי לעוף מעל השפה · סיבוב באוויר = 180',6000);
-        if(P.s>40&&P.speed>4) tip('press','על השלג: תפיסה + קדימה = לחיצה על האף (אחורה = הזנב) · היגוי תוך כדי = באטר עם סיבוב',6000); }
+        if(P.s>40&&P.speed>4) tip('press',BT?'באוויר: סיבוב + תפיסה, ולחיצה נוספת על תפיסה = תפיסה אחרת · על מעקה: מהירות = לחיצה על האף':'על השלג: תפיסה + קדימה = לחיצה על האף (אחורה = הזנב) · היגוי תוך כדי = באטר עם סיבוב',6000); }
     }
     ST.Resort.update(tAcc,P.s); updateSpray(dt); World.update(P.s); World.follow({x:P.x,y:P.y,z:P.z},tAcc);
     World.updateFlakes(tAcc,camera.position,{x:P.vx,y:0,z:P.vz});
@@ -435,7 +477,7 @@
     { const vk=P.speed/(track.vref||24); el.speedfx.style.opacity=clamp((vk-.9)/.5,0,1)*.85; }
     if(frame%2===0) drawRadar(); el.radarTxt.textContent=Math.round(P.s)+' / '+track.len;
     if(subT>0){ subT-=dt*1000; if(subT<=0) el.sub.style.opacity=0; }
-    jumpHint(); coinFade(); balanceHud(); if(!P.grind&&balEl.classList.contains('on')) balEl.classList.remove('on');
+    el.hud.classList.toggle('air',airborne()&&!useJoy()); jumpHint(); coinFade(); balanceHud(); if(!P.grind&&balEl.classList.contains('on')) balEl.classList.remove('on');
     if(flashK>0){ flashK=Math.max(0,flashK-dt*1.8); el.flash.style.opacity=flashK; }
     gr('uSpeed',clamp((P.speed/(track.vref||24)-.85)/.6,0,1)); if(P.fall&&P.fall.ph!=='recover'&&P.fall.ph!=='getup') gr('uDesat',damp(ST.GFX.grade?ST.GFX.grade.uniforms.uDesat.value:0,.85,6,dt)); else if(ST.GFX.grade&&ST.GFX.grade.uniforms.uDesat.value>0) gr('uDesat',damp(ST.GFX.grade.uniforms.uDesat.value,0,5,dt));
     Audio.update(P.speed*(24/(track.vref||24)),P.grind?0:Math.abs(P.lean)+P.tuck*.5,!P.grounded); Audio.grind(P.grind&&mode==='play'?clamp(P.grind.v/7,.25,1):0,P.grind?P.grind.r.kind:'');

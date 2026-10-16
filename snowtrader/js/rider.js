@@ -185,7 +185,7 @@
      joints answer the same input at different speeds instead of moving as one block.
      Angles are in degrees, in the figure's own frame: +Z where it faces (the toe edge), +X its left (the nose when regular), +Y up. */
   R.P={t:0,dir:1,menu:false,sit:0,swing:0,look:0,crouch:.2,charge:0,tuck:0,air:0,grab:0,grabName:'',spinW:0,flipW:0,body:0,edge:0,fa:0,om:0,slip:0,speed:0,
-    brake:0,skid:0,absorb:0,ext:0,rough:0,wobble:0,skate:0,skatePh:0,popKind:'',popT:9,airT:0,ground:0,getup:0,fallPh:'',press:0,jib:0,bal:0};
+    brake:0,skid:0,absorb:0,ext:0,rough:0,wobble:0,skate:0,skatePh:0,popKind:'',popT:9,airT:0,ground:0,getup:0,fallPh:'',press:0,jib:0,bal:0,windup:0,spinA:0};
   const AH=.205, BIND=.28, PAIRS=[['ShoulderL','ShoulderR'],['UpperArmL','UpperArmR'],['LowerArmL','LowerArmR'],['WristL','WristR'],['UpperLegL','UpperLegR'],['LowerLegL','LowerLegR'],['FootL','FootR']];
   const UPPER=['Hips','Abdomen','Torso','Chest','Neck','Head','ShoulderL','UpperArmL','LowerArmL','WristL','ShoulderR','UpperArmR','LowerArmR','WristR'];
   const smooth01=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
@@ -219,7 +219,9 @@
       // knee bend (degrees from straight): stance, speed crouch, loading for a jump, absorbing, the pop's extension, tucks in the air
       const eAbs=Math.abs(toeE)*(1-a);
       const def=R._grabDef||0;
-      let kn=28+P.crouch*45+ch*55+P.absorb*42-P.ext*28+a*(tk*55+g*(55+def*160)+flipK*25)+br*18+P.skate*8+eAbs*.75+(toeE<0?eAbs*.35:0)+(1-a)*tk*20;
+      // a deep carve at speed: the rider sinks, bends into the turn and drags the inside glove through the snow
+      const drag=smooth01(44,60,eAbs)*smooth01(6,10,P.speed||0)*live*(1-a)*(1-br);
+      let kn=28+P.crouch*45+ch*55+P.absorb*42-P.ext*28+a*(tk*55+g*(55+def*160)+flipK*25)+br*18+P.skate*8+eAbs*.75+(toeE<0?eAbs*.35:0)+(1-a)*tk*20+drag*24;
       kn=clamp(kn,4,145);
       // a press loads one leg: the knee over the pressed end folds, the other straightens as its end of the board lifts.
       // On a jib the knees stay soft and the body sways with the balance (balC: + toward the toes).
@@ -228,8 +230,11 @@
       const fold=S('fold',kn*.2+tk*(1-a)*55+tk*a*10+g*(70+def*120)+ch*22+bump*60+Math.abs(pr)*10,9,.7);
       // where the travel is, seen from the figure (it faces the toe edge, the nose is to its left): eyes and shoulders go there
       const look=clamp(90+slipC-omC*16+(P.menu?Math.sin(P.t*.5)*14:0),-20,115);
-      const twist=dir*(-P.spinW*4.2);                                                           // spinning: the shoulders lead the rotation
-      const side=S('side',clamp(omC*6,-12,12)+wob*Math.sin(P.t*9)*10,7,.5);                    // a side bend into the turn, a sway when losing it
+      // spinning: the shoulders lead the rotation; loading a jump while turning winds them the other way first (the wind-up)
+      const twist=dir*(-P.spinW*4.2+(P.windup||0)*34);
+      const side=S('side',clamp(omC*6,-12,12)+wob*Math.sin(P.t*9)*10+drag*Math.sign(toeE)*20,7,.5);   // a side bend into the turn, a sway when losing it
+      // spotting: in a spin the eyes stay on where the rider is going for as long as the neck allows, then whip round
+      const spinC=dir*(P.spinA||0)*DEG, spotOn=a*smooth01(15,40,Math.abs(spinC)), spot=spotOn*clamp(((90+spinC-look+540)%360)-180,-80,80);
       // ---- the trunk ----
       // how far the trunk leans forward (absolute, each segment a little more than the one below: a curved back), the head kept up
       const lean=clamp(fold*.62,0,85), gEnd=g*(gn0==='NOSE'?-22:gn0==='TAIL'?22:0);      // nose/tail grabs bend the trunk toward that end
@@ -237,8 +242,8 @@
       rot('Abdomen',S('abP',lean*.9-sitW*10,9,.7),                 S('abY',look*.14+twist*.25,9,.65),                    S('abR',side*.4+gEnd*.8,8,.65));
       rot('Torso',  S('toP',lean*.96-sitW*8+buzz*.3,8,.65),        S('toY',look*.21+twist*.35,7.5,.6),                   S('toR',side*.35+gEnd,7,.6));
       rot('Chest',  S('chP',lean+2-sitW*6+buzz*.4,7,.6),           S('chY',look*.29+twist*.4,6.5,.55),                   S('chR',side*.25+gEnd,6,.55));
-      rot('Neck',   S('neP',lean*.42-4+sitW*8-buzz*.4,12,.6),      S('neY',look*.6+twist*.2,6,.6),                       S('neR',-side*.2,6,.6));
-      rot('Head',   S('heP',4+lean*.08+sitW*6,10,.6),              S('heY',look*.92+twist*.1+(P.menu?Math.sin(P.t*.31)*8:0),5.5,.55), S('heR',-side*.15-lamRel*.15,5.5,.6));
+      rot('Neck',   S('neP',lean*.42-4+sitW*8-buzz*.4,12,.6),      S('neY',look*.6+twist*.2+spot*.45,6,.6),              S('neR',-side*.2,6,.6));
+      rot('Head',   S('heP',4+lean*.08+sitW*6,10,.6),              S('heY',look*.92+twist*.1+spot*.85+(P.menu?Math.sin(P.t*.31)*8:0),7,.6), S('heR',-side*.15-lamRel*.15,5.5,.6));
       // ---- the arms: a neutral starting shape here; the hands are placed further down (targets + IK) ----
       rot('ShoulderL',0,0,S('shL',-omC*5+a*5+ch*4,9,.6)); rot('ShoulderR',0,0,S('shR',omC*5-a*5-ch*4,9,.6));
       rot('UpperArmL',0,-12,-(62-(R.droop||0))); rot('UpperArmR',0,12,62-(R.droop||0));
@@ -260,7 +265,7 @@
       R._hands={F:hF.map((v,i)=>S('hF'+i,v,9-i,.55)),B:hB.map((v,i)=>S('hB'+i,v,8-i,.55))};
       // the lean of the whole upper body relative to the board: angulation across it, the weight fore and aft along it
       R._lean={pitch:S('lamRel',lamRel*live,12,.75),roll:-dir*S('faL',(P.fa*DEG*.9+pr*8)*live,8,.7)};
-      R._legs={kF,kB,sitW,bump,gu,live};
+      R._legs={kF,kB,sitW,bump,gu,live}; R._drag={k:drag,toe:toeE>0};
       // pelvis targets in the board frame (x toward the toes, z along the board, front foot at -z when regular)
       const ecx=.12*Math.tanh(toeE/9);                                                         // the edge carrying the weight
       const px=S('px',(-.05-P.crouch*.05+ecx+.85*Math.sin(lamRel/DEG*live))*live+sitW*-.42+bump*.12,10,.75);
@@ -297,6 +302,11 @@
     const hipW=bp.Hips.getWorldPosition(new THREE.Vector3()), hipR=rig.worldToLocal(hipW.clone());
     const jL=rig.worldToLocal(bp.UpperLegL.getWorldPosition(new THREE.Vector3())).sub(hipR), jR=rig.worldToLocal(bp.UpperLegR.getWorldPosition(new THREE.Vector3())).sub(hipR);
     const T={L:R.bindT.L.clone(),R:R.bindT.R.clone()};
+    // a grab tweaks the board against the body (Indy and Mute tip the toe edge up, Tail and Nose lift that end); the feet stay on it
+    // because their targets turn with it
+    const gwT=P.grab||0, gnT=P.grabName||'INDY', tq=R._tweakQ||(R._tweakQ=new THREE.Quaternion());
+    tq.setFromEuler(_e.set(S('twP',gwT*(gnT==='TAIL'?-dir*.3:gnT==='NOSE'?dir*.3:gnT==='MUTE'?-dir*.12:dir*.12),9,.6),0,S('twR',gwT*(gnT==='TAIL'||gnT==='NOSE'?0:.32),9,.6),'XYZ'));
+    T.L.applyQuaternion(tq); T.R.applyQuaternion(tq);
     if(sk>.01){ const f=-dir, ph=((P.skatePh||0)%1+1)%1, z1=f*.05, z2=-f*.55; let x=.32,y=.1,z;
       if(ph<.12){ z=z1; y=lerp(.3,.1,ph/.12); } else if(ph<.55){ z=lerp(z1,z2,(ph-.12)/.43); } else { const u=(ph-.55)/.45; z=lerp(z2,z1,u); y=.1+.22*Math.sin(Math.PI*u); }
       T[rear].lerp(new THREE.Vector3(x,y,z),sk); }
@@ -317,7 +327,12 @@
     handT[front]={p:toW(front,H.F)}; handT[back]={p:toW(back,H.B)};
     const gw=(P.grab||0), gn=P.grabName||'INDY'; let gArm=null;
     if(gw>.01){ const tgt=gn==='MUTE'?[front,.16,.17,f*.06]:gn==='NOSE'?[front,.03,.18,f*.6]:gn==='TAIL'?[back,.03,.18,-f*.6]:[back,.16,.17,-f*.04]; gArm=tgt[0];
-      handT[gArm].p.lerp(rig.localToWorld(new THREE.Vector3(tgt[1],tgt[2],tgt[3])),clamp(gw,0,1)); }
+      handT[gArm].p.lerp(rig.localToWorld(new THREE.Vector3(tgt[1],tgt[2],tgt[3]).applyQuaternion(tq)),clamp(gw,0,1)); }
+    // a deep carve: the inside glove goes down to the snow beside the board (front hand on the toe side, back hand on the heel side)
+    const D=R._drag; R.handDrag=null;
+    if(D&&D.k>.02&&!gArm){ const hs=D.toe?front:back, zz=D.toe?-dir*.22:dir*.3, xe=D.toe?.16:-.16;
+      const pe=rig.localToWorld(new THREE.Vector3(xe,0,zz)), pa=rig.localToWorld(new THREE.Vector3(xe+(D.toe?1:-1),0,zz)), dx=pa.x-pe.x, dz=pa.z-pe.z, dl=Math.hypot(dx,dz)||1;
+      const sx=pe.x+dx/dl*.3, sz=pe.z+dz/dl*.3; handT[hs].p.lerp(new THREE.Vector3(sx,ST.World.groundY(sx,sz)+.04,sz),D.k); R.handDrag={sd:hs,k:D.k,touch:false,pos:new THREE.Vector3()}; }
     const sw2=Math.max(R._legs.sitW,R._legs.bump*.8*(R._legs.gu<.55?1:0));
     if(sw2>.01) ['L','R'].forEach(sd=>{ if(sd===gArm) return; handT[sd].p.lerp(rig.localToWorld(new THREE.Vector3(-.66,.05,(sd==='L'?-1:1)*.3)),clamp(sw2,0,1)); });
     info.hands={}; info.reach.armL=0; info.reach.armR=0;
@@ -327,10 +342,12 @@
       info.reach['arm'+sd]=+sub.reach.a.toFixed(2); info.hands[sd]=+(sub.err.a*100).toFixed(1); });
     // a grab the hand cannot reach yet: next frame the knees come up and the body folds a little more
     R._grabDef=gArm?damp(R._grabDef||0,clamp((info.reach['arm'+gArm]||0)-.92,0,.5),6,dt):damp(R._grabDef||0,0,4,dt);
+    if(R.handDrag){ const hd=R.handDrag; bp['Wrist'+hd.sd].getWorldPosition(hd.pos); hd.touch=hd.pos.y-ST.World.groundY(hd.pos.x,hd.pos.z)<.14; }
     info.targets=[wT.L,wT.R]; info.handPts=[handT.L.p,handT.R.p]; R.ik=info;
     finishBoard(P,1);
   };
-  function finishBoard(){ rig.rotation.set(0,0,0); rig.position.set(0,-.9,0); if(boardObj) boardObj.rotation.y=0; }   // the board is strapped to the feet: it never lags them
+  // the board is strapped to the feet: it never lags them (and turns with a grab's tweak, which the feet follow)
+  function finishBoard(P,live){ rig.rotation.set(0,0,0); rig.position.set(0,-.9,0); if(boardObj){ if(live&&R._tweakQ) boardObj.quaternion.copy(R._tweakQ); else boardObj.rotation.set(0,0,0); } }
   /* the chairlift seat: no IK, the legs hang */
   function poseSeated(P,rot){ const sw=Math.sin(P.t*2.2)*P.swing;
     rot('UpperLegL',-84+sw*.3,7,0); rot('UpperLegR',-86-sw*.3,-5,0); rot('LowerLegL',-4+sw,7,0); rot('LowerLegR',-8-sw,-5,0); rot('FootL',0,0,0); rot('FootR',0,0,0);

@@ -111,6 +111,34 @@ await test('lowfps',async()=>{ const r=await page.evaluate(()=>{ const run=(dt)=
     return {d30:+Math.hypot(a.x-b.x,a.z-b.z).toFixed(2),d12:+Math.hypot(a.x-c.x,a.z-c.z).toFixed(2),nan:a.nan||b.nan||c.nan,underCm:+(Math.max(a.under,b.under,c.under)*100).toFixed(1)}; });
   return {ok:!r.nan&&r.d30<1.5&&r.d12<3&&r.underCm<3,detail:JSON.stringify(r)+' (same inputs at 144, 30 and 12 fps)'}; });
 
+/* the touch buttons (the default on phones), driven with pointer events like a finger: hold ▶ to carve, a thumb on the middle of
+   the strip brakes, JUMP loads and pops; in the air the buttons become SPIN / GRAB / FLIP, a short SPIN is finished by the spin
+   assist to a half turn, and the rider lands it clean */
+await test('touch',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug, W=ST.World, P=D.P, ctl=D.ctl; T.start('lab');
+    const ptr=(el,type,fx,id)=>{ const b=el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent(type,{pointerId:id||7,bubbles:true,cancelable:true,clientX:b.left+b.width*(fx==null?.5:fx),clientY:b.top+b.height*.5,pointerType:'touch'})); };
+    const st=document.getElementById('steer'), bJ=document.getElementById('btnJump'), bG=document.getElementById('btnGrab'), bF=document.getElementById('btnFlip');
+    const out={}; T.speed(9);
+    ptr(st,'pointerdown',.95); for(let k=0;k<50;k++) D.tick(1/60); out.steerHeld=+ctl.steer.toFixed(2); out.edgeDeg=Math.round(P.edge*57.3);
+    ptr(st,'pointermove',.5); for(let k=0;k<40;k++) D.tick(1/60); out.brakeMiddle=ctl.brake; out.brakeK=+P.brakeK.toFixed(2); ptr(st,'pointerup',.5); for(let k=0;k<60;k++) D.tick(1/60);
+    // to the lab kicker, then load and pop at its lip, and spin in the air with the SPIN button
+    const r0=W.rampAt(0), evs=[]; const orig=ST.Physics.step; ST.Physics.step=function(p,c,dt,ev){ orig(p,c,dt,ev); ev.forEach(e=>evs.push(e)); };
+    P.x=W.cx(r0.s-40)+r0.u; P.z=-(r0.s-40); P.hd=Math.atan2(W.dcx(r0.s-40),1); ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.yC; P.vy=0; P.vyT=null; P.fresh=true; T.speed(13);
+    let jumped=false, air=false, spun=false, airClass=false, grabbed=false, flipped=false, k=0;
+    for(;k<900;k++){ const lip=W.lipNear(P.s,P.x,4,0);
+      if(!jumped&&lip&&lip.d<lip.r.L-2.5&&P.grounded){ ptr(bJ,'pointerdown'); jumped=1; }
+      if(jumped===1&&lip&&lip.d>lip.r.L-1&&P.grounded){ ptr(bJ,'pointerup'); jumped=2; }
+      D.tick(1/60);
+      if(!P.grounded&&P.airT>.15&&!air){ air=true; airClass=document.getElementById('hud').classList.contains('air'); ptr(bJ,'pointerdown',.5,8); }
+      if(air&&!spun&&P.airT>.42){ spun=true; out.spinOn=ctl.spin; ptr(bJ,'pointerup',.5,8); ptr(bG,'pointerdown',.5,9); }
+      if(spun&&!grabbed&&P.airT>.6){ grabbed=P.grabbed; ptr(bG,'pointerup',.5,9); ptr(bF,'pointerdown',.5,10); }
+      if(grabbed&&!flipped&&P.airT>.66){ flipped=P.wfl>0; ptr(bF,'pointerup',.5,10); }
+      if(air&&P.grounded) break; }
+    ST.Physics.step=orig;
+    const take=evs.find(e=>e.type==='takeoff'), land=evs.filter(e=>e.type==='land').pop();
+    return Object.assign(out,{popped:!!(take&&take.pop),airButtons:airClass,grabbed,flip:flipped,landing:land?{out:land.out,half:land.half,deg:Math.round(land.spin*57.3),air:+land.air.toFixed(2),yawErr:+land.yawErr.toFixed(2),grabs:land.grabs}:null}); });
+  // the brief flip press only starts a flip; what matters here is that every button did its job and the spin landed square
+  const L=r.landing; return {ok:r.steerHeld>.9&&r.edgeDeg>12&&r.brakeMiddle&&r.brakeK>.5&&r.popped&&r.airButtons&&r.spinOn&&r.grabbed&&r.flip&&L&&Math.abs(L.half)>=1&&L.yawErr<.2,detail:JSON.stringify(r)}; });
+
 /* the park: ride onto the box and the rail in the test lab (no input once lined up, apart from keeping the line) */
 async function rideJib(name,u,v){ return page.evaluate(([name,u,v])=>{ const D=ST.debug, W=ST.World, P=D.P, I=D.input; T.start('lab');
     const r=ST.Park.rails.find(q=>q.name===name), s0=r.sA-14; P.x=W.cx(s0)+u; P.z=-s0; P.hd=Math.atan2(W.dcx(s0),1); ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.h; T.speed(v);
