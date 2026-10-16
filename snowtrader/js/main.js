@@ -67,6 +67,7 @@
   addEventListener('keydown',e=>{ if(e.repeat) return; Audio.init(); const k=KEYMAP[e.code]; if(k){ input.k[k]=true; e.preventDefault(); }
     if(e.code==='Space'){ e.preventDefault(); input.jump=true; input.jumpEdge=true; } if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=true;
     if((e.code==='Escape'||e.code==='KeyP')&&(mode==='play'||mode==='pause')) togglePause(); if(e.code==='Enter'&&mode==='lift') endLift();
+    if(mode==='menu'){ if(e.code==='Enter'&&$('#controls').hidden) $('#playBtn').onclick(); if(e.code==='KeyC') town.sheet==='char'?closeSheets():openSheet('char'); if(e.code==='KeyM') town.sheet==='map'?closeSheets():openSheet('map'); if(e.code==='Escape') closeSheets(); return; }
     if(e.code==='KeyC') cycleCam(); if(e.code==='KeyH') document.body.classList.toggle('hud-hidden'); if(e.code==='KeyR'&&mode==='play') startRun(); });
   addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) input.k[k]=false; if(e.code==='Space') input.jump=false; if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=false; });
   document.addEventListener('visibilitychange',()=>{ if(document.hidden&&mode==='play') togglePause(); });
@@ -108,7 +109,7 @@
     ST.Physics.reset(P,World.cx(0),0,Math.atan2(World.dcx(0),1));
     P.money=0; P.shown=0; P.combo=0; P.comboT=0; P.tricks=0; P.best=null; P.coins=0; P.greens=0; P.reds=0; P.wipes=0; P.wipeLog=[];
     P.t=0; P.history=[{s:0,m:0,v:0}]; P.histS=0; P.finished=false; P.fin=0; P.lean=0; P.shake=0; P.autoSkate=0; acc=0;
-    tr.pts.length=0; rebuildTrail(); runT=0; if(!menu) World.update(0,true);
+    tr.pts.length=0; rebuildTrail(); runT=0; if(!menu){ World.update(0,true); if(Rider.walking) Rider.walkSet(false); closeSheets(); }
     Rider.setBoard(save.board); applyLook();
   }
   function applyLook(){ const k=track.id; Rider.setLook({jacket:k==='bull'?0xffc21a:k==='bear'?0x2f8bff:k==='ipo'?0xff3dd8:0xffc21a,pants:k==='ipo'?0x1b1033:0x1fa35a,helmet:0x0d0e12});
@@ -426,7 +427,10 @@
 
   /* ---------- menu ---------- */
   function renderRiders(){ const row=$('#riderRow'); row.innerHTML=Rider.choices.map((n,i)=>'<button data-i="'+i+'" class="'+(i===(save.rider||0)?'sel':'')+'">'+(Rider.isAsset(n)?ST.Assets.characters[n].label:(i+1))+'</button>').join('');
-    row.querySelectorAll('button').forEach(b=>b.onclick=async()=>{ const i=+b.dataset.i; if(i===save.rider&&Rider.current===Rider.choices[i]) return; const st=$('#riderState'); st.textContent='טוענים…'; try{ await Rider.swap(Rider.choices[i]); save.rider=i; persist(); applyLook(); }catch(e){ console.warn(e); st.textContent='שגיאה'; setTimeout(()=>st.textContent='',1500); return; } st.textContent=''; renderRiders(); }); }
+    row.querySelectorAll('button').forEach(b=>b.onclick=async()=>{ const i=+b.dataset.i; if(i===save.rider&&Rider.current===Rider.choices[i]) return; const st=$('#riderState'); st.textContent='טוענים…';
+      const walking=mode==='menu'; if(walking) Rider.root.visible=false;   // no glimpse of the new rider in its riding stance
+      try{ await Rider.swap(Rider.choices[i]); save.rider=i; persist(); applyLook(); if(walking){ await Rider.walkPrep(); if(mode==='menu'){ Rider.walkSet(true); town.wave=2.4; } } }catch(e){ console.warn(e); st.textContent='שגיאה'; setTimeout(()=>st.textContent='',1500); }
+      Rider.root.visible=true; st.textContent=''; renderRiders(); }); }
   function menuNote(t){ let n=document.getElementById('mnote'); if(!n){ n=document.createElement('div'); n.id='mnote'; document.body.appendChild(n); } n.textContent=t; n.className='show'; clearTimeout(menuNote.h); menuNote.h=setTimeout(()=>n.className='',2400); }
   function stars(n){ return '★'.repeat(n)+'☆'.repeat(3-n); }
   function unlocked(i){ if(i===0) return true; const prev=ST.TRACKS[i-1], b=save.best[prev.id]; return !!b&&b.stars>=2; }
@@ -434,24 +438,103 @@
     $('#walletN').textContent=fmt(save.wallet);
     ST.TrailMap.render($('#trailMap'),{tracks:ST.TRACKS,sel:trackIdx,best:save.best,unlocked},i=>{ if(!unlocked(i)){ menuNote('🔒 סיימו את '+ST.TRACKS[i-1].name+' עם 2 כוכבים כדי לפתוח'); return; } trackIdx=i; save.track=i; persist(); track=ST.TRACKS[i]; menuScene(); renderMenuCards(); });
     { const t=trackIdx>=0?ST.TRACKS[trackIdx]:track, b=save.best[t.id], drop=Math.round(t.len*t.slope*.92); $('#trackInfo').innerHTML='<div class="tn">'+t.en+'</div><span class="chip '+t.diff+'">'+t.diffName+'</span><div class="tb">'+t.blurb+'</div><div class="facts"><span>אורך<b>'+t.len+' מ׳</b></span><span>ירידה<b>'+drop+' מ׳</b></span><span>יעד ניקוד<b>'+fmt(t.goals[0])+'</b></span><span>שיא<b>'+(b?fmt(b.profit):'—')+'</b></span></div>'; }
-    renderRiders();
+    renderRiders(); $('#tMapName').textContent=(trackIdx>=0?ST.TRACKS[trackIdx]:track).en;
     $('#boardCards').innerHTML=Rider.BOARDS.map((b,i)=>{ const own=save.owned.includes(i); return '<div class="card'+(i===save.board?' sel':'')+'" data-b="'+i+'"><div class="sw" style="background:linear-gradient(90deg,'+b.top[0]+','+b.top[1]+')"></div><div class="nm">'+b.name+'</div><div class="meta"><span>'+(own?(i===save.board?'נבחר':'שלכם'):'לרכישה')+'</span>'+(own?'':'<span class="px">'+fmt(b.price)+'</span>')+'</div></div>'; }).join('');
         document.querySelectorAll('#boardCards .card').forEach(c=>c.onclick=()=>{ const i=+c.dataset.b, b=Rider.BOARDS[i]; if(!save.owned.includes(i)){ if(save.wallet<b.price){ c.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:220}); return; } save.wallet-=b.price; save.owned.push(i); }
       save.board=i; persist(); Rider.setBoard(i); renderMenuCards(); });
   }
-  /* the menu stands the rider on the village square (the Christmas tree, the hotels and the lift behind) */
-  function menuScene(){ resetPlayer(true); const V=ST.Village, M=V&&V.spots&&V.spots.menu;
+  /* the home screen is the town: the rider stands on the village square (or where a run ended) and walks about from there */
+  function menuScene(at){ resetPlayer(true); const V=ST.Village, M=V&&V.spots&&V.spots.menu;
     if(M){ const s=track.len+M.d; ST.Physics.reset(P,World.cx(s)+M.u,-s,M.hd||0); } else P.hd=0;
-    ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.yC; World.update(P.s,true,4,4); mode='menu'; }
+    ST.Physics.contact(P.x,P.z,P.hd,P.gc); P.y=P.gc.yC; mode='menu';
+    townPlace(at||(M?null:{x:P.x,z:P.z,hd:PI})); World.update(P.s,true,4,4); }
+
+  /* ---------- the town: the home screen is the village, walked in ----------
+     The rider stands on the square in the clothes of the run and walks about (left thumb: a joystick that appears where it
+     touches; keys: arrows / WASD, Shift runs). The other thumb turns the camera by dragging. From the town: the rider (and
+     board), the run (trail map), and the lift, which starts the run; walking up to the lift's gates offers it too. */
+  const town={x:0,z:0,y:0,hd:0,v:0,vEff:0,camYaw:0,camPitch:.3,tx:0,ty:0,tz:0,snap:true,dragT:0,wave:0,sheet:null,near:false,moved:0,fov:0};
+  const WALK_V=1.25, RUN_V=3.6, wrapA=a=>Math.atan2(Math.sin(a),Math.cos(a));
+  function townPlace(at){ const V=ST.Village; let x=P.x, z=P.z, hd=at&&at.hd!=null?at.hd:0;
+    if(at){ x=at.x; z=at.z; }
+    else if(V&&V.loadPt){ hd=Math.atan2(V.loadPt.x-x,V.loadPt.z-z); }   // facing the lift
+    town.x=x; town.z=z; town.hd=hd; town.v=0; town.vEff=0; town.camYaw=hd+PI; town.camPitch=.3; town.snap=true; town.near=false; town.wave=0; town.moved=0; $('#tLift').hidden=true;
+    const p={x,z}; if(V&&V.walkOut) V.walkOut(p,.4); town.x=p.x; town.z=p.z; town.y=World.groundY(town.x,town.z); P.x=town.x; P.z=town.z; P.s=-town.z; P.y=town.y; }
+  /* the rider's own model walks (the clips are made for it once); until then it stands */
+  function townWalk(){ Rider.walkPrep().then(()=>{ if(mode==='menu'){ Rider.walkSet(true); Rider.root.visible=true; } }).catch(e=>console.warn('walk',e)); }
+  // touch: a floating joystick on the left part, camera drag on the right part (a mouse always turns the camera)
+  const tzEl=$('#tzone'), tjEl=$('#tjoy'), tkEl=$('#tjoy i'), tj={id:null,cx:0,cy:0,x:0,y:0,cam:null,lx:0,ly:0};
+  tzEl.addEventListener('pointerdown',e=>{ e.preventDefault(); Audio.init(); if(town.sheet){ closeSheets(); return; }
+    const left=e.pointerType!=='mouse'&&e.clientX<innerWidth*.5;
+    if(left&&tj.id===null){ tj.id=e.pointerId; tj.cx=e.clientX; tj.cy=e.clientY; tj.x=tj.y=0; tjEl.style.left=e.clientX+'px'; tjEl.style.top=e.clientY+'px'; tjEl.hidden=false; tkEl.style.transform=''; }
+    else if(tj.cam===null){ tj.cam=e.pointerId; tj.lx=e.clientX; tj.ly=e.clientY; }
+    try{ tzEl.setPointerCapture(e.pointerId); }catch(_){} });
+  tzEl.addEventListener('pointermove',e=>{ if(e.pointerId===tj.id){ let dx=e.clientX-tj.cx, dy=e.clientY-tj.cy; const R=52, d=Math.hypot(dx,dy); if(d>R){ dx*=R/d; dy*=R/d; } tj.x=dx/R; tj.y=dy/R; tkEl.style.transform=`translate(${dx}px,${dy}px)`; }
+    else if(e.pointerId===tj.cam){ const k=e.pointerType==='mouse'?.0055:.0085; town.camYaw-=(e.clientX-tj.lx)*k; town.camPitch=clamp(town.camPitch+(e.clientY-tj.ly)*k*.6,.05,.85); tj.lx=e.clientX; tj.ly=e.clientY; town.dragT=1.6; } });
+  const tzUp=e=>{ if(e.pointerId===tj.id){ tj.id=null; tj.x=tj.y=0; tjEl.hidden=true; } if(e.pointerId===tj.cam) tj.cam=null; };
+  tzEl.addEventListener('pointerup',tzUp); tzEl.addEventListener('pointercancel',tzUp);
+  tzEl.addEventListener('wheel',e=>{ town.camPitch=clamp(town.camPitch+e.deltaY*.0008,.05,.85); },{passive:true});
+  function townUpdate(dt){ const V=ST.Village, L=track.len;
+    // where to: the stick (or the keys) relative to the camera; pushed to the rim, or with Shift, the rider runs
+    let ix=tj.x+(input.k.r?1:0)-(input.k.l?1:0), iy=tj.y+(input.k.d?1:0)-(input.k.u?1:0), mag=Math.hypot(ix,iy); if(mag>1){ ix/=mag; iy/=mag; mag=1; }
+    if(town.sheet) mag=0;
+    const run=mag>.12&&(input.grab||Math.hypot(tj.x,tj.y)>.93); let want=mag<.12?0:run?RUN_V:WALK_V*clamp((mag-.12)/.55,.4,1);
+    if(want>0){ const fx=-Math.sin(town.camYaw), fz=-Math.cos(town.camYaw), mx=fx*(-iy)+(-fz)*ix, mz=fz*(-iy)+fx*ix, tgt=Math.atan2(mx,mz), d=wrapA(tgt-town.hd);
+      town.hd=wrapA(town.hd+d*(1-Math.exp(-dt*(run?6.5:8.5)))); want*=Math.max(.2,Math.cos(Math.min(Math.abs(d),PI/2))); }   // turn first, then go
+    town.v=damp(town.v,want,want>town.v?4.5:9,dt);
+    const p={x:town.x+Math.sin(town.hd)*town.v*dt,z:town.z+Math.cos(town.hd)*town.v*dt};
+    if(V&&V.walkOut) V.walkOut(p,.4);
+    // step round the villagers close by
+    for(const a of ST.People.active){ const r=a.r; if(r.hide) continue; const dx=p.x-r.x, dz=p.z-r.z, dl=Math.hypot(dx,dz); if(dl<.75&&dl>1e-3){ p.x=r.x+dx/dl*.75; p.z=r.z+dz/dl*.75; } }
+    // the village's edges: up the run-out a little, the wooded banks, the hill behind the church
+    { const s=-p.z, d=clamp(s-L,-40,203), s2=L+d, u=clamp(p.x-World.cx(s),-56,56); p.z=-s2; p.x=World.cx(s2)+u; }
+    const moved=Math.hypot(p.x-town.x,p.z-town.z); town.vEff=damp(town.vEff,moved/Math.max(dt,1e-4),14,dt); town.moved+=moved;
+    town.x=p.x; town.z=p.z; town.y=World.groundY(town.x,town.z); P.x=town.x; P.z=town.z; P.s=-town.z; P.y=town.y;
+    if(town.wave>0) town.wave-=dt; if(town.dragT>0) town.dragT-=dt;
+    // the lift: at its gates (or the queue's entry) the way up is offered
+    let near=false; if(V&&V.queuePath&&V.queuePath.length){ const ends=[V.queuePath[0],V.queuePath[V.queuePath.length-1]]; for(const q of ends){ const s=L+q.d, x=World.cx(s)+q.u, z=-s; if(Math.hypot(x-town.x,z-town.z)<4.2) near=true; } }
+    if(near!==town.near){ town.near=near; $('#tLift').hidden=!near; }
+    if(town.moved>6&&!save.walked){ save.walked=1; persist(); $('#tHint').hidden=true; }
+    Rider.walkFrame(dt,{x:town.x,y:town.y,z:town.z,hd:town.hd,speed:town.vEff,wave:town.wave>0&&town.v<.2});
+  }
+  const _tc=new THREE.Vector3(), _tl=new THREE.Vector3();
+  function townCamera(dt){ const W=innerWidth, H=innerHeight, portrait=H>W*1.05, show=town.sheet==='char', V=ST.Village;
+    // the camera swings behind the walker (not while the player turns it by hand); with the rider's sheet open it comes round to the front
+    let yawT=null; if(show) yawT=town.hd+.45; else if(town.vEff>.5&&town.dragT<=0) yawT=town.hd+PI;
+    if(yawT!=null) town.camYaw+=wrapA(yawT-town.camYaw)*(1-Math.exp(-dt*(show?3.5:1.5*clamp(town.vEff/1.6,.5,1.6))));
+    const k=town.snap?1:1-Math.exp(-dt*9); town.tx+=(town.x-town.tx)*k; town.tz+=(town.z-town.tz)*k; town.ty+=(town.y-town.ty)*(town.snap?1:1-Math.exp(-dt*6));
+    const pitch=show?.1:town.camPitch, look=show?.95:1.35; let dist=show?(portrait?3.6:3.1):(portrait?5.4:4.5)+clamp(town.vEff-2,0,2)*.35;
+    const ox=Math.sin(town.camYaw)*Math.cos(pitch), oy=Math.sin(pitch), oz=Math.cos(town.camYaw)*Math.cos(pitch), ty=town.ty+look;
+    // a wall between: the camera comes in front of it
+    if(V&&V.inside){ for(let t=.18;t<=1.001;t+=.06){ const x=town.tx+ox*dist*t, z=town.tz+oz*dist*t; if(V.inside(x,z,.35)){ dist=Math.max(1.3,dist*(t-.08)); break; } } }
+    _tc.set(town.tx+ox*dist,ty+oy*dist,town.tz+oz*dist); _tc.y=Math.max(_tc.y,World.groundY(_tc.x,_tc.z)+.5);
+    camera.position.copy(_tc); _tl.set(town.tx,ty,town.tz); camera.lookAt(_tl);
+    const fov=(ST.baseFov||62)+(portrait?12:-2)+(show?-6:0); if(town.snap||Math.abs(camera.fov-fov)>.05){ camera.fov=town.snap?fov:damp(camera.fov,fov,5,dt); camera.updateProjectionMatrix(); }
+    // with a sheet open the rider is framed in the part of the screen the sheet leaves free
+    const want=town.sheet?(portrait?[0,H*.21]:[W*.2,0]):null;   // portrait: above the sheet; landscape: beside it (the sheet is on the right)
+    if(want){ camera.setViewOffset(W,H,want[0],want[1],W,H); } else if(camera.view&&camera.view.enabled) camera.clearViewOffset();
+    town.snap=false; }
+  function townTick(dt){ if(Rider.walking){ townUpdate(dt); townCamera(dt); } else { P.t+=dt; updateRider(dt,true); menuCamera(tAcc); } }
+  /* sheets: the rider, the run, the settings (one at a time; a tap on the town closes it) */
+  function openSheet(id){ closeSheets(); town.sheet=id; $('#sheet-'+id).hidden=false; document.body.classList.add('sheet-open'); if(id==='char'){ town.wave=0; } }
+  function closeSheets(){ town.sheet=null; document.querySelectorAll('.sheet').forEach(x=>x.hidden=true); document.body.classList.remove('sheet-open'); }
+  $('#tChar').onclick=()=>town.sheet==='char'?closeSheets():openSheet('char');
+  $('#tMap').onclick=()=>town.sheet==='map'?closeSheets():openSheet('map');
+  $('#tSet').onclick=()=>town.sheet==='set'?closeSheets():openSheet('set');
+  document.querySelectorAll('.sheet .sx').forEach(b=>b.onclick=closeSheets);
+  document.querySelectorAll('.sgo').forEach(b=>b.onclick=()=>$('#playBtn').onclick());
+  $('#tLift').onclick=()=>$('#playBtn').onclick();
+  $('#tMute').onclick=()=>$('#mute').onclick();
   let bellT=6;   // the church bell rings soon after the village comes into view, then every minute or so
   /* the chairlift's machinery is heard near either terminal */
   function stationHum(){ const tw=ST.Resort.towers&&ST.Resort.towers(); if(!tw||!tw.length) return 0; const c=camera.position; let best=1e9; [tw[0],tw[tw.length-1]].forEach(w=>{ const d=Math.hypot(c.x-w.x,c.z-w.z); if(d<best) best=d; }); return clamp(1-(best-8)/45,0,1); }
-  function toMenu(){ mode='menu'; bellT=Math.min(bellT,4); el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.menu.hidden=false; Audio.music(false); menuScene(); renderMenuCards(); gr('uDesat',0); }
+  function toMenu(){ const back=(mode==='end'||mode==='finish'||mode==='pause')&&P.s>track.len+5&&ST.Village&&ST.Village.T?{x:P.x,z:P.z,hd:-P.hd+PI}:null;   // after a run: walk on from where the rider stopped
+    mode='menu'; bellT=Math.min(bellT,4); el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.menu.hidden=false; Audio.music(false); menuScene(back); renderMenuCards(); gr('uDesat',0); townWalk(); }
   function togglePause(){ if(mode==='play'){ mode='pause'; el.pause.hidden=false; } else if(mode==='pause'){ mode='play'; el.pause.hidden=true; last=performance.now(); } }
   $('#playBtn').onclick=()=>{ if(!save.ctlSeen) showControls(startRun); else startRun(); };   // the controls before the very first run
   $('#againBtn').onclick=startRun; $('#menuBtn').onclick=toMenu; $('#pause').onclick=togglePause; $('#resumeBtn').onclick=togglePause; $('#restartBtn').onclick=startRun; $('#quitBtn').onclick=toMenu;
-  $('#mute').onclick=()=>{ save.muted=!save.muted; Audio.setMuted(save.muted); $('#mute').textContent=save.muted?'🔇':'🔊'; persist(); };
-  $('#mute').textContent=save.muted?'🔇':'🔊';
+  $('#mute').onclick=()=>{ save.muted=!save.muted; Audio.setMuted(save.muted); $('#mute').textContent=$('#tMute').textContent=save.muted?'🔇':'🔊'; persist(); };
+  $('#mute').textContent=$('#tMute').textContent=save.muted?'🔇':'🔊';
   /* control scheme: buttons (default) or the joystick; the short how-to follows it */
   const HOWTO={buttons:['◀ ▶ פנייה (החזיקו = קארב חזק יותר) · באמצע = בלימה','קפיצה: החזיקו לטעינה ושחררו · מהירות: כפיפה','באוויר: סיבוב · תפיסה (כל תפיסה נוספת = תפיסה אחרת) · סלטה','מעקה: ◀ ▶ לאיזון · מהירות = לחיצה על האף','⌨️ חיצים · רווח · Shift · C מצלמה · H בלי ממשק'],
     joy:['🕹️ גררו לפנייה · למטה בלימה · למעלה כפיפה','⬆️ החזיקו קפיצה ושחררו','🌀 באוויר: סיבוב, סלטה, תפיסה + כיוון','🛹 מעקה וקופסה: גררו לאיזון · תפיסה + קדימה = לחיצה','⌨️ C מצלמה · H בלי ממשק · R מחדש']};
@@ -471,7 +554,6 @@
     $('#ctlOk').textContent=then?'הבנתי · יוצאים':'סגירה'; ctlThen=then||null; $('#controls').hidden=false; }
   $('#ctlOk').onclick=()=>{ $('#controls').hidden=true; if(!save.ctlSeen){ save.ctlSeen=1; persist(); } const t=ctlThen; ctlThen=null; if(t) t(); };
   $('#helpBtn').onclick=()=>showControls(); $('#helpBtn2').onclick=()=>showControls();
-  $('#viewBtn').onclick=()=>{ const on=document.body.classList.toggle('menu-min'); $('#viewBtn').textContent=on?'☰ תפריט':'👁 נוף'; };
   if(matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch');
 
   /* ---------- main loop ---------- */
@@ -493,7 +575,7 @@
     if(mode==='pause') return;
     ST.People.update(dt,camera.position.x,camera.position.z);
     if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); ST.Village.update(dt); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
-    if(mode==='menu'||mode==='load'){ P.t+=dt; updateRider(dt,true); menuCamera(tAcc); Audio.crowd(.75); Audio.liftHum(stationHum()); bellT-=dt; if(bellT<=0){ bellT=75+Math.random()*40; Audio.bell(3); } ST.Resort.update(tAcc,P.s,240,120); World.update(P.s,false,4,4); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); ST.Village.update(dt); return; }
+    if(mode==='menu'||mode==='load'){ if(mode==='menu') townTick(dt); else { P.t+=dt; updateRider(dt,true); menuCamera(tAcc); } Audio.crowd(.75); Audio.liftHum(stationHum()); bellT-=dt; if(bellT<=0){ bellT=75+Math.random()*40; Audio.bell(3); } ST.Resort.update(tAcc,P.s,240,120); World.update(P.s,false,4,4); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); ST.Village.update(dt); return; }
     if(mode==='countdown'){ countdown-=dt; const n=Math.ceil(countdown-.3); if(n!==lastCd){ lastCd=n; if(n>0){ bigText(String(n)); Audio.coin(n===1?4:0); } else { bigText('GO','gold'); Audio.green(); mode='play'; P.autoSkate=1.5; P.vx=Math.sin(P.hd)*.8; P.vz=-Math.cos(P.hd)*.8; subtitle(useJoy()?'גררו לפנייה · החזיקו קפיצה ושחררו · משכו למטה לבלימה':'◀ ▶ פנייה · החזיקו קפיצה ושחררו · באוויר: סיבוב ותפיסה',3800); } }
       updateRider(dt,true); updateCamera(dt); }
     else if(mode==='play'||mode==='finish'){
@@ -537,14 +619,15 @@
     if(qt==='lab'&&ST.LAB){ track=ST.LAB; trackIdx=-1; }          // the hidden test slope (not on the trail map, not saved)
     World.setTrack(track); await World.ensureSky(track); set(35,'מלבישים את הרוכב…');
     try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
-    set(80,'מחממים את הלוח…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=Math.max(0,Rider.choices.indexOf('meshy_rider')); if(save.rider>0&&Rider.choices[save.rider]){ Rider.preload(Rider.choices[save.rider]).then(()=>Rider.swap(Rider.choices[save.rider])).then(()=>applyLook()).catch(e=>console.warn('rider',e)); }
+    set(80,'מחממים את הלוח…'); Rider.setBoard(save.board); applyLook(); World.update(0,true); Audio.setMuted(save.muted); if(!(save.rider>=0&&save.rider<Rider.choices.length)) save.rider=Math.max(0,Rider.choices.indexOf('meshy_rider')); if(save.rider>0&&Rider.choices[save.rider]){ try{ await Rider.preload(Rider.choices[save.rider]); await Rider.swap(Rider.choices[save.rider]); applyLook(); }catch(e){ console.warn('rider',e); } }
+    try{ await Rider.walkPrep(); }catch(e){ console.warn('walk',e); }
     set(100); await new Promise(r=>setTimeout(r,250));
-    $('#loading').remove(); mode='menu'; toMenu(); P.t=0; ST.People.preload(5);
+    $('#loading').remove(); mode='menu'; toMenu(); P.t=0; ST.People.preload(5); if(!save.walked) $('#tHint').hidden=false;
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ startRun(); }
     window.READY=true; requestAnimationFrame(loop);
   }
   const isPortraitPhone=()=>innerHeight>innerWidth&&innerWidth<700; const rot=$('#rotate'); const chkRot=()=>{ rot.hidden=!isPortraitPhone()||false; }; // portrait still playable; hint only
   rot.hidden=true; addEventListener('resize',joyHome);
-  ST.debug={P,setTrack:id=>{ const i=ST.TRACKS.findIndex(t=>t.id===id); if(i>=0){ trackIdx=i; track=ST.TRACKS[i]; } else if(id==='lab'){ trackIdx=-1; track=ST.LAB; } menuScene(); },cycleCam,get camMode(){ return CAMS[camMode]; },tick,startRun,startLift,beginCountdown,endLift,showResults,finishRun,get mode(){return mode;},setMode:m=>mode=m,track:()=>track,toMenu,input,ctl,stateName,runPhysics,camera:()=>({hd:camHd})};
+  ST.debug={town,townPlace,townTick,openSheet,closeSheets,P,setTrack:id=>{ const i=ST.TRACKS.findIndex(t=>t.id===id); if(i>=0){ trackIdx=i; track=ST.TRACKS[i]; } else if(id==='lab'){ trackIdx=-1; track=ST.LAB; } menuScene(); },cycleCam,get camMode(){ return CAMS[camMode]; },tick,startRun,startLift,beginCountdown,endLift,showResults,finishRun,get mode(){return mode;},setMode:m=>mode=m,track:()=>track,toMenu,input,ctl,stateName,runPhysics,camera:()=>({hd:camHd})};
   boot();
 })(window.ST);

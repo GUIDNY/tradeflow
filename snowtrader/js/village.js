@@ -9,7 +9,7 @@
   const PI=Math.PI;
   const V={T:null,L:0,ls:1,group:null,key:'',night:0,blds:[],lamps:[],terminal:null,square:null};
   V.VW=46;                              // half-width of the valley floor
-  V.blds=[]; V.lamps=[]; V.paths=[];
+  V.blds=[]; V.lamps=[]; V.paths=[]; V.solids=[];
   const SV=.03, EASE=45, PSTEP=.5, PLEN=340, HILL0=205, HILL_H=46, HILL_L=85;
   let prof=null;
   const W=()=>ST.World;
@@ -351,6 +351,10 @@
       B.body.box(0,1.3,0,2.6,2.6,2.6,C('#e6e1d6'),K.plaster,['-y']); B.body.box(0,2.75,0,3.2,.25,3.2,C('#3a4150'),K.metal); B.body.box(0,2.95,0,3.1,.3,3.1,PAL.snow,K.snow);
       ['+z','+x','-x'].forEach(f=>window_(B,f,2.6,2.6,0,1.6,1.7,1,.6,null,0)); }
     if(top) return;
+    // what a walker in the town bumps into: the bullwheel's column, the canopy's posts, the sheave's gallows, the operator's hut
+    { const W2=(lx,lz,r)=>{ place(bw.x,bw.gy,bw.z,yaw); V.solids.push({x:X.ox+lx*X.c+lz*X.s,z:X.oz-lx*X.s+lz*X.c,r}); };
+      W2(0,1.5,1.05); [[-1,cz0+.6],[1,cz0+.6],[-1,cz1-.6],[1,cz1-.6]].forEach(([sx,z])=>W2(sx*(cw/2-.25),z,.35)); W2(-inner*(HALFX+3.8),-sL+1.5,1.95);
+      const lq=ld, lyaw=yaw; place(lq.x,lq.gy,lq.z,lyaw); V.solids.push({x:X.ox+ox*X.c,z:X.oz-ox*X.s,r:.4}); place(bw.x,bw.gy,bw.z,yaw); }
     { const sx=inner*(cw/2+.08), zc=(cz0+cz1)/2-1; B.body.box(sx,cy-.5,zc,.16,1.3,5.2,red,K.plain); sign(B,'lift',sx+inner*.09,cy-.5,zc,4.9,inner*PI/2); }   // and one to the square
     V.loadPt={s:R.sLoad,x:cu.x,z:cu.z,yaw,inner}; }
   /* the top terminal, for the chunk at the top of the run (world coordinates) */
@@ -392,7 +396,7 @@
       const B=put(d,u,face,0,y0), G2=got(), key=G2&&(G2.buildings[o.sign]?o.sign:G2.buildings.house?'house':null);
       if(key){ const F=G2.buildings[key], sc=F.spec.fit==='footprint'?Math.min(o.w/F.size.x,o.d/F.size.z):1; modelAt('bld:'+key,F,sc); V.blds.push({d,u,hd:hd+.2,hu:hu+.2,ao:.42,h:F.size.y*sc}); return B; }   // a listed model, fitted to the footprint
       const h=house(B,o); V.blds.push({d,u,hd:hd+.2,hu:hu+.2,ao:.42,h}); return B; }
-    V.blds=[]; V.lamps=[]; V.seats=[];
+    V.blds=[]; V.lamps=[]; V.seats=[]; V.solids=[];
     const warm=[[1,.8,.45],[1,.7,.35]], fest=[[1,.82,.45],[1,.3,.25],[.4,.8,1],[1,.75,.2]];
 
     // --- the square ---
@@ -485,6 +489,15 @@
     Q.next=nc; };
   V.cheer=function(){ V.cheerT=6; };
   V.Q=Q;
+  /* someone walking about the village (the player in the town): pushed out of every footprint (buildings, stalls, the stand,
+     the trees the village planted) and out of the lift's solid parts; p = {x,z}, r = the walker's radius */
+  V.walkOut=function(p,r){ if(!V.T) return false; const Wd=W(); let hit=false;
+    for(const b of V.blds){ const s=-p.z, d=s-V.L, u=p.x-Wd.cx(s), ed=b.hd+r, eu=b.hu+r, dd=d-b.d, du=u-b.u; if(Math.abs(dd)>=ed||Math.abs(du)>=eu) continue;
+      hit=true; if(ed-Math.abs(dd)<eu-Math.abs(du)){ const s2=V.L+b.d+(dd<0?-ed:ed); p.z=-s2; p.x=Wd.cx(s2)+u; } else p.x=Wd.cx(s)+b.u+(du<0?-eu:eu); }
+    for(const c of V.solids){ const dx=p.x-c.x, dz=p.z-c.z, dl=Math.hypot(dx,dz), m=c.r+r; if(dl<m){ const k=dl>1e-4?m/dl:0; p.x=dl>1e-4?c.x+dx*k:c.x+m; p.z=dl>1e-4?c.z+dz*k:p.z; hit=true; } }
+    return hit; };
+  /* is (x,z) inside a building (for the town's camera: it comes in front of a wall instead of looking through it) */
+  V.inside=function(x,z,pad){ if(!V.T) return false; const Wd=W(), s=-z, d=s-V.L, u=x-Wd.cx(s); for(const b of V.blds){ if(b.hd<2.4&&b.hu<2.4) continue; if(Math.abs(d-b.d)<b.hd+(pad||0)&&Math.abs(u-b.u)<b.hu+(pad||0)) return true; } return false; };
   /* after the finish line the rider slides on without the run's colliders: keep it out of the buildings, stalls and stands */
   V.keepOut=function(P){ if(!V.T||!V.blds.length) return; const Wd=W(), d=P.s-V.L; if(d<-5) return; const u=P.x-Wd.cx(P.s);
     for(const b of V.blds){ if(b.hd<1.5) continue; const ed=b.hd+.45, eu=b.hu+.45, dd=d-b.d, du=u-b.u; if(Math.abs(dd)>=ed||Math.abs(du)>=eu) continue;

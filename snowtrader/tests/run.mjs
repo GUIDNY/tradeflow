@@ -189,6 +189,40 @@ await test('pipe',async()=>{ const r=await page.evaluate(()=>{ const D=ST.debug,
     return {heightAboveFloorM:+top.toFixed(2),wallH:pp.H,air:+airT.toFixed(2),landing:landed?landed.out:null,impact:landed?+landed.imp.toFixed(1):null,ridingAfter:P.grounded&&P.speed>3,fell:!!P.fall,maxEnergyGainJkg:+gain.toFixed(2)}; });
   return {ok:r.heightAboveFloorM>r.wallH+.3&&r.landing==='clean'&&!r.fell&&r.ridingAfter&&r.maxEnergyGainJkg<1.5,detail:JSON.stringify(r)}; });
 
+/* the town (the home screen): the rider walks about the village on its own model (Mixamo's clips retargeted, the board put away),
+   runs, stays on the snow and out of the buildings, takes the lift from the queue, and walks on from where a run ended; the
+   rider can be changed in the town. And the real buttons of the pause menu and the results screen work (they once did not). */
+await test('walk',async()=>{ const r=await page.evaluate(async()=>{ const D=ST.debug, R=ST.Rider, V=ST.Village, W=ST.World, I=D.input, t=D.town; D.setTrack('bunny'); D.toMenu();
+    for(let i=0;i<40&&!R.walking;i++) await new Promise(f=>setTimeout(f,100));
+    const out={walking:R.walking,boardHidden:!R.boardObj.visible}; const feet=()=>{ const g=W.groundY(t.x,t.z); return Math.min(R.bones.FootL.getWorldPosition(new THREE.Vector3()).y,R.bones.FootR.getWorldPosition(new THREE.Vector3()).y)-g-.09; };
+    const x0=t.x, z0=t.z; let worst=0, inside=0; I.k.u=true; for(let i=0;i<90;i++){ D.townTick(1/30); if(i>20) worst=Math.max(worst,Math.abs(feet())); if(V.inside(t.x,t.z,-.05)) inside++; } I.k.u=false;
+    out.walked=+Math.hypot(t.x-x0,t.z-z0).toFixed(2); out.walkAnim=R.model.userData.walk.cur; out.walkTs=+R.model.userData.walk.acts.Walk.timeScale.toFixed(2);
+    I.k.u=true; I.grab=true; for(let i=0;i<60;i++){ D.townTick(1/30); if(V.inside(t.x,t.z,-.05)) inside++; } I.k.u=false; I.grab=false; out.runV=+t.vEff.toFixed(2); out.runAnim=R.model.userData.walk.cur;
+    for(let i=0;i<40;i++) D.townTick(1/30); out.stopAnim=R.model.userData.walk.cur; out.feetCm=+(worst*100).toFixed(1);
+    // a wall: walk at the café for 4 s, never into it
+    const b=V.blds.find(x=>x.d===101), s=V.L+b.d+b.hd+2.5; D.townPlace({x:W.cx(s)+b.u,z:-s,hd:0}); t.camYaw=Math.PI; for(let i=0;i<5;i++) D.townTick(1/30);
+    I.k.u=true; let into=0, minGap=9; for(let i=0;i<120;i++){ D.townTick(1/30); const d=-t.z-V.L; minGap=Math.min(minGap,d-(b.d+b.hd)); if(V.inside(t.x,t.z,-.05)) into++; } I.k.u=false; out.cafeGapM=+minGap.toFixed(2); out.insideFrames=inside+into;
+    // the lift: offered at the queue
+    const q=V.queuePath[V.queuePath.length-1], sq=V.L+q.d+1.5; D.townPlace({x:W.cx(sq)+q.u,z:-sq,hd:0}); for(let i=0;i<5;i++) D.townTick(1/30); out.liftOffered=!document.getElementById('tLift').hidden;
+    return out; });
+  // the rider sheet: another rider, which walks too; then a run from the town, the results, and back to the town
+  const s2=await page.evaluate(async()=>{ const D=ST.debug, R=ST.Rider; D.openSheet('char'); const btns=[...document.querySelectorAll('#riderRow button')], cur=btns.findIndex(b=>b.classList.contains('sel')), pick=btns[cur===1?2:1];
+    pick.click(); for(let i=0;i<120&&!(R.walking&&R.model.userData.walk&&R.root.visible&&R.current===R.choices[+pick.dataset.i]);i++) await new Promise(f=>setTimeout(f,100));
+    const out={orig:R.choices[cur],swapped:R.current,walkingAfterSwap:R.walking&&!!R.model.userData.walk,visible:R.root.visible}; D.closeSheets(); for(let i=0;i<30;i++) D.townTick(1/30);
+    btns[cur].click(); for(let i=0;i<120&&!(R.current===R.choices[cur]&&R.walking&&R.root.visible);i++) await new Promise(f=>setTimeout(f,100)); out.backTo=R.current; return out; });
+  const mode=()=>page.evaluate(()=>ST.debug.mode);
+  await page.evaluate(()=>{ window._sawCtl=localStorage.getItem('snowtrader.v1'); }); await page.click('#playBtn',{force:true}); if(await page.evaluate(()=>!document.getElementById('controls').hidden)) await page.click('#ctlOk');
+  const b={afterPlay:await mode(),boardBack:await page.evaluate(()=>ST.Rider.boardObj.visible&&!ST.Rider.walking)};
+  await page.evaluate(()=>{ for(let i=0;i<120;i++) ST.debug.tick(1/30); }); await page.click('#pause',{force:true}); b.pause=await mode(); await page.click('#resumeBtn'); b.resume=await mode();
+  await page.evaluate(()=>{ const D=ST.debug, P=D.P, T=D.track(), W=ST.World; P.s=T.len-20; P.z=-P.s; P.x=W.cx(P.s); P.y=W.groundY(P.x,P.z)+.05; for(let i=0;i<1400&&D.mode!=='end';i++) D.tick(1/30); });
+  await page.waitForTimeout(2600); b.results=await mode(); await page.click('#menuBtn');
+  for(let i=0;i<40&&!(await page.evaluate(()=>ST.Rider.walking));i++) await page.waitForTimeout(100);
+  const back=await page.evaluate(()=>{ const D=ST.debug, t=D.town; return {mode:D.mode,walking:ST.Rider.walking,pastFinishM:+(-t.z-D.track().len).toFixed(1),liftBtnHidden:document.getElementById('tLift').hidden}; });
+  const all={...r,...s2,...b,back}, checks={walking:r.walking&&r.boardHidden,walks:r.walked>2.5&&r.walkAnim==='Walk',runs:r.runV>3.2&&r.runAnim==='Run',stops:r.stopAnim==='Idle',feetOnSnow:r.feetCm<4,
+    wall:r.insideFrames===0&&r.cafeGapM>.2,lift:r.liftOffered,riderSwap:s2.walkingAfterSwap&&s2.visible&&s2.swapped!==s2.orig&&s2.backTo===s2.orig,play:b.afterPlay==='countdown'&&b.boardBack,pauseButtons:b.pause==='pause'&&b.resume==='play',
+    results:b.results==='end',backToTown:back.mode==='menu'&&back.walking&&back.pastFinishM>5&&back.liftBtnHidden}, bad=Object.keys(checks).filter(k=>!checks[k]);
+  return {ok:!bad.length,detail:JSON.stringify(all)+(bad.length?' FAILED: '+bad.join(','):'')}; });
+
 /* the asset replacement layer (js/assets.js): the Mixamo crowd retargets as before (no rest fix), the Meshy model works as a
    village guest (arms fixed to Mixamo's rest, walks like a Mixamo guest, stands on its own spot), and every slot takes a listed
    model: stand-ins from tests/fixtures (a helmet, goggles and mitts on the rider, the Meshy body as a garment on itself, a

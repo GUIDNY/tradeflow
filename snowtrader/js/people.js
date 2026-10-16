@@ -254,5 +254,6 @@
   /* seated riders for the chairlift, boards on their feet: set(i, position, quaternion, seed) then done(n) */
   P.seatedRiders=N=>instSet(figureGeo(true,true),N,true);
 
+  P.retarget=retarget; P.loadAnims=loadAnims;   // the rider walking in the town uses the same clips (js/rider.js walk)
   ST.People=P;
 })(window.ST);

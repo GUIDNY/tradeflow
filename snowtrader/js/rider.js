@@ -63,7 +63,7 @@
     grp.userData.edge=steel; return grp;
   }
   let boardObj=null;
-  R.setBoard=function(i){ if(boardObj){ trick.remove(boardObj); } boardObj=makeBoard(BOARDS[i]||BOARDS[0]); boardObj.position.y=-.9; trick.add(boardObj); R.boardIndex=i; R.boardObj=boardObj; };
+  R.setBoard=function(i){ if(boardObj){ trick.remove(boardObj); } boardObj=makeBoard(BOARDS[i]||BOARDS[0]); boardObj.position.y=-.9; boardObj.visible=!R.walking; trick.add(boardObj); R.boardIndex=i; R.boardObj=boardObj; };   // walking in the town: put away
   trick.position.y=.9; rig.position.y=-.9;   // spin and flips turn about the body's centre, not the soles
 
   /* ---------- the figure ---------- */
@@ -97,6 +97,7 @@
     const depth=o=>{ let d=0; while(o.parent){ d++; o=o.parent; } return d; }; R.order=Object.keys(R.bones).sort((a,b)=>depth(R.bones[a])-depth(R.bones[b]));   // parents first
     R.bind={}; R.order.forEach(k=>{ R.bind[k]=R.bones[k].getWorldQuaternion(new THREE.Quaternion()); });   // model still unrotated here
     rig.add(model); model.rotation.y=Math.PI/2; model.scale.setScalar(1.0);
+    model.userData.rest=restOf(model); model.userData.rideYaw=Math.PI/2; model.userData.walkYaw=0;
     R.heroModel=model; R.heroMats=R.mats; measureLimbs(); R.dress(); R.addGear(); R.ready=true; R.pose({}); return model;
   };
   /* ---------- any Mixamo-rigged character as the rider ---------- */
@@ -105,6 +106,7 @@
     if(R.model&&R.model.parent) R.model.parent.remove(R.model);
     if(R.gear&&R.gear.parent) R.gear.parent.remove(R.gear);
     model.rotation.set(0,0,0); model.scale.setScalar(k); model.position.set(0,0,0); rig.add(model); model.updateMatrixWorld(true);
+    if(!model.userData.rest) model.userData.rest=restOf(model); model.userData.rideYaw=rotY; model.userData.walkYaw=rotY-Math.PI/2;   // walking: the face forward
     R.model=model; R.bones={}; MIX.forEach(key=>{ const b=boneFor(key); if(b) R.bones[key]=b; });
     const depth=o=>{ let d=0; while(o.parent){ d++; o=o.parent; } return d; }; R.order=Object.keys(R.bones).sort((a,b)=>depth(R.bones[a])-depth(R.bones[b]));
     R.bind={}; R.order.forEach(key=>{ R.bind[key]=R.bones[key].getWorldQuaternion(new THREE.Quaternion()); });
@@ -349,6 +351,48 @@
     rot('Hips',-6,0,0); rot('Abdomen',-4,0,0); rot('Torso',-4,0,0); rot('Chest',-2,0,0); rot('Neck',-4,P.look*.5,0); rot('Head',-4,P.look,0);
     const spread=16-(R.droop||0); rot('UpperArmL',-28,-6,-spread); rot('UpperArmR',-28,6,spread); rot('LowerArmL',-58,0,-spread*.3); rot('LowerArmR',-58,0,spread*.3); }
 
+
+  /* ---------- walking in the town ----------
+     The village is walked in, not ridden: the board is put away and the rider's own model plays Mixamo's Idle / Walk / Run,
+     retargeted onto its skeleton the way the village guests' are (js/people.js). The clips are measured against the model's
+     rest pose (saved when it was first adopted, before any pose touched it), on a clone standing at the origin, so whatever
+     riding pose is in the bones does not matter. Each clip's own pace (how fast its planted foot travels back under the body)
+     is measured too, so the steps match the speed over the snow; the lower foot is kept on the snow every frame. Riding takes
+     over again by itself: the pose sets every bone it drives. */
+  function restOf(model){ const r={}; model.traverse(o=>{ if(o.isBone) r[o.name]={q:o.quaternion.clone(),p:o.position.clone()}; }); return r; }
+  R.walking=false;
+  R.walkPrep=async function(){ const m=R.model; if(!m) return null; if(m.userData.walk) return m.userData.walk; if(m.userData.walkP) return m.userData.walkP;
+    return m.userData.walkP=(async()=>{ const PP=ST.People, A=ST.Assets, an=await PP.loadAnims(), rest=m.userData.rest||{};
+      const c=THREE.SkeletonUtils.clone(m); c.position.set(0,0,0); c.rotation.set(0,0,0); c.scale.setScalar(1);
+      c.traverse(o=>{ if(o.isBone&&rest[o.name]){ o.quaternion.copy(rest[o.name].q); o.position.copy(rest[o.name].p); } }); c.updateMatrixWorld(true);
+      const pairs=A.MIX.filter(k=>R.bones[k]).map(k=>[A.RIGS.mixamo.map[k],R.bones[k].name,k]), clips={};
+      ['Idle','Walk','Run','Wave'].forEach(n=>{ const cl=an.animations.find(a=>a.name===n); if(cl) clips[n]=PP.retarget(cl,an.scene,c,pairs); });
+      // where the figure stands: its hips over the spot, its ankles 9 cm over the snow (rest pose, at its size, facing +Z)
+      c.scale.copy(m.scale); c.updateMatrixWorld(true); const B={}; c.traverse(o=>{ if(o.isBone) B[o.name]=o; }); const bw=k=>B[R.bones[k].name].getWorldPosition(new THREE.Vector3());
+      const hp=bw('Hips'), off=new THREE.Vector3(-hp.x,.09-Math.min(bw('FootL').y,bw('FootR').y),-hp.z);
+      // each clip's pace: the planted (lower) foot slides back under the body as fast as the figure walks
+      const pace={}, mx=new THREE.AnimationMixer(c);
+      ['Walk','Run'].forEach(n=>{ const cl=clips[n]; if(!cl) return; const a=mx.clipAction(cl); a.play(); const N=60, D=cl.duration; let sum=0, cnt=0, prev=null;
+        for(let i=0;i<=N;i++){ mx.setTime(D*i/N); c.updateMatrixWorld(true); const l=bw('FootL'), r=bw('FootR'), h=bw('Hips'), st=l.y<r.y?'L':'R', f=st==='L'?l:r, z=f.z-h.z;
+          if(prev&&prev.st===st&&Math.abs(l.y-r.y)>.02){ const v=-(z-prev.z)/(D/N); if(v>0){ sum+=v; cnt++; } } prev={st,z}; }
+        a.stop(); pace[n]=cnt?sum/cnt:(n==='Run'?3.2:1.2); });
+      mx.uncacheRoot(c);
+      const mixer=new THREE.AnimationMixer(m), acts={}; for(const n in clips){ const a=mixer.clipAction(clips[n]); a.setLoop(THREE.LoopRepeat,Infinity); acts[n]=a; }
+      return m.userData.walk={mixer,acts,clips,off,pace,cur:null,dy:0}; })(); };
+  /* into the town (the board away, the figure facing forward) or back to riding */
+  R.walkSet=function(on){ const m=R.model; if(!m) return; R.walking=!!on; if(boardObj) boardObj.visible=!on; const w=m.userData.walk;
+    if(on){ m.rotation.set(0,m.userData.walkYaw||0,0); tilt.quaternion.identity(); tilt.position.set(0,0,0); rollG.rotation.set(0,0,0); rollG.position.set(0,0,0); trick.rotation.set(0,0,0); rig.rotation.set(0,0,0); rig.position.set(0,-.9,0); if(w){ w.cur=null; w.mixer.stopAllAction(); } }
+    else { if(w){ w.mixer.stopAllAction(); w.cur=null; } m.rotation.set(0,m.userData.rideYaw!=null?m.userData.rideYaw:Math.PI/2,0); R.S={}; } };
+  /* one frame of walking: o = {x,y,z (the snow under the figure), hd (heading), speed (m/s), wave} */
+  R.walkFrame=function(dt,o){ const m=R.model, w=m&&m.userData.walk; if(!w||!R.walking) return;
+    root.position.set(o.x,o.y,o.z); root.rotation.set(0,o.hd,0);
+    const want=o.wave&&w.acts.Wave?'Wave':o.speed<.15?'Idle':o.speed<2.4?'Walk':'Run';
+    if(w.cur!==want){ const a=w.acts[want]||w.acts.Idle, prev=w.cur&&w.acts[w.cur]; a.reset(); a.play(); if(prev&&prev!==a) prev.crossFadeTo(a,want==='Run'||w.cur==='Run'?.3:.25,false); w.cur=want; }
+    if(w.acts.Walk) w.acts.Walk.timeScale=clamp(o.speed/(w.pace.Walk||1.2),.55,1.8); if(w.acts.Run) w.acts.Run.timeScale=clamp(o.speed/(w.pace.Run||3.2),.7,1.45);
+    w.mixer.update(dt);
+    // the lower foot on the snow (the clips have no root motion, so a bent knee would lift the feet)
+    m.position.copy(w.off); m.updateMatrixWorld(true); const low=Math.min(R.bones.FootL.getWorldPosition(_v).y,R.bones.FootR.getWorldPosition(_v2).y)-o.y;
+    w.dy=damp(w.dy,clamp(.09-low,-.25,.15),20,dt); m.position.y=w.off.y+w.dy; m.updateMatrixWorld(true); };
   /* shared trail ribbon, spray + landing puff */
   R.setLook=function(o){ Object.assign(R.look,o); R.dress(); if(R.current!=='hero'&&R.model&&!(R.spec&&R.spec.outfit==='baked')) ST.People.dressOutfit(R.model,R.look.jacket,R.look.pants); if(R.helm) R.helm.material.color.setHex(R.look.helmet);
     if(R.spec&&R.spec.tint&&R.model) R.model.traverse(x=>{ if(x.material&&x.material.userData.pants) x.material.userData.pants.setHex(R.look.pants).convertSRGBToLinear(); }); };
