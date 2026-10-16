@@ -15,7 +15,7 @@
   /* ---------- state ---------- */
   const P={x:0,y:0,z:0,vx:0,vz:0,vy:0,vyg:0,hd:0,s:0,grounded:true,speed:0,
     sp:0,fl:0,wsp:0,wfl:0,airT:0,grabT:0,grabbed:false,money:0,shown:0,combo:0,comboT:0,tricks:0,best:null,coins:0,greens:0,reds:0,wipes:0,
-    stun:0,invuln:0,tumble:0,t:0,lean:0,crouch:.2,tuck:0,popT:0,jumpBuf:0,shake:0,history:[],histS:0,airStart:0,finished:false,fin:0,boost:0};
+    stun:0,invuln:0,tumble:0,t:0,lean:0,crouch:.2,tuck:0,popT:9,popExt:0,landT:9,landAbs:0,vygPrev:0,jumpBuf:0,shake:0,history:[],histS:0,airStart:0,finished:false,fin:0,boost:0};
   let mode='load', track=ST.TRACKS[0], trackIdx=0, runT=0, countdown=0, tipsOn=false, tipShown={};
   const input={joy:{x:0,y:0,id:null},k:{},jump:false,grab:false,jumpEdge:false};
 
@@ -204,10 +204,10 @@
       P.grabbed=input.grab; P.lean=damp(P.lean,0,6,dt);
       if(P.airT>.35) tip('air','באוויר: ימינה/שמאלה = ספין · למעלה/למטה = סלטה · החזיקו תפיסה',5200);
       const gy=World.groundY(P.x,P.z);
-      if(P.y<=gy){ P.y=gy; P.grounded=true; P.fresh=true; P.vyg=P.vy; P._lastAir=true; const ok=landTrick(); if(ok){ const nx=World.groundN(P.x,P.z,_n); const dx=Math.sin(P.hd),dz=-Math.cos(P.hd); const into=P.vy; const sp0=Math.hypot(P.vx,P.vz); const vdot=(P.vx*(-_n.x)+P.vz*(-_n.z)); P.vy=0; P.vyg=0; P.speedPenalty=0; const loss=clamp(-into/60,0,.2); P.vx*=1-loss; P.vz*=1-loss; } P.airT=0; P.grabT=0; P.wsp=P.wfl=0; P.grabbed=false; }
+      if(P.y<=gy){ P.y=gy; P.grounded=true; P.fresh=true; P.vyg=P.vy; P._lastAir=true; const ok=landTrick(); P.landT=0; P.landAbs=clamp(-P.vy/16,.2,1); if(ok){ const nx=World.groundN(P.x,P.z,_n); const dx=Math.sin(P.hd),dz=-Math.cos(P.hd); const into=P.vy; const sp0=Math.hypot(P.vx,P.vz); const vdot=(P.vx*(-_n.x)+P.vz*(-_n.z)); P.vy=0; P.vyg=0; P.speedPenalty=0; const loss=clamp(-into/60,0,.2); P.vx*=1-loss; P.vz*=1-loss; } P.airT=0; P.grabT=0; P.wsp=P.wfl=0; P.grabbed=false; }
     }
   }
-  function takeoff(vy,pop){ P.grounded=false; P.vy=vy; P.airT=0; P.sp=0; P.fl=0; P.grabT=0; P.wsp=P.wfl=0; P.airStart=P.y; if(pop) P.jumpBuf=0; }
+  function takeoff(vy,pop){ P.popT=0; P.popExt=pop?1:.5; P.grounded=false; P.vy=vy; P.airT=0; P.sp=0; P.fl=0; P.grabT=0; P.wsp=P.wfl=0; P.airStart=P.y; if(pop) P.jumpBuf=0; }
 
   /* ---------- pickups and hazards ---------- */
   function collide(dt){
@@ -251,15 +251,17 @@
   /* ---------- rider visuals ---------- */
   const _qa=new THREE.Quaternion(), _qb=new THREE.Quaternion(), _up=new THREE.Vector3(0,1,0), _ln=new THREE.Vector3(), _e=new THREE.Euler();
   function updateRider(dt,menu){
-    const R=Rider; R.root.position.set(P.x,P.y,P.z); R.root.rotation.y=-P.hd;
+    const R=Rider; R.root.position.set(P.x,P.y,P.z); R.root.rotation.y=-P.hd; R.rollMax=lerp(.3,.78,clamp(P.speed/((track.vref||24)*1.25),0,1));
     if(P.grounded&&P.tumble<=0){ World.groundN(P.x,P.z,_n); _ln.copy(_n); _ln.applyAxisAngle(_up,P.hd);  // into the board's own frame (heading undone)
       _ln.set(_n.x*Math.cos(-P.hd)+_n.z*Math.sin(-P.hd)*0,0,0); const c=Math.cos(P.hd), s=Math.sin(P.hd); const lx=_n.x*c+_n.z*s, lz=-_n.x*s+_n.z*c; _ln.set(lx,_n.y,lz).normalize();
-      _qb.setFromUnitVectors(_up,_ln); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*14)); R.tilt.rotation.z+=0; _e.set(0,0,-P.lean*.42); _qa.setFromEuler(_e); R.tilt.quaternion.multiply(_qa); }
+      _qb.setFromUnitVectors(_up,_ln); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*14)); R.tilt.rotation.z+=0; _e.set(0,0,-P.lean*R.rollMax); _qa.setFromEuler(_e); R.tilt.quaternion.multiply(_qa); }
     else { _qb.identity(); R.tilt.quaternion.slerp(_qb,1-Math.exp(-dt*6)); _e.set(clamp(-P.vy*.012,-.3,.35),0,0); }
     R.trick.rotation.order='YXZ'; R.trick.rotation.y=-P.sp; R.trick.rotation.x=P.fl;
     const air=!P.grounded&&P.tumble<=0; const tgt={crouch:menu?.25:P.grounded?clamp(.16+.2*clamp(P.speed/36,0,1)+P.tuck*.65+(P.jumpBuf>0?.3:0),0,1):(.58),
       air:air?1:0,grab:air&&P.grabbed?1:0,lean:P.lean,tuck:P.grounded?P.tuck*.7:(P.grabbed?0:.35),twist:air?clamp(P.wsp*-4,-30,30):0};
-    const p=R.P; ['crouch','air','grab','lean','tuck','twist'].forEach(k=>{ p[k]=damp(p[k],tgt[k],k==='air'?14:9,dt); });
+    P.landT+=dt; P.popT+=dt; const bell=(t,d)=>t<d?Math.sin(Math.PI*t/d):0; tgt.absorb=clamp(P.landAbs*bell(P.landT,.4)+(P.grounded?clamp(Math.abs(P.vyg-P.vygPrev)*.03,0,.3):0),0,1); P.vygPrev=P.vyg;
+    tgt.ext=Math.max(P.popExt*bell(P.popT,.34),air&&P.airT<.25?.5*(1-P.airT/.25):0); tgt.rough=P.grounded?clamp(P.speed/((track.vref||24)*1.2),0,1)*(1-P.tuck*.4):0;
+    const p=R.P; ['crouch','air','grab','lean','tuck','twist'].forEach(k=>{ p[k]=damp(p[k],tgt[k],k==='air'?14:9,dt); }); ['absorb','ext','rough'].forEach(k=>{ p[k]=damp(p[k],tgt[k],k==='rough'?4:16,dt); }); p.t=P.t;
     if(P.tumble>0){ p.crouch=1; p.air=1; p.tuck=1; }
     R.pose({});
     // blink while invulnerable
