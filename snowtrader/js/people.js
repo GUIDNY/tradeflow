@@ -5,7 +5,7 @@
   const {hash2}=ST; const {scene}=ST;
   const NAMES=['Ch02','Ch03','Ch07','Ch12','Ch21','Ch22','Ch26','Ch27','Ch33'];
   const P={names:NAMES,tpl:{},pend:{},anims:null,regs:[],active:[],ready:false,count:0};
-  const coarse=matchMedia('(pointer:coarse)').matches; const MAXA=coarse?9:22;
+  const coarse=matchMedia('(pointer:coarse)').matches; const MAXA=coarse?7:14;   // figures alive at once near the player
 
   function loadGLTF(url){ return new Promise((res,rej)=>{ const L=new THREE.GLTFLoader(); if(window.MeshoptDecoder) L.setMeshoptDecoder(window.MeshoptDecoder); L.load(url,res,undefined,rej); }); }
   function mixRetarget(clip,srcRoot,tgtRoot){
@@ -31,7 +31,7 @@
       m.updateMatrixWorld(true); const top=bone(m,'HeadTop_End')||bone(m,'Head'), fl=bone(m,'LeftFoot'), fr=bone(m,'RightFoot'); const v=new THREE.Vector3();
       const ty=top.getWorldPosition(v).y, fy=Math.min(fl.getWorldPosition(v).y,fr.getWorldPosition(v).y), h=(ty-fy)+.09, k=1.78/h;
       const clips={}; ['Idle','Walk','Run','Wave'].forEach(n=>{ const c=an.animations.find(a=>a.name===n); if(c) clips[n]=mixRetarget(c,an.scene,m); });
-      splitOutfit(m); const T={name,scene:m,clips,k,y:-(fy-.09)*k}; P.tpl[name]=T; P.ready=true; return T; }));
+      splitOutfit(m); mergeParts(m); const T={name,scene:m,clips,k,y:-(fy-.09)*k}; P.tpl[name]=T; P.ready=true; return T; }));
   };
   P.preload=async function(n){ for(const nm of NAMES.slice(0,n||5)){ try{ await P.template(nm); }catch(e){ console.warn('people',nm,e); } await new Promise(r=>setTimeout(r,60)); } };
 
@@ -54,8 +54,46 @@
         mesh.position.copy(m.position); mesh.quaternion.copy(m.quaternion); mesh.scale.copy(m.scale); m.parent.add(mesh); mesh.bind(m.skeleton,m.bindMatrix); });
       m.parent.remove(m); });
   }
+  /* Draw calls: a character arrives as 5-18 skinned pieces. All of them hang on the same 65 bones, so they are merged: every
+     piece of clothing into ONE mesh whose colours come from uniforms (a per-vertex category picks jacket, trousers, boots or
+     mitts), and the textured pieces (skin, hair) into one mesh per material. 12-18 draws per figure become 2-4. */
+  const CAT_ID={jacket:0,pants:1,boots:2,gloves:3};
+  function outfitMaterial(){ const m=new THREE.MeshStandardMaterial({color:0xffffff,skinning:true,roughness:.62,metalness:0});
+    const cols=m.userData.cols={jacket:new THREE.Color(1,1,1),pants:new THREE.Color(.1,.1,.12),boots:new THREE.Color(.03,.03,.04),gloves:new THREE.Color(.03,.03,.04)};
+    m.onBeforeCompile=sh=>{ sh.uniforms.uJ={value:cols.jacket}; sh.uniforms.uP={value:cols.pants}; sh.uniforms.uB={value:cols.boots}; sh.uniforms.uG={value:cols.gloves};
+      sh.vertexShader='attribute float aCat;\nvarying float vCat;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vCat=aCat;');
+      sh.fragmentShader='uniform vec3 uJ,uP,uB,uG;\nvarying float vCat;\n'+sh.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n diffuseColor.rgb*=vCat<.5?uJ:vCat<1.5?uP:vCat<2.5?uB:uG;'); };
+    m.customProgramCacheKey=()=>'st-outfit'; return m; }
+  function sameSkeleton(a,b){ if(a.skeleton.bones.length!==b.skeleton.bones.length) return false; for(let i=0;i<a.skeleton.bones.length;i++){ if(a.skeleton.bones[i]!==b.skeleton.bones[i]) return false; if(!a.skeleton.boneInverses[i].equals(b.skeleton.boneInverses[i])) return false; } return a.bindMatrix.equals(b.bindMatrix); }
+  // the models are compressed (meshopt): positions, normals, UVs and skin weights can be normalised integers; read them as floats
+  const NORM={Int8Array:127,Uint8Array:255,Int16Array:32767,Uint16Array:65535,Int32Array:2147483647,Uint32Array:4294967295};
+  function rd(at,i,k){ const v=at.isInterleavedBufferAttribute?at.data.array[i*at.data.stride+at.offset+k]:at.array[i*at.itemSize+k]; if(!at.normalized) return v; const m=NORM[at.array.constructor.name]; return m?Math.max(v/m,-1):v; }
+  function mergeGeoms(list,withUv,cat){ let nv=0,ni=0; list.forEach(m=>{ const g=m.geometry; nv+=g.attributes.position.count; ni+=g.index?g.index.count:g.attributes.position.count; });
+    const pos=new Float32Array(nv*3), nor=new Float32Array(nv*3), si=new Float32Array(nv*4), sw=new Float32Array(nv*4), uv=withUv?new Float32Array(nv*2):null, ct=cat?new Float32Array(nv):null, idx=new Uint32Array(ni); let vo=0, io=0;
+    list.forEach(m=>{ const g=m.geometry, a=g.attributes, n=a.position.count;
+      for(let i=0;i<n;i++){ const o=vo+i; for(let k=0;k<3;k++){ pos[o*3+k]=rd(a.position,i,k); nor[o*3+k]=rd(a.normal,i,k); }
+        let ws=0; for(let k=0;k<4;k++){ si[o*4+k]=rd(a.skinIndex,i,k); sw[o*4+k]=rd(a.skinWeight,i,k); ws+=sw[o*4+k]; } if(ws>0&&Math.abs(ws-1)>1e-3) for(let k=0;k<4;k++) sw[o*4+k]/=ws;
+        if(uv&&a.uv){ uv[o*2]=rd(a.uv,i,0); uv[o*2+1]=rd(a.uv,i,1); } if(ct) ct[o]=CAT_ID[m.userData.cat]; }
+      if(g.index){ const ix=g.index.array; for(let i=0;i<ix.length;i++) idx[io+i]=ix[i]+vo; io+=ix.length; } else { for(let i=0;i<n;i++) idx[io+i]=vo+i; io+=n; }
+      vo+=n; });
+    const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(pos,3)); geo.setAttribute('normal',new THREE.BufferAttribute(nor,3)); geo.setAttribute('skinIndex',new THREE.BufferAttribute(si,4)); geo.setAttribute('skinWeight',new THREE.BufferAttribute(sw,4));
+    if(uv) geo.setAttribute('uv',new THREE.BufferAttribute(uv,2)); if(ct) geo.setAttribute('aCat',new THREE.BufferAttribute(ct,1)); geo.setIndex(new THREE.BufferAttribute(idx,1)); geo.computeBoundingSphere(); return geo; }
+  function mergeParts(root){
+    const list=[]; root.traverse(o=>{ if(o.isSkinnedMesh&&!o.morphTargetInfluences) list.push(o); }); if(list.length<2) return;
+    const base=list[0]; if(!list.every(m=>sameSkeleton(m,base))) return;   // only if they truly share the skeleton (same bones, inverse binds and bind matrix:
+    // a skinned vertex ends up at sum(w * bone * inverseBind * bindMatrix * v), so pieces under different nodes still merge)
+    const host=base.parent, hpos=base.position.clone(), hq=base.quaternion.clone(), hs=base.scale.clone(), skel=base.skeleton, bindM=base.bindMatrix.clone();
+    const groups=new Map(); list.forEach(m=>{ const c=m.userData.cat, key=(c&&c!=='skin')?'outfit':'mat:'+m.material.uuid; (groups.get(key)||groups.set(key,[]).get(key)).push(m); });
+    groups.forEach((ms,key)=>{ if(key!=='outfit'&&ms.length<2) return; const outfit=key==='outfit', withUv=ms.every(m=>m.geometry.attributes.uv);
+      const geo=mergeGeoms(ms,withUv,outfit), mat=outfit?outfitMaterial():ms[0].material, mesh=new THREE.SkinnedMesh(geo,mat);
+      mesh.userData.cat=outfit?'outfit':ms[0].userData.cat; mesh.castShadow=true; mesh.receiveShadow=true; mesh.frustumCulled=false;
+      mesh.position.copy(hpos); mesh.quaternion.copy(hq); mesh.scale.copy(hs); host.add(mesh); mesh.bind(skel,bindM);
+      ms.forEach(m=>{ if(m.parent) m.parent.remove(m); }); }); }
+
   const JACKETS=[0xffc21a,0xe8283f,0x2f79ff,0xf2f5ff,0x16c97a,0xff7a1a,0xd63bff,0x1fc8e8,0x111418], PANTS=[0x15171d,0x1fa35a,0x23304a,0x3a3f4a,0xd9d9e0,0x6b2d2d];
-  function dressOutfit(model,jacket,pants){ model.traverse(o=>{ if(!o.isSkinnedMesh||!o.userData.cat||o.userData.cat==='skin') return; const c=o.userData.cat; const mt=o.material.clone();
+  function dressOutfit(model,jacket,pants){ model.traverse(o=>{ if(!o.isSkinnedMesh||!o.userData.cat||o.userData.cat==='skin') return; const c=o.userData.cat;
+      if(c==='outfit'){ if(!o.userData.own){ o.material=outfitMaterial(); o.userData.own=true; } const C=o.material.userData.cols; C.jacket.setHex(jacket).convertSRGBToLinear(); C.pants.setHex(pants).convertSRGBToLinear(); return; }
+      const mt=o.material.clone();
       mt.color.setHex(c==='jacket'?jacket:c==='pants'?pants:0x0e1015).convertSRGBToLinear(); mt.roughness=c==='jacket'?.5:.7; mt.metalness=0; mt.map=null; o.material=mt; }); }
   P.dressOutfit=dressOutfit; P.JACKETS=JACKETS; P.PANTS=PANTS;
 
@@ -63,9 +101,15 @@
   const beanGeo=new THREE.SphereGeometry(.125,14,10,0,Math.PI*2,0,Math.PI*.55), pomGeo=new THREE.SphereGeometry(.045,8,6);
   function winterize(m,seed){   // a hat so a guest in street clothes reads as a skier
     const head=bone(m,'Head'); if(!head) return; m.updateMatrixWorld(true); const v=new THREE.Vector3(); head.getWorldPosition(v);
-    const mat=new THREE.MeshStandardMaterial({color:BEAN[seed%BEAN.length],roughness:.9}); const hat=new THREE.Mesh(beanGeo,mat); hat.position.copy(v); hat.position.y+=.105; hat.scale.set(1,1.15,1.1); hat.castShadow=true;
-    const pom=new THREE.Mesh(pomGeo,new THREE.MeshStandardMaterial({color:0xffffff,roughness:1})); pom.position.set(0,.14,0); hat.add(pom);
+    // beanie and pompom as one mesh (vertex colours), no shadow: one small draw per figure instead of four
+    const c=new THREE.Color(BEAN[seed%BEAN.length]), g=hatGeo(c), hat=new THREE.Mesh(g,hatMat); g.userData.hat=1; hat.position.copy(v); hat.position.y+=.105; hat.scale.set(1,1.15,1.1);
     scene.add(hat); head.attach(hat); }
+  const hatMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.9});
+  function hatGeo(c){ const a=beanGeo.clone(), b=pomGeo.clone(); b.translate(0,.14,0); const n1=a.attributes.position.count, n2=b.attributes.position.count, pos=new Float32Array((n1+n2)*3), nor=new Float32Array((n1+n2)*3), col=new Float32Array((n1+n2)*3);
+    pos.set(a.attributes.position.array,0); pos.set(b.attributes.position.array,n1*3); nor.set(a.attributes.normal.array,0); nor.set(b.attributes.normal.array,n1*3);
+    for(let i=0;i<n1+n2;i++){ const w=i>=n1; col[i*3]=w?1:c.r; col[i*3+1]=w?1:c.g; col[i*3+2]=w?1:c.b; }
+    const ia=a.index.array, ib=b.index.array, idx=new Uint32Array(ia.length+ib.length); idx.set(ia,0); for(let i=0;i<ib.length;i++) idx[ia.length+i]=ib[i]+n1;
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.BufferAttribute(nor,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere(); a.dispose(); b.dispose(); return g; }
   function spawn(r){
     const T=P.tpl[r.ch]; if(!T) return null;
     const m=THREE.SkeletonUtils.clone(T.scene), g=new THREE.Group(); g.add(m); dressOutfit(m,JACKETS[Math.floor(hash2(r.id,13)*JACKETS.length)],PANTS[Math.floor(hash2(r.id,17)*PANTS.length)]); m.scale.multiplyScalar(T.k*(r.sc||1)); m.position.y=T.y*(r.sc||1); scene.add(g);
@@ -73,7 +117,7 @@
     const a=acts[r.type]||acts.Idle; a.play(); a.time=hash2(r.id,5)*a.getClip().duration; mixer.update(0);
     g.position.set(r.x,r.y,r.z); g.rotation.y=r.ry||0; g.updateMatrixWorld(true); winterize(m,r.id);
     return {r,g,m,mixer,t:Math.random()*10,dir:1}; }
-  function kill(a){ try{ a.mixer.stopAllAction(); a.mixer.uncacheRoot(a.m); }catch(e){} scene.remove(a.g); a.g.traverse(o=>{ if(o.isMesh&&o.parent&&o.geometry&&o.geometry.userData.hat) o.geometry.dispose(); }); }
+  function kill(a){ try{ a.mixer.stopAllAction(); a.mixer.uncacheRoot(a.m); }catch(e){} scene.remove(a.g); a.g.traverse(o=>{ if(o.isMesh&&o.geometry&&o.geometry.userData.hat){ o.geometry.dispose(); if(o.parent) o.parent.remove(o); } }); }
   let rid=1;
   P.add=function(ci,spec){ const W=ST.World; spec.id=rid++; spec.ci=ci; spec.y=W.groundY(spec.x,spec.z); spec.ch=NAMES[Math.floor(hash2(spec.id,9)*NAMES.length)]; P.regs.push(spec); };
   P.clear=function(ci){ P.regs=P.regs.filter(r=>{ if(r.ci===ci){ if(r.act){ kill(r.act); P.active=P.active.filter(x=>x!==r.act); } return false; } return true; }); };
@@ -84,7 +128,10 @@
     for(let i=0;i<P.regs.length;i++){ const r=P.regs[i], d=Math.hypot(r.x-px,r.z-pz);
       if(!r.act&&d<(coarse?90:140)&&P.active.length<MAXA){ if(!P.tpl[r.ch]){ const any=Object.keys(P.tpl)[0]; if(!any){ P.template(r.ch).catch(()=>{}); continue; } r.ch=any; } r.act=spawn(r); if(r.act) P.active.push(r.act); }
       else if(r.act&&d>200){ kill(r.act); P.active=P.active.filter(x=>x!==r.act); r.act=null; } }
-    for(let i=0;i<P.active.length;i++){ const a=P.active[i]; a.mixer.update(dt); const r=a.r;
+    P.frame=(P.frame||0)+1;
+    for(let i=0;i<P.active.length;i++){ const a=P.active[i], r=a.r, d=Math.hypot(r.x-px,r.z-pz), every=d<45?1:d<90?2:3;
+      a.acc=(a.acc||0)+dt; if(P.frame%every===0){ a.mixer.update(a.acc); a.acc=0; }
+      const sh=d<32; if(a.sh!==sh){ a.sh=sh; a.m.traverse(o=>{ if(o.isMesh) o.castShadow=sh; }); }
       if(r.type==='Walk'&&r.seg){ a.t+=dt*1.15*a.dir; const L=Math.hypot(r.seg[0],r.seg[1]); let u=a.t/L; if(u>1){ a.dir=-1; a.t=L; u=1; } if(u<0){ a.dir=1; a.t=0; u=0; }
         const x=r.x+r.seg[0]*u, z=r.z+r.seg[1]*u; a.g.position.set(x,ST.World.groundY(x,z),z); a.g.rotation.y=Math.atan2(r.seg[0]*a.dir,r.seg[1]*a.dir); } }
   };

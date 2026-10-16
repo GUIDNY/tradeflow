@@ -59,6 +59,7 @@
       const bu=new THREE.Mesh(new THREE.BoxGeometry(.04,.036,.072),accent); bu.position.set(.105,.085,.03); g.add(bu);
       g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); return g; };
     grp.add(binding(-.28,20),binding(.28,-8));
+    ST.bakeStatic(grp);   // the two bindings (a dozen parts) become one mesh per material
     grp.userData.edge=steel; return grp;
   }
   let boardObj=null;

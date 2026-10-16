@@ -14,4 +14,20 @@ window.ST = window.ST || {};
   const fmt=n=>Math.round(n).toLocaleString('en-US');
   const $=s=>document.querySelector(s);
   Object.assign(ST,{clamp,lerp,smooth,damp,lerpAngle,hash2,vnoise,fmt,$});
+  /* Draw calls: everything static in a chunk (posts, poles, pylons, cables, buildings, nets, signs) is baked into one mesh per
+     material. A chunk drops from ~100 draws (plus as many shadow draws) to ~15. Moving or vanishing things are left alone. */
+  ST.bakeStatic=function(grp){
+    grp.updateMatrixWorld(true); const by=new Map(), out=[];
+    grp.traverse(o=>{ if(!o.isMesh||o.isInstancedMesh||o.isSkinnedMesh||o.userData.dyn||Array.isArray(o.material)) return; const pa=o.geometry.attributes.position; if(!pa||pa.count>4000||!o.geometry.attributes.normal) return;
+      let p=o.parent, dyn=false; while(p&&p!==grp){ if(p.userData.dyn) dyn=true; p=p.parent; } if(dyn) return;
+      (by.get(o.material)||by.set(o.material,[]).get(o.material)).push(o); });
+    by.forEach((list,mat)=>{ if(list.length<2) return; const uv=list.every(o=>o.geometry.attributes.uv), col=!!mat.vertexColors&&list.every(o=>o.geometry.attributes.color);
+      let n=0; const parts=list.map(o=>{ let g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone(); g.applyMatrix4(o.matrixWorld); n+=g.attributes.position.count; return g; });
+      const P=new Float32Array(n*3), N=new Float32Array(n*3), U=uv?new Float32Array(n*2):null, C=col?new Float32Array(n*3):null; let k=0;
+      parts.forEach(g=>{ const c=g.attributes.position.count; P.set(g.attributes.position.array,k*3); N.set(g.attributes.normal.array,k*3); if(U) U.set(g.attributes.uv.array,k*2); if(C) C.set(g.attributes.color.array,k*3); k+=c; g.dispose(); });
+      const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(P,3)); geo.setAttribute('normal',new THREE.BufferAttribute(N,3)); if(U) geo.setAttribute('uv',new THREE.BufferAttribute(U,2)); if(C) geo.setAttribute('color',new THREE.BufferAttribute(C,3)); geo.computeBoundingSphere();
+      const m=new THREE.Mesh(geo,mat); m.castShadow=list.some(o=>o.castShadow); m.receiveShadow=list.some(o=>o.receiveShadow); m.renderOrder=list[0].renderOrder; m.frustumCulled=true; m.matrixAutoUpdate=false;
+      list.forEach(o=>o.parent.remove(o)); grp.add(m); out.push(geo); });
+    return out; };
+
 })(window.ST);

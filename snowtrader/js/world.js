@@ -235,21 +235,24 @@
     for(let bs=Math.ceil((s0-60)/170)*170+90; bs<s0+L+60; bs+=170){ if(bs<s0||bs>=s0+L||bs>T.len) continue; const side=Math.floor(bs/170)%2?1:-1, u=side*(halfW(bs)+4.5), x=cx(bs)+u, z=-bs, y=groundY(x,z);
       const m=new THREE.Mesh(new THREE.PlaneGeometry(14,7),new THREE.MeshBasicMaterial({map:BB[Math.floor(bs/170)%BB.length],toneMapped:false}));
       const post=new THREE.Mesh(new THREE.BoxGeometry(.5,9,.5),MATS.metal); const pg=new THREE.Group(); pg.position.set(x,y,z); post.position.set(0,4,-.4); m.position.set(0,8.4,0); pg.lookAt(cx(bs),y+8.4,-bs); pg.rotation.set(0,pg.rotation.y,0); pg.add(post,m); const post2=post.clone(); post2.position.x=4.5; const post3=post.clone(); post3.position.x=-4.5; pg.add(post2,post3); grp.add(pg); }
-    // item meshes
+    // item meshes (coins: one instanced mesh for the whole chunk, spun and hidden per instance by updateCoins)
+    const coins=[];
     items.forEach(it=>{
-      if(it.type==='coin'){ const m=new THREE.Mesh(coinGeo,MATS.coin); it.y+=it.air||1; m.position.set(it.x,it.y,it.z); m.scale.setScalar(it.big?1.7:1.35); m.castShadow=true; it.mesh=m; it.r=1.7; grp.add(m); }
-      else if(it.type==='green'||it.type==='red'){ const G=candleGeo(it.h,it.type==='red'), gm=new THREE.Group(); const b=new THREE.Mesh(G.b,it.type==='green'?MATS.green:MATS.red), w=new THREE.Mesh(G.w,it.type==='green'?MATS.wickG:MATS.wickR); b.castShadow=true; gm.add(b,w); gm.position.set(it.x,it.y,it.z); it.mesh=gm; it.r=it.type==='green'?2.1:1.35; grp.add(gm);
+      if(it.type==='coin'){ it.y+=it.air||1; it.r=1.7; coins.push(it); }
+      else if(it.type==='green'||it.type==='red'){ const G=candleGeo(it.h,it.type==='red'), gm=new THREE.Group(); const b=new THREE.Mesh(G.b,it.type==='green'?MATS.green:MATS.red), w=new THREE.Mesh(G.w,it.type==='green'?MATS.wickG:MATS.wickR); b.castShadow=true; b.userData.dyn=w.userData.dyn=1; gm.add(b,w); gm.position.set(it.x,it.y,it.z); it.mesh=gm; it.r=it.type==='green'?2.1:1.35; grp.add(gm);
         const bm=it.type==='green'?MATS.green:MATS.red; } 
       else if(it.type==='rockhaz'){ const A=ASSET.rocks.length?ASSET.rocks[hash2(it.x|0,it.z|0)<.5?0:1]:null; const m=new THREE.Mesh(A?A.geo:GEO.rock,A?A.mat:MATS.tree); m.position.set(it.x,it.y-.1,it.z); m.scale.setScalar(A?it.r*2.4:it.r*1.1); m.rotation.y=hash2(it.x|0,it.z|0)*6; m.castShadow=true; m.receiveShadow=true; grp.add(m); }
     });
+    if(coins.length){ const im=new THREE.InstancedMesh(coinGeo,MATS.coin,coins.length); im.userData.dyn=1; im.castShadow=true; im.frustumCulled=false; coins.forEach((it,i)=>{ it.im=im; it.ii=i; }); grp.add(im); grp.userData.coins=coins; }
     if(ST.Resort) ST.Resort.chunk(ci,grp,items,s0,L);
-    world.add(grp); return {group:grp,items,geo:g,idx:ci};
+    const baked=ST.bakeStatic(grp);
+    world.add(grp); return {group:grp,items,geo:g,idx:ci,baked};
   }
   function addArch(grp,s,l1,l2){ const w=halfW(s)+2, x=cx(s), z=-s, y=groundY(x,z), tex=bannerTex(l1,l2);
     [-1,1].forEach(sd=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(1,15,1),MATS.metal); p.position.set(x+sd*w,groundY(x+sd*w,z)+7,z); p.castShadow=true; grp.add(p); });
     const bw=Math.min(w*2,24), b=new THREE.Mesh(new THREE.PlaneGeometry(bw,bw/4),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,toneMapped:false})); b.position.set(x,y+11.2,z); grp.add(b);
     const bar=new THREE.Mesh(new THREE.BoxGeometry(w*2+1,.6,.8),MATS.metal); bar.position.set(x,y+13.1,z); grp.add(bar); }
-  function disposeChunk(c){ if(ST.Resort) ST.Resort.disposeChunk(c.idx); world.remove(c.group); c.group.traverse(o=>{ if(o===c.group) return; if(o.geometry&&o.geometry===c.geo) o.geometry.dispose(); }); }
+  function disposeChunk(c){ if(ST.Resort) ST.Resort.disposeChunk(c.idx); world.remove(c.group); c.group.traverse(o=>{ if(o===c.group) return; if(o.geometry&&o.geometry===c.geo) o.geometry.dispose(); }); (c.baked||[]).forEach(g=>g.dispose()); }
 
   let lastCi=null;
   function update(playerS,force){
@@ -258,6 +261,11 @@
     want.forEach(i=>{ if(!chunks.has(i)) chunks.set(i,buildChunk(i)); });
     chunks.forEach((c,i)=>{ if(!want.has(i)){ disposeChunk(c); chunks.delete(i); } });
   }
+  const _cm=new THREE.Matrix4(), _cq=new THREE.Quaternion(), _cp=new THREE.Vector3(), _cs=new THREE.Vector3(), _cy=new THREE.Vector3(0,1,0);
+  function updateCoins(t,cam,s){ const ci=Math.floor(s/L); for(let i=ci-1;i<=ci+3;i++){ const c=chunks.get(i); if(!c||!c.group.userData.coins) continue; const list=c.group.userData.coins; let im=null;
+      for(const it of list){ im=it.im; const dx=it.x-cam.x, dy=it.y-cam.y, dz=it.z-cam.z, hide=it.dead||dx*dx+dy*dy+dz*dz<3.2*3.2, k=hide?0:(it.big?1.05:.85);   // coins the lens flies through would fill the screen
+        _cq.setFromAxisAngle(_cy,t*3.4+it.x); _cp.set(it.x,it.y,it.z); _cs.set(k,k,k); _cm.compose(_cp,_cq,_cs); im.setMatrixAt(it.ii,_cm); }
+      if(im) im.instanceMatrix.needsUpdate=true; } }
   function nearItems(s,fn){ const ci=Math.floor(s/L); for(let i=ci-1;i<=ci+1;i++){ const c=chunks.get(i); if(c) c.items.forEach(fn); } }
   function reset(){ chunks.forEach(disposeChunk); chunks.clear(); lastCi=null; }
 
@@ -381,5 +389,5 @@
     sky.position.copy(camera.position); sky.material.uniforms.time.value=t; mount.position.set(camera.position.x,p.y-30,camera.position.z);
     const sd=T.sky.sunDir; sun.position.set(p.x-sd[0]*0+sd[0]*120,p.y+sd[1]*120+30,p.z+sd[2]*120); sun.target.position.set(p.x,p.y,p.z); sun.target.updateMatrixWorld(); }
 
-  ST.World={loadAssets,ensureSky,get T(){return T;},baseGround,groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,lipNear,flightLine,jumpWindow,L,BUILD,flakes,reset,rampProfile};
+  ST.World={loadAssets,ensureSky,get T(){return T;},baseGround,groundY,groundN,cx,dcx,halfW,fall,update,nearItems,setTrack,follow,updateFlakes,rampAt,lipNear,flightLine,jumpWindow,updateCoins,L,BUILD,flakes,reset,rampProfile};
 })(window.ST);

@@ -188,7 +188,7 @@
     const px=P.x, py=P.y, pz=P.z;
     World.nearItems(P.s,it=>{ if(it.dead) return;
       const dx=it.x-px, dz=it.z-pz, d2=dx*dx+dz*dz;
-      if(it.type==='coin'){ it.mesh.rotation.y+=dt*3.4; if(d2<it.r*it.r&&Math.abs(it.y-(py+1))<2.4){ it.dead=true; it.mesh.visible=false; P.coins++; addMoney(it.big?25:10); P.shown+=0; Audio.coin(Math.min(P.coins%12,11)); for(let i=0;i<5;i++) emit(it.x,it.y,it.z,(Math.random()-.5)*4,Math.random()*3,(Math.random()-.5)*4,.4,.5); } }
+      if(it.type==='coin'){ if(d2<it.r*it.r&&Math.abs(it.y-(py+1))<2.4){ it.dead=true; P.coins++; addMoney(it.big?25:10); P.shown+=0; Audio.coin(Math.min(P.coins%12,11)); for(let i=0;i<5;i++) emit(it.x,it.y,it.z,(Math.random()-.5)*4,Math.random()*3,(Math.random()-.5)*4,.4,.5); } }
       else if(it.type==='green'){ it.mesh.position.y=it.y+Math.sin(P.t*2+it.x)*.12; if(d2<it.r*it.r&&py<it.y+it.h+1.5){ it.dead=true; it.mesh.visible=false; P.greens++; const v=Math.round(80+it.h*30); addMoney(v,'CRYSTAL'); toast('CRYSTAL',' +'+fmt(v)); Audio.green(); P.boost+=2.2; for(let i=0;i<16;i++) emit(it.x,it.y+it.h/2,it.z,(Math.random()-.5)*6,Math.random()*5,(Math.random()-.5)*6,.55,.8); } }
       else if(it.type==='red'){ if(P.invuln<=0&&d2<it.r*it.r&&py<it.y+it.h+.3){ it.dead=true; it.mesh.visible=false; P.reds++; const v=Math.round(110+it.h*25); addMoney(-v,'ICE SPIKE'); toast('OUCH','−'+fmt(v),true); Audio.red(); P.shake=.7; P.stun=.35; P.vx*=.62; P.vz*=.62; P.combo=0; flash('#ff2244',.3); for(let i=0;i<22;i++) emit(it.x,it.y+1,it.z,(Math.random()-.5)*8,Math.random()*6,(Math.random()-.5)*8,.6,.8); } }
       else if(it.type==='rockhaz'||it.type==='rock'){ if(P.invuln<=0&&!P.fall&&d2<(it.r+.35)*(it.r+.35)&&py<it.y+1.6){ it.dead=true; Physics.hit(P,it.x,it.z,it.r,EV); } }
@@ -276,7 +276,7 @@
   }
 
   /* coins the camera is about to fly through would fill the screen: hide them when the lens gets close */
-  function coinFade(){ const c=camera.position; World.nearItems(P.s,it=>{ if(it.type!=='coin'||it.dead||!it.mesh) return; const dx=it.x-c.x, dy=it.y-c.y, dz=it.z-c.z; it.mesh.visible=dx*dx+dy*dy+dz*dz>3.2*3.2; }); }
+  function coinFade(){ World.updateCoins(tAcc,camera.position,P.s); }
 
   /* ---------- jump speed: approaching a kicker, say whether this speed will land on the landing (real parks mark this) ---------- */
   const jh=document.createElement('div'); jh.id='jumpHint'; el.hud.appendChild(jh); let jhState='';
