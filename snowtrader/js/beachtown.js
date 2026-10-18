@@ -34,7 +34,7 @@
   Batch.prototype.mesh=function(mat){ if(!this.i.length) return null; const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(this.p,3)); g.setAttribute('normal',new THREE.Float32BufferAttribute(this.n,3));
     g.setAttribute('color',new THREE.Float32BufferAttribute(this.c,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(this.u,2)); g.setIndex(this.i); g.computeBoundingSphere(); const m=new THREE.Mesh(g,mat); return m; };
   /* ---------- signs: one canvas atlas ---------- */
-  const SIGNS={surf:['SURF RUSH','חוף הגלשנים','#0b6fa4','#fff'],kite:['KITE SCHOOL','בית ספר לקייטסרף','#ff4f2e','#fff'],bar1:['BEACH BAR','LA PLAYA','#2a9d8f','#fff'],bar2:['MANGO','BEACH BAR','#f4a261','#2b1a00'],bar3:['SUNSET','BAR · ביץ׳ בר','#e76f51','#fff'],
+  const SIGNS={surf:['SURF RUSH','חוף הגלשנים','#0b6fa4','#fff'],kite:['KITE SCHOOL','בית ספר לקייטסרף','#ff4f2e','#fff'],surfs:['SURF SCHOOL','בית ספר לגלישה','#0077b6','#fff'],bar1:['BEACH BAR','LA PLAYA','#2a9d8f','#fff'],bar2:['MANGO','BEACH BAR','#f4a261','#2b1a00'],bar3:['SUNSET','BAR · ביץ׳ בר','#e76f51','#fff'],
     h1:['SEA BREEZE','HOTEL','#ffffff','#0b5c8a'],h2:['MARINA','HOTEL ★★★★','#ffffff','#1d3557'],h3:['BLUE BAY','HOTEL','#ffffff','#0077b6'],h4:['CORAL','SUITES','#ffffff','#c2410c'],
     cafe:['CAFÉ','DEL MAR','#264653','#f1faee'],gel:['GELATO','גלידה','#ffb4c8','#7a1f3d'],fal:['FALAFEL','פלאפל','#ffd166','#3a2a00'],pizza:['PIZZA','PRONTO','#d62828','#fff'],shop:['SURF SHOP','ציוד גלישה','#00b4d8','#fff'],
     sushi:['SUSHI','BAR','#111','#fff'],fish:['FISH','& CHIPS','#023e8a','#fff'],guard:['מציל','LIFEGUARD','#d62828','#fff'],juice:['JUICE','מיצים','#80b918','#fff']};
@@ -97,6 +97,12 @@
     sign(Bs,'kite',0,3.2,2.5,5.4,0);
     for(let i=0;i<5;i++) Bb.box(-3.2+i*.32,0,3.2,.08,1.4,.42,AWN[i%AWN.length]);   // boards in the rack
     Bb.box(-1.6,0,3.2,3.4,.08,.6,PAL.woodD); }
+  /* the surf school at the west end, by the break: a wooden hut, its sign, a rack of boards standing on their tails */
+  function surfSchool(Bb,Bg,Bs){ const wood=lin(0xc8a27a), woodD=PAL.woodD; Bb.box(0,0,0,6,2.8,4,wood); Bg.box(1.3,.9,2.02,2.4,1.3,.04,PAL.glass,['-z']); Bb.box(-1.6,0,2.02,1.1,2.1,.04,woodD,['-z']);
+    Bb.tri4([-3.4,2.8,2.3],[3.4,2.8,2.3],[3.4,3.5,-2.3],[-3.4,3.5,-2.3],lin(0x0096c7)); Bb.box(0,2.8,0,6.2,.12,4.2,PAL.white,['-y']);
+    sign(Bs,'surfs',0,3.05,2.15,5,0);
+    const cols=[0xffffff,0xffd166,0xef476f,0x06d6a0,0x118ab2,0xff9f1c,0xf4f1de]; for(let i=0;i<7;i++){ const x=-3.1+i*.55; Bb.box(x,0,3.3,.46,1.85,.07,lin(cols[i])); Bb.box(x,1.1,3.36,.05,.6,.01,lin(0x5a3820)); }   // boards in the rack, their stringers
+    Bb.box(-1.45,.55,3.18,3.8,.08,.5,woodD); Bb.box(-3.4,0,3.18,.1,1.1,.5,woodD); Bb.box(.5,0,3.18,.1,1.1,.5,woodD); }
   /* ---------- instanced: palms, umbrellas, loungers ---------- */
   function palmGeo(){ const P=[], N=[], Cc=[], I=[]; let v=0; const vert=(x,y,z,nx,ny,nz,c)=>{ P.push(x,y,z); N.push(nx,ny,nz); Cc.push(c.r,c.g,c.b); return v++; };
     const bark=lin(0x8a6d4b), bark2=lin(0x6e5538), leaf=lin(0x3f7a2e), leaf2=lin(0x2f5e24);
@@ -156,7 +162,8 @@
     { const x=-78, d=22; place(x,gy(x,d),wz(x,d),PI*.5); Bb.cyl(-4.5,0,0,.06,.06,2.5,6,PAL.white); Bb.cyl(4.5,0,0,.06,.06,2.5,6,PAL.white); Bb.box(0,1.55,0,9,.9,.02,lin(0x222222)); Bb.box(0,2.42,0,9,.07,.04,PAL.white); T.spots.volley={x,d}; }
     // the kite beach: the school, boards, kites on the sand
     { const x=218, d=31; place(x,gy(x,d),wz(x,d),PI); kiteSchool(Bb,Bg,Bs); foot(x,d,7.4,4.8); T.spots.school={x,z:wz(x,d)-4,d:d-4}; }
-    T.spots.launch={x:226,z:wz(226,3),d:3}; T.spots.start={x:60,z:wz(60,51),d:51};
+    { const x=-196, d=31; place(x,gy(x,d),wz(x,d),PI); surfSchool(Bb,Bg,Bs); foot(x,d,6.4,4.4); T.spots.surfSchool={x,z:wz(x,d)-4,d:d-4}; }
+    T.spots.launch={x:226,z:wz(226,3),d:3}; T.spots.surf={x:-200,z:wz(-200,3),d:3}; T.spots.start={x:60,z:wz(60,51),d:51};
     // --- the meshes ---
     [[Bb,MAT.body,true],[Bg,MAT.glass,false],[Bs,MAT.sign,false]].forEach(([b,m,sh])=>{ const me=b.mesh(m); if(me){ me.castShadow=sh; me.receiveShadow=true; me.matrixAutoUpdate=false; grp.add(me); } });
     // palms: along the promenade, in the town, round the bars
@@ -203,6 +210,7 @@
     // volleyball and the kite school
     if(T.spots.volley){ const v=T.spots.volley; for(let j=0;j<4;j++){ const x=v.x+(j<2?-1:1)*3.5, d=v.d+(j%2?-2:2); add({x,z:wz(x,d),type:'Idle',ry:j<2?PI*.5:-PI*.5},talker(200+j)); } }
     if(T.spots.school){ const s=T.spots.school; for(let j=0;j<4;j++){ const x=s.x-3+j*2, z=s.z-1-(j%2); add({x,z,type:'Idle',ry:PI},talker(300+j)); } }
+    if(T.spots.surfSchool){ const s=T.spots.surfSchool; for(let j=0;j<3;j++){ const x=s.x-2.5+j*2.4, z=s.z-1.5-(j%2); add({x,z,type:'Idle',ry:PI},talker(320+j)); } }
     return n; };
   ST.BeachTown=T;
 })(window.ST);

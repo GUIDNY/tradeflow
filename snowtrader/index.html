@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0b0d1a">
 <link rel="icon" href="data:,">
 <title>Rush · בחרו עולם</title>
-<meta name="description" content="שני עולמות תלת־ממדיים: כפר סקי עם סנובורד, ועיירת חוף עם קייטסרף.">
+<meta name="description" content="שני עולמות תלת־ממדיים: כפר סקי עם סנובורד, ועיירת חוף עם גלישת גלים וקייטסרף.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
 <link rel="prefetch" href="lib/three.min.js">
@@ -80,8 +80,8 @@
     <a class="world beach" href="beach.html" id="goBeach">
       <div class="art"><div class="sun"></div><div class="swell a"></div><div class="swell b"></div><div class="swell c"></div><div class="kite"></div><div class="palm"></div></div>
       <div class="best" id="bestBeach"></div>
-      <div class="txt"><h2>SURF <b>RUSH</b></h2><div class="sub">עיירת חוף · קייטסרף</div>
-        <div class="chips"><span>🪁 קייטסרף</span><span>🌴 טיילת לטייל בה</span><span class="soon">🌊 גלים — בקרוב</span><span class="soon">⛵ רוח — בקרוב</span></div>
+      <div class="txt"><h2>SURF <b>RUSH</b></h2><div class="sub">עיירת חוף · גלים וקייטסרף</div>
+        <div class="chips"><span>🌊 גלישת גלים</span><span>🪁 קייטסרף</span><span>🌴 טיילת לטייל בה</span><span class="soon">⛵ רוח — בקרוב</span></div>
         <span class="go">🏖️ לעיירת החוף</span></div>
     </a>
   </div>
@@ -91,7 +91,7 @@
   (function(){ const fmt=n=>Math.round(n).toLocaleString('en-US'), read=k=>{ try{ return JSON.parse(localStorage.getItem(k)||'{}'); }catch(e){ return {}; } };
     const s=read('snowtrader.v1'), b=read('surfrush.v1');
     const sBest=s.best?Math.max(0,...Object.values(s.best).map(v=>v&&v.profit||0)):0; if(sBest>0) document.getElementById('bestSnow').textContent='שיא: '+fmt(sBest);
-    if(b.best>0) document.getElementById('bestBeach').textContent='שיא סשן: '+fmt(b.best); })();
+    const bb=Math.max(b.best||0,b.sbest||0); if(bb>0) document.getElementById('bestBeach').textContent='שיא סשן: '+fmt(bb); })();
 </script>
 </body>
 </html>

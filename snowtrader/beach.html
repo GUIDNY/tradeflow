@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b2a3a">
 <link rel="icon" href="data:,">
-<title>Surf Rush · קייטסרף</title>
-<meta name="description" content="עיירת חוף תלת־ממדית: מטיילים בטיילת, יוצאים למים וגולשים קייטסרף.">
+<title>Surf Rush · גלים וקייטסרף</title>
+<meta name="description" content="עיירת חוף תלת־ממדית: מטיילים בטיילת, יוצאים למים, גולשים קייטסרף וגלים.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -30,7 +30,7 @@
   <button id="tLift" class="tlift" hidden>🪁 יוצאים למים</button>
   <div class="tbar">
     <button id="tChar" class="tbtn"><b>🏄</b><span>רוכב וקייט</span></button>
-    <button id="playBtn" class="tgo">🪁 קייטסרף</button>
+    <div class="tgo2"><button id="surfBtn" class="tgo surf">🏄 גלים</button><button id="playBtn" class="tgo">🪁 קייט</button></div>
   </div>
   <div id="sheet-char" class="sheet" hidden><div class="shead"><h3>הרוכב שלכם <small id="riderState"></small></h3><button class="sx" aria-label="סגירה">✕</button></div>
     <div id="riderRow"></div><h3 class="sh3">הקייט</h3><div id="kiteRow"></div></div>
@@ -44,6 +44,7 @@
   <div class="prog"><i id="progBar"></i><span id="progTxt">3:00</span></div>
   <div id="wind"><i id="windArrow">➤</i><span id="windTxt">18 קשר</span></div>
   <div id="jumpH"></div>
+  <div id="cue"></div>
   <div id="combo" hidden><b id="comboX">x2</b><span>קומבו</span><i id="comboBar"></i></div>
   <div id="toast"></div>
   <div id="big"></div>
@@ -84,6 +85,7 @@
 <script src="js/rider.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/kite.js"></script>
+<script src="js/surf.js"></script>
 <script src="js/beachmain.js"></script>
 </body>
 </html>

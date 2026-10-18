@@ -328,6 +328,50 @@ await test('kitefps',async()=>{ const p=await openBeach(); const r=await p.evalu
     const a=run(1/60), b=run(1/20); D.toBeach(); return {fps60:a,fps20:b}; });
   const ok=r.fps60.jumps===1&&r.fps20.jumps===1&&Math.abs(r.fps60.maxH-r.fps20.maxH)<.6&&Math.abs(r.fps60.kmh-r.fps20.kmh)<6;
   return {ok,detail:JSON.stringify(r)}; });
+/* wave surfing: the physics with a bot in the page (the sea's clock set so a given wave comes), then the session's flow */
+await test('surf',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const SF=ST.Surf, S=SF.S, C=ST.Coast, SU=C.SURF, H=1/120, wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
+    const fr=x=>{ const sd=10/170*Math.cos(x/170)+4/53*Math.cos(x/53+1.3), l=Math.hypot(sd,1); return {ax:1/l,az:sd/l,nx:-sd/l,nz:1/l}; };
+    const ctl=()=>({steer:0,paddle:false,pop:false,pump:false,spin:false,spinDir:1,grab:false});
+    const head=(th,f)=>Math.atan2(Math.cos(th)*f.ax-Math.sin(th)*f.nx,Math.cos(th)*f.az-Math.sin(th)*f.nz);
+    // lying just outside the break, a little down the line from wave i's peak, its crest 18 m out
+    const lineup=i=>{ const px=SU.peak+((i*37)%21+21)%21-10, x=px+8, off=SU.offB+8, f=fr(x); C.time=i*SU.period+(SU.off0-(off+18))/SU.c; SF.reset({x,z:C.shoreZ(x)-off,h:Math.atan2(f.nx,f.nz)}); };
+    // one wave: how = 'idle' (nothing), 'straight' (stand up and go to the beach), 'trim' (down the line holding the middle of the face, pumping), 'carve' (bottom and top turns)
+    const ride=(i,how)=>{ lineup(i); const c=ctl(); let t=0, rideT=null, x0=0, maxV=0, evs=[], mode='drop';
+      while(t<(how==='idle'?15:30)){   /* idle: just this wave (later ones find a drifting surfer further in) */ const sw=S.face, f=fr(S.x);
+        if(S.ph==='wait'||S.ph==='paddle'){ if(how!=='idle'){ c.paddle=!!sw&&sw.u>-12&&sw.u<2; c.steer=Math.max(-1,Math.min(1,wrap(S.h-head(-75*Math.PI/180,f))*3)); c.pop=!!sw&&S.speed>SF.C.popMin&&sw.u>-sw.Lf; } }
+        else if(S.ph==='ride'){ c.paddle=c.pop=false; if(rideT==null){ rideT=t; x0=S.x; } maxV=Math.max(maxV,S.speed);
+          let th=-Math.PI/2; if(how==='trim'){ th=mode==='drop'?-55*Math.PI/180:Math.max(-.9,Math.min(.75,(.5-S.f)*2.6)); if(mode==='drop'&&S.f<.3) mode='trim'; c.pump=true; }
+          else if(how==='carve'){ if(mode==='drop'&&S.f<.22) mode='up'; else if(mode==='up'&&S.f>.85) mode='drop'; th=mode==='drop'?-50*Math.PI/180:55*Math.PI/180; c.pump=true; }
+          c.steer=Math.max(-1,Math.min(1,wrap(S.h-head(th,f))*(how==='carve'?5:4))); }
+        else { c.steer=0; c.paddle=c.pop=c.pump=false; }
+        C.time+=H; SF.step(H,c); evs.push(...SF.events.map(e=>e.type==='land'?'land:'+(e.clean?'clean':'bad')+':'+e.h:e.type+(e.why?':'+e.why:''))); SF.events.length=0; t+=H;
+        if(S.ph==='wipe'||S.ph==='out') break; }
+      return {ride:rideT!=null?+(t-rideT).toFixed(1):null,along:+(S.x-x0).toFixed(0),maxKmh:+(maxV*3.6).toFixed(0),evs:evs.filter(e=>e!=='pop'&&e!=='ride'),ph:S.ph}; };
+    const out={}; out.idle=[5,7,8,9].map(i=>ride(i,'idle').evs.join()||'passed'); out.straight=ride(6,'straight'); out.trim=[5,6,8].map(i=>ride(i,'trim')); out.carve=[5,6,7].map(i=>ride(i,'carve')); return out; });
+  const checks={idle:r.idle.filter(e=>e==='passed').length>=3,straight:r.straight.evs.some(e=>e==='wipe:whitewater'),
+    trim:r.trim.filter(t=>t.ride>8&&t.along>40).length>=2&&r.trim.every(t=>t.maxKmh>20&&t.maxKmh<48),trimEnds:r.trim.filter(t=>t.evs.includes('end:kick')).length>=2,
+    air:r.carve.some(c=>c.evs.some(e=>e==='air'))&&r.carve.some(c=>c.evs.some(e=>e.startsWith('land:clean')))}, bad=Object.keys(checks).filter(k=>!checks[k]);
+  return {ok:!bad.length,detail:JSON.stringify(r)+(bad.length?' FAILED: '+bad.join(','):'')}; });
+
+await test('surfflow',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const D=ST.debug, S=ST.Surf.S, C=ST.Coast, I=D.input, U=ST.BeachTown.spots.surf, out={};
+    D.toBeach(); D.save.sctlSeen=0; D.townPlace({x:U.x+2,z:U.z+3,hd:Math.PI}); for(let i=0;i<10;i++) D.tick(1/60); const L=document.querySelector('#tLift'); out.offer=!L.hidden&&L.textContent.includes('גלים');
+    L.click(); out.controlsFirst=!document.querySelector('#controls').hidden&&document.querySelectorAll('#ctlTouch .r').length>=6; document.querySelector('#ctlOk').click();
+    out.session=D.mode==='surf'&&D.sport==='surf'&&!document.querySelector('#hud').hidden&&!!ST.Rider.boardObj.userData.surfboard&&ST.Rider.boardObj.visible;
+    for(let i=0;i<10;i++) D.tick(1/60); out.prone=ST.Rider.ik&&ST.Rider.ik.state; out.cue=document.querySelector('#cue').textContent;
+    // the game's own input: paddle when the wave comes, stand up when it has the board, then ride down the line pumping
+    const tick=(n,f)=>{ for(let k=0;k<n;k++){ I.k={}; I.jump=false; if(f) f(k); D.tick(1/60); } I.k={}; I.jump=false; };
+    let t=0, sawPop=false; while(S.ph!=='ride'&&t<2400){ tick(1,k=>{ const sw=S.face; if(D.surf.nextT-C.time<1.8) I.k.u=true; if(sw&&S.speed>ST.Surf.C.popMin&&sw.u>-sw.Lf){ I.jump=k%2===0; sawPop=sawPop||document.querySelector('#cue').textContent.includes('קום'); } }); t++; }
+    out.stood=S.ph==='ride'; out.popCue=sawPop; out.standing=ST.Rider.ik&&ST.Rider.ik.state;
+    t=0; while(S.ph==='ride'&&t<300){ tick(1,()=>{ const x=S.x, sd=10/170*Math.cos(x/170)+4/53*Math.cos(x/53+1.3), nl=Math.hypot(sd,1); const th=S.f>.62?-.5:S.f<.35?.45:-.1, hx=Math.cos(th)/nl-Math.sin(th)*(-sd/nl), hz=Math.cos(th)*sd/nl-Math.sin(th)/nl; let d=S.h-Math.atan2(hx,hz); d=Math.atan2(Math.sin(d),Math.cos(d)); if(d>.08) I.k.r=true; else if(d<-.08) I.k.l=true; I.k.u=true; }); t++; }
+    out.feet=ST.Rider.ik&&Math.max(ST.Rider.ik.err.L,ST.Rider.ik.err.R)*100; out.kmh=+(S.speed*3.6).toFixed(0);
+    // pause and resume; the clock runs out (the ride is let finish), results, back on the sand by the surf school
+    document.querySelector('#pause').click(); out.paused=D.mode==='pause'; document.querySelector('#resumeBtn').click(); out.resumed=D.mode==='surf';
+    D.sess.t=D.sess.len; t=0; while(D.mode==='surf'&&t<2400){ tick(1); t++; } out.results=D.mode==='end'&&document.querySelectorAll('#endRows div').length===6&&document.querySelector('#endRows').textContent.includes('גלים');
+    document.querySelector('#menuBtn').click(); for(let i=0;i<10;i++) D.tick(1/60);
+    out.back=D.mode==='menu'&&ST.Rider.walking&&!ST.Rider.boardObj.visible&&!ST.Surf.group.visible&&Math.hypot(D.town.x-U.x,D.town.z-U.z)<4;
+    return out; });
+  const ok=r.offer&&r.controlsFirst&&r.session&&r.prone==='prone (FK)'&&r.stood&&r.popCue&&r.standing!=='prone (FK)'&&r.feet<3&&r.kmh>12&&r.paused&&r.resumed&&r.results&&r.back&&beachErrors.length===0;
+  return {ok,detail:JSON.stringify(r)+(beachErrors.length?' errors: '+beachErrors.slice(0,2).join(' | '):'')}; });
 if(beach) await beach.close();
 
 await browser.close(); server.close();

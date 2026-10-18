@@ -25,6 +25,40 @@
   /* ---------- the sea: Gerstner waves (direction, wavelength, amplitude, steepness) ---------- */
   const G=9.81, WAVES=[[.17,1,48,.42,.55],[-.32,1,31,.2,.5],[.82,.57,11,.085,.6],[.35,.94,5.3,.035,.5]].map(([dx,dz,L,A,Q])=>{ const l=Math.hypot(dx,dz), k=2*PI/L; return {dx:dx/l,dz:dz/l,k,w:Math.sqrt(G*k),A,Q:Q/(k*A*4)}; });
   C.WAVES=WAVES; C.time=0;
+  /* ---------- the surf: waves that break on the bar at the west end of the bay ----------
+     A wave rolls in every 14 s (a run of heights that repeats, like sets). Each shoals (grows) toward the bar, starts to break
+     at its peak 84 m out and peels toward the town (+x) at 4.2 m/s, a quicker close-out the other way. Behind the peel it is
+     whitewater: a lower bore of foam that runs on to the sand. Ahead of the peel the face is steepest (the pocket) and it
+     flattens and drops along the shoulder. Across the crest: a long gentle back and a short concave face. The same function
+     draws the sea (GPU, from uniforms set each frame) and carries the board (here, with the water's own speed in it). */
+  const SURF={x0:-330,x1:-40,peak:-215,off0:150,offB:84,c:5,peel:4.2,back:11,period:14,dir:1,H:[1.9,2.4,2.8,2.1,2.6,2.2,3.0,2.0]};
+  SURF.tb=(SURF.off0-SURF.offB)/SURF.c; C.SURF=SURF;
+  const shoreZd=x=>10/170*Math.cos(x/170)+4/53*Math.cos(x/53+1.3);   // the slope of the shoreline
+  /* the waves in the water at time t (the last three launched): crest distance offshore, height with shoaling, peak, time since it broke */
+  C.surfWaves=function(t,out){ out=out||[]; out.length=0; const S=SURF, n=Math.floor(t/S.period);
+    for(let i=n;i>n-3;i--){ const tr=t-i*S.period, off=S.off0-S.c*tr; if(tr<0||off<3) continue; const H=S.H[((i%8)+8)%8];
+      out.push({i,tr,off,Hs:H*lerp(.3,1,smooth(S.off0,S.offB,off)),px:S.peak+((i*37)%21+21)%21-10,dtb:tr-S.tb}); }
+    return out; };
+  /* one wave at the point (x, off): the height and what the board needs to know (into o) */
+  function surfOne(w,x,off,o){ const S=SURF; o.y=0; o.brk=0; o.foam=0; o.k=0; o.u=0; o.Hu=0; o.qa=1e3;
+    const taper=smooth(S.x0,S.x0+40,x)*(1-smooth(S.x1-40,S.x1,x))*smooth(3,14,off); if(taper<=0) return o;
+    const a=(x-w.px)*S.dir, db=Math.max(w.dtb,0), qa=a-S.peel*db, qb=a+S.back*db;   // along the peel; ahead of the peel; the close-out the other way
+    const brk=w.dtb>0?smooth(1.5,-1.5,qa)*smooth(-1.5,1.5,qb):0;
+    const k=w.dtb>0?Math.max(Math.exp(-Math.max(qa,0)/16),Math.exp(-Math.max(-qb,0)/10)):.45*smooth(-6,0,w.dtb)*Math.exp(-a*a/900);
+    const Hu=w.Hs*taper*(.68+.32*k), Hb=w.Hs*taper*lerp(.55,.28,smooth(S.offB,15,w.off)), u=off-w.off;
+    const Lb=5.5*Hu+4, Lf=Hu*(3.4-2*k)+.4, pw=1.4+1.2*k, Lbb=4*Hb+3, Lfb=1.5*Hb+.5;
+    const yu=u>=0?Hu*Math.exp(-(u*u)/(Lb*Lb)):(-u<Lf?Hu*Math.pow(1+u/Lf,pw):0);
+    const yb=u>=0?Hb*Math.exp(-(u*u)/(Lbb*Lbb)):(-u<Lfb?Hb*Math.pow(1+u/Lfb,1.3):0);
+    const lip=(1-brk)*(w.dtb>0?smooth(5,0,qa):0)*smooth(.7,.95,yu/Math.max(Hu,.01))*(u<.5?1:0);
+    o.y=lerp(yu,yb,brk); o.brk=brk*(u>-Lfb&&u<Lbb?1:0); o.foam=Math.max(brk*(u>-Lfb?Math.exp(-Math.max(u,0)/16):0),lip); o.k=k; o.u=u; o.Hu=Hu; o.Hb=Hb; o.qa=qa; o.Lf=Lf; return o; }
+  const _sw=[], _so={}, _sb={};
+  /* the surf at (x,z): height, and of the wave with the most there: its index, the board's place on it (u: + behind the crest),
+     the local face height, how broken, how steep, how far ahead of the peel */
+  function surfAt(x,z,t,o){ const off=shoreZ(x)-z; C.surfWaves(t,_sw); o.y=0; o.brk=0; o.foam=0; o.w=null; let best=-1;
+    for(const w of _sw){ surfOne(w,x,off,_so); o.y+=_so.y; o.brk=Math.max(o.brk,_so.brk); o.foam=Math.max(o.foam,_so.foam);
+      const m=_so.Hu>.05?_so.y/_so.Hu+(Math.abs(_so.u)<40?1:0):-1; if(m>best&&_so.Hu>.05&&Math.abs(_so.u)<45){ best=m; o.w=w; o.u=_so.u; o.Hu=_so.Hu; o.k=_so.k; o.qa=_so.qa; o.Lf=_so.Lf; o.wy=_so.y; o.wbrk=_so.brk; } }
+    return o; }
+  C.surfAt=surfAt;
   // how much of the waves is left where the water is d metres deep (they die at the waterline)
   const ampAt=depth=>smooth(-.1,2.6,depth);
   const depthAt=(x,z)=>{ const d=z-shoreZ(x); return d<0?-seabed(-d):-land(x,d); };
@@ -37,10 +71,37 @@
     out.dx=dx; out.dz=dz; out.y=y; out.vy=vy; out.sx=sx; out.sz=sz; return out; }
   const _s={dx:0,dz:0,y:0,vy:0,sx:0,sz:0};
   /* the surface over the point (x,z): the waves carry each water particle in a small circle, so find the particle that is there */
+  const _sx={}, _sz={};
   C.water=function(x,z,t,out){ t=t==null?C.time:t; out=out||{}; let x0=x, z0=z; for(let i=0;i<3;i++){ surf(x0,z0,t,_s); x0=x-_s.dx; z0=z-_s.dz; } surf(x0,z0,t,_s);
-    out.y=_s.y; out.vy=_s.vy; out.nx=-_s.sx; out.nz=-_s.sz; out.depth=depthAt(x,z); return out; };
+    out.y=_s.y; out.vy=_s.vy; out.nx=-_s.sx; out.nz=-_s.sz; out.depth=depthAt(x,z);
+    // the surf (only near the spot): its height, its slope, how fast it rises under a point, and the water it carries shoreward
+    out.brk=0; out.foam=0; out.ux=0; out.uz=0; out.sw=null;
+    if(x>SURF.x0-5&&x<SURF.x1+5){ surfAt(x0,z0,t,_sb); if(_sb.w||_sb.y){ const e=.25, hx=surfAt(x0+e,z0,t,_sx).y, hz=surfAt(x0,z0+e,t,_sz).y, gx=(hx-_sb.y)/e, gz=(hz-_sb.y)/e;
+      out.y+=_sb.y; out.nx-=gx; out.nz-=gz; out.brk=_sb.brk; out.foam=_sb.foam;
+      // the crest moves shoreward at c: a point sees the surface rise at c times the slope along the shore normal
+      const sd=shoreZd(x0), nl=Math.hypot(sd,1), nx=-sd/nl, nz=1/nl; out.vy+=-SURF.c*(gx*nx+gz*nz);
+      // the water under the wave goes shoreward (shallow water: c·η/(depth+η)), all of it in the whitewater's bore
+      // and near the top of a steep face, about to break, nearly as fast as the wave itself (that is what pitches the lip)
+      const dep=Math.max(.4,depthAt(x0,z0)), fh=_sb.Hu>.1?_sb.wy/_sb.Hu:0, lipF=_sb.u<.5?_sb.k*smooth(.55,1,fh):0;
+      const uw=Math.min(.95,Math.max(0,_sb.y)/(dep+Math.max(0,_sb.y))*1.15+_sb.brk*.55+lipF*.55)*SURF.c; out.ux=nx*uw; out.uz=nz*uw;
+      if(_sb.w) out.sw={w:_sb.w,u:_sb.u,Hu:_sb.Hu,k:_sb.k,qa:_sb.qa,Lf:_sb.Lf,y:_sb.wy,brk:_sb.wbrk,nx,nz}; } }
+    return out; };
   C.waterY=(x,z,t)=>C.water(x,z,t,_w).y; const _w={};
   /* ---------- GLSL: the same sea ---------- */
+  const GLSL_SURF=`
+    uniform vec4 uSW[3]; float sFace=0.;   // how far up a wave's open face (0..1, steeper = more): the light through the water near the lip
+    float surfOne(vec2 p,vec4 w,out float foam){ foam=0.; if(w.y<=0.) return 0.;
+      float off=shoreZ(p.x)-p.y, taper=smoothstep(${SURF.x0.toFixed(1)},${(SURF.x0+40).toFixed(1)},p.x)*(1.-smoothstep(${(SURF.x1-40).toFixed(1)},${SURF.x1.toFixed(1)},p.x))*smoothstep(3.,14.,off); if(taper<=0.) return 0.;
+      float a=(p.x-w.z)*${SURF.dir.toFixed(1)}, db=max(w.w,0.), qa=a-${SURF.peel.toFixed(2)}*db, qb=a+${SURF.back.toFixed(2)}*db;
+      float brk=w.w>0.?smoothstep(1.5,-1.5,qa)*smoothstep(-1.5,1.5,qb):0.;
+      float k=w.w>0.?max(exp(-max(qa,0.)/16.),exp(-max(-qb,0.)/10.)):.45*smoothstep(-6.,0.,w.w)*exp(-a*a/900.);
+      float Hu=w.y*taper*(.68+.32*k), Hb=w.y*taper*mix(.55,.28,smoothstep(${SURF.offB.toFixed(1)},15.,w.x)), u=off-w.x;
+      float Lb=5.5*Hu+4., Lf=Hu*(3.4-2.*k)+.4, pw=1.4+1.2*k, Lbb=4.*Hb+3., Lfb=1.5*Hb+.5;
+      float yu=u>=0.?Hu*exp(-(u*u)/(Lb*Lb)):(-u<Lf?Hu*pow(1.+u/Lf,pw):0.);
+      float yb=u>=0.?Hb*exp(-(u*u)/(Lbb*Lbb)):(-u<Lfb?Hb*pow(1.+u/Lfb,1.3):0.);
+      float lip=(1.-brk)*(w.w>0.?smoothstep(5.,0.,qa):0.)*smoothstep(.7,.95,yu/max(Hu,.01))*step(u,.5);
+      foam=max(brk*(u>-Lfb?exp(-max(u,0.)/16.):0.),lip); sFace=max(sFace,(1.-brk)*(u<0.&&-u<Lf?(1.+u/Lf)*(.35+.65*k)*smoothstep(.4,1.2,Hu):0.)); return mix(yu,yb,brk); }
+    float surfH(vec2 p,out float foam){ float f0,f1,f2; float h=surfOne(p,uSW[0],f0)+surfOne(p,uSW[1],f1)+surfOne(p,uSW[2],f2); foam=max(f0,max(f1,f2)); return h; }`;
   const GLSL_SEA=`
     uniform float uT;
     float shoreZ(float x){ return 10.*sin(x/170.)+4.*sin(x/53.+1.3); }
@@ -49,7 +110,7 @@
     void sea(vec2 p,out vec3 disp,out vec3 tx,out vec3 tz,out float crest){ float depth=depthAt(p), m=smoothstep(-.1,2.6,depth); disp=vec3(0.); tx=vec3(1.,0.,0.); tz=vec3(0.,0.,1.); crest=0.;
       ${WAVES.map((W,i)=>`{ vec2 D=vec2(${W.dx.toFixed(5)},${W.dz.toFixed(5)}); float k=${W.k.toFixed(5)}, A=${W.A.toFixed(4)}*m, Q=${W.Q.toFixed(4)}; float th=k*dot(D,p)-${W.w.toFixed(5)}*uT, c=cos(th), s=sin(th);
         disp+=vec3(Q*A*D.x*c,A*s,Q*A*D.y*c); tx+=vec3(-Q*A*k*D.x*D.x*s,A*k*D.x*c,-Q*A*k*D.x*D.y*s); tz+=vec3(-Q*A*k*D.x*D.y*s,A*k*D.y*c,-Q*A*k*D.y*D.y*s); crest+=${i<2?'1.':'.5'}*Q*A*k*s; }`).join('\n      ')}
-      float sw=1.-m; float th0=${WAVES[0].k.toFixed(5)}*dot(vec2(${WAVES[0].dx.toFixed(5)},${WAVES[0].dz.toFixed(5)}),p)-${WAVES[0].w.toFixed(5)}*uT; disp.y+=sw*.22*sin(th0); }`;
+      float sw=1.-m; float th0=${WAVES[0].k.toFixed(5)}*dot(vec2(${WAVES[0].dx.toFixed(5)},${WAVES[0].dz.toFixed(5)}),p)-${WAVES[0].w.toFixed(5)}*uT; disp.y+=sw*.22*sin(th0); }`+GLSL_SURF;
   C.GLSL_SEA=GLSL_SEA;
   /* ---------- the sky: dome and environment ---------- */
   const SKY={sun:new THREE.Vector3(-.36,.52,-.78).normalize(),zen:new THREE.Color(.16,.38,.78),hor:new THREE.Color(.7,.83,.95),sunC:new THREE.Color(1,.93,.78)};
@@ -96,23 +157,27 @@
     const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setIndex(idx); g.computeBoundingSphere(); g.boundingSphere.radius=1e5;
     const m=new THREE.MeshStandardMaterial({color:0x1b5f7a,roughness:.18,metalness:0});
     m.onBeforeCompile=sh=>{ sh.uniforms.uT=SEA_U.uT; sh.uniforms.uCam=SEA_U.uCam; sh.uniforms.uSun={value:SKY.sun}; sh.uniforms.uZen={value:SKY.zen}; sh.uniforms.uHor={value:SKY.hor}; sh.uniforms.uSunC={value:SKY.sunC}; sh.uniforms.uDbg=SEA_U.uDbg;
-      sh.vertexShader='uniform vec3 uCam;\nvarying vec3 vWp; varying float vDepth; varying float vCrest; varying float vFar;\n'+GLSL_SEA+'\n'+sh.vertexShader
+      sh.uniforms.uSW=SEA_U.uSW;
+      sh.vertexShader='uniform vec3 uCam;\nvarying vec3 vWp; varying float vDepth; varying float vCrest; varying float vFar; varying float vSurf; varying float vFace;\n'+GLSL_SEA+'\n'+sh.vertexShader
         .replace('#include <beginnormal_vertex>',`vec3 wp0=(modelMatrix*vec4(position,1.)).xyz; vec3 dsp, tx, tz; float crest; sea(wp0.xz,dsp,tx,tz,crest);
-          float far=smoothstep(180.,420.,length(wp0.xz-uCam.xz)); dsp*=1.-far; tx=mix(tx,vec3(1.,0.,0.),far); tz=mix(tz,vec3(0.,0.,1.),far);
+          { float sf, sf1, sf2, e=.3; sFace=0.; float h=surfH(wp0.xz,sf); float face=sFace; if(h!=0.||sf>0.){ float hx=surfH(wp0.xz+vec2(e,0.),sf1), hz=surfH(wp0.xz+vec2(0.,e),sf2); dsp.y+=h; tx.y+=(hx-h)/e; tz.y+=(hz-h)/e; } vSurf=sf; vFace=face; }
+          float far=smoothstep(180.,420.,length(wp0.xz-uCam.xz)); dsp*=1.-far; tx=mix(tx,vec3(1.,0.,0.),far); tz=mix(tz,vec3(0.,0.,1.),far); vSurf*=1.-far;
           vec3 objectNormal=normalize(cross(tz,tx)); vDepth=depthAt(wp0.xz); vCrest=crest*(1.-far); vFar=far;`)
         .replace('#include <begin_vertex>','vec3 transformed=position+dsp;')
         .replace('#include <worldpos_vertex>','#include <worldpos_vertex>\n vWp=(modelMatrix*vec4(transformed,1.)).xyz;');
-      sh.fragmentShader='uniform float uT; uniform vec3 uSun,uZen,uHor,uSunC; uniform vec4 uDbg;\nvarying vec3 vWp; varying float vDepth; varying float vCrest; varying float vFar;\nfloat h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y); }\n'+sh.fragmentShader
+      sh.fragmentShader='uniform float uT; uniform vec3 uSun,uZen,uHor,uSunC; uniform vec4 uDbg;\nvarying vec3 vWp; varying float vDepth; varying float vCrest; varying float vFar; varying float vSurf; varying float vFace;\nfloat h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y); }\n'+sh.fragmentShader
         .replace('#include <color_fragment>',`#include <color_fragment>
           float dep=max(vDepth,0.);
           vec3 deep=vec3(.004,.045,.095), mid=vec3(.012,.13,.19), shal=vec3(.05,.26,.27), sand=vec3(.4,.36,.24);
           vec3 wc=mix(shal,mid,smoothstep(.4,3.5,dep)); wc=mix(wc,deep,smoothstep(3.,14.,dep)); wc=mix(sand,wc,smoothstep(0.,.55,dep));
+          wc=mix(wc,vec3(.06,.42,.42),pow(clamp(vFace,0.,1.),1.6)*.75*(1.-vFar));   // a wave's face lights up turquoise toward the lip
           // foam: the waterline's lace, the bar's broken water, whitecaps on steep crests
           float n1=vn(vWp.xz*.9+vec2(uT*.35,uT*.12)), n2=vn(vWp.xz*3.1-vec2(uT*.2,uT*.5));
           float shore=smoothstep(.55,.0,dep)*(.55+.45*sin(dep*9.-uT*1.6+n1*3.));
           float bar=smoothstep(2.6,2.1,dep)*smoothstep(1.2,2.0,dep)*smoothstep(.25,.6,vCrest+n1*.3);
           float caps=smoothstep(.42,.62,vCrest+n2*.25)*.65;
-          float foam=clamp(max(shore,max(bar,caps))*(.6+.4*n2),0.,1.)*(1.-vFar)*uDbg.x;
+          float surfF=vSurf*(.62+.38*smoothstep(.25,.75,n1*.6+n2*.6));   // the surf's whitewater and its curling lip
+          float foam=clamp(max(max(shore,max(bar,caps))*(.6+.4*n2),surfF),0.,1.)*(1.-vFar)*uDbg.x;
           diffuseColor.rgb=mix(wc,vec3(.95,.97,.98),foam); fFoam=foam;`)
         .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
           { float e=.35; vec2 q=vWp.xz*.55+vec2(uT*.11,uT*.07); float a=vn(q), b=vn(q+vec2(e,0.)), c=vn(q+vec2(0.,e)); vec2 q2=vWp.xz*1.9-vec2(uT*.23,uT*.17); float a2=vn(q2), b2=vn(q2+vec2(e,0.)), c2=vn(q2+vec2(0.,e));
@@ -127,7 +192,10 @@
         .replace('void main() {','float fFoam=0.;\nvoid main() {'); };
     m.customProgramCacheKey=()=>'st-sea';
     const mesh=new THREE.Mesh(g,m); mesh.receiveShadow=true; mesh.frustumCulled=false; mesh.name='sea'; return mesh; }
-  const SEA_U={uT:{value:0},uCam:{value:new THREE.Vector3()},uDbg:{value:new THREE.Vector4(1,1,0,0)}}; C.SEA_U=SEA_U;
+  const SEA_U={uT:{value:0},uCam:{value:new THREE.Vector3()},uDbg:{value:new THREE.Vector4(1,1,0,0)},uSW:{value:[new THREE.Vector4(),new THREE.Vector4(),new THREE.Vector4()]}}; C.SEA_U=SEA_U;
+  const _uw=[];
+  /* the surf's waves for the GPU: crest offshore, height, peak, time since breaking */
+  function surfUniforms(){ C.surfWaves(C.time,_uw); SEA_U.uSW.value.forEach((v,i)=>{ const w=_uw[i]; if(w) v.set(w.off,w.Hs,w.px,w.dtb); else v.set(0,0,0,0); }); }
   /* ---------- build, light, follow ---------- */
   let built=false, sea=null;
   C.build=function(){ if(built) return; built=true;
@@ -137,7 +205,7 @@
     sun.color.copy(SKY.sunC); sun.intensity=2.25;
     ST.gradeCfg={shadow:[.94,1.0,1.08],high:[1.06,1.01,.93],sat:1.14,contrast:1.06,vig:.24}; if(ST.applyGrade) ST.applyGrade(); };
   /* every frame: the waves' clock, the sea under the camera, the sun's shadow box over the player */
-  C.update=function(dt,focus){ C.time+=dt; SEA_U.uT.value=C.time; skyMesh.material.uniforms.uT.value=C.time; const cp=camera.position;
+  C.update=function(dt,focus){ C.time+=dt; SEA_U.uT.value=C.time; surfUniforms(); skyMesh.material.uniforms.uT.value=C.time; const cp=camera.position;
     if(sea){ const s=2.5; sea.position.set(Math.round(cp.x/s)*s,0,Math.round(cp.z/s)*s); SEA_U.uCam.value.copy(cp); }
     skyMesh.position.copy(cp);
     const f=focus||cp, sd=SKY.sun; sun.position.set(f.x+sd.x*140,f.y+sd.y*140,f.z+sd.z*140); sun.target.position.set(f.x,f.y,f.z); sun.target.updateMatrixWorld(); };

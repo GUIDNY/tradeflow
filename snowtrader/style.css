@@ -241,3 +241,14 @@ body.beach #pause{left:96px}body.beach #mute{left:148px}
 #kiteRow button i{display:block;width:54px;height:22px;border-radius:30px 30px 6px 6px;background:linear-gradient(90deg,var(--c) 0 12%,var(--a) 12% 42%,var(--b) 42% 58%,var(--a) 58% 88%,var(--c) 88%);border-top:4px solid var(--c)}
 #kiteRow button.sel{border-color:var(--g);box-shadow:0 0 0 3px rgba(22,224,138,.25)}
 @media (max-width:700px){ #wind{top:8px;left:10px;width:60px;height:60px} #wind i{font-size:22px} body.beach #pause{left:80px;top:10px} body.beach #mute{left:130px;top:10px} }
+/* the beach: two ways out on the water; the surf's cue and its buttons */
+.tgo2{display:flex;gap:8px}.tgo2 .tgo{flex:1 1 0;font-size:21px;padding:11px 4px 9px;white-space:nowrap}
+.tgo.surf{background:linear-gradient(180deg,#5ee7ff,#13b6e0);color:#03222c;box-shadow:0 6px 0 #0a6f8a,0 12px 30px rgba(19,182,224,.4)}
+.tgo.surf:active{box-shadow:0 2px 0 #0a6f8a}
+#cue{position:absolute;left:50%;bottom:24%;transform:translateX(-50%);font-family:var(--display);font-size:clamp(30px,6.5vw,60px);letter-spacing:.06em;color:#fff;text-shadow:0 4px 0 #000,0 0 26px rgba(0,0,0,.5);opacity:0;transition:opacity .15s;pointer-events:none;white-space:nowrap}
+#cue.on{opacity:1}#cue.go{color:var(--gold);animation:cuepulse .5s ease-in-out infinite alternate}
+@keyframes cuepulse{from{transform:translateX(-50%) scale(1)}to{transform:translateX(-50%) scale(1.12)}}
+body.surfing #btnFlip{display:none}
+@media (max-width:700px){ .tgo2 .tgo{font-size:18px} }
+body.beach #combo{top:128px}
+@media (max-width:520px) and (orientation:portrait){ body.beach #combo{top:150px} }

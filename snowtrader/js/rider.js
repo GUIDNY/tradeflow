@@ -205,6 +205,8 @@
     const S=(n,tg,f,z)=>{ const o=R.S[n]||(R.S[n]={x:tg,v:0}); const h=dt/2, w=f*f; for(let i=0;i<2;i++){ o.v+=(w*(tg-o.x)-2*z*f*o.v)*h; o.x+=o.v*h; } return o.x; };
     const E={}; const rot=(k,x,y,z)=>{ E[k]=[x,y,z]; };
     const dir=P.dir<0?-1:1, DEG=180/Math.PI;
+    if((P.prone||0)>.5){ poseProne(P); R._prone=true; return; }
+    if(R._prone){ R._prone=false; R.model.rotation.set(0,R.model.userData.rideYaw!=null?R.model.userData.rideYaw:Math.PI/2,0); R.S={}; }   // up from lying on a surfboard
     if(seated){ poseSeated(P,rot); }
     else {
       // ---- canonical inputs (as if riding regular: left foot forward); a switch rider gets the mirror image ----
@@ -348,6 +350,36 @@
   };
   // the board is strapped to the feet: it never lags them (and turns with a grab's tweak, which the feet follow)
   function finishBoard(P,live){ rig.rotation.set(0,0,0); rig.position.set(0,-.9,0); if(boardObj){ if(live&&R._tweakQ) boardObj.quaternion.copy(R._tweakQ); else boardObj.rotation.set(0,0,0); } }
+  /* lying on a surfboard: face down along it, the head toward its nose (P.noseZ: -1 or +1 in the rig's frame), the chest and
+     head raised, the legs together with the feet pointed; the arms paddle a crawl stroke (P.paddle 0..1 how hard, P.stroke its
+     phase in turns: overhead, down through the water under the chest, along the side to the hip, back over the top) or rest
+     along the rails. Forward kinematics only: every bone's turn from the bind pose, in the figure's own axes. */
+  const _yA=new THREE.Vector3(0,1,0), _pm=new THREE.Matrix4(), _bxP=new THREE.Vector3(), _byP=new THREE.Vector3(), _bzP=new THREE.Vector3();
+  function poseProne(P){ const m=R.model, nose=P.noseZ>0?1:-1, RD=Math.PI/180, bp=R.bones;
+    const fix=new THREE.Quaternion().setFromAxisAngle(_yA,(m.userData.rideYaw!=null?m.userData.rideYaw:Math.PI/2)-Math.PI/2);   // a model that faces -Z turned round first
+    // its up along the board, its front down, its left = up x front
+    _pm.makeBasis(_bxP.set(nose,0,0),_byP.set(0,0,nose),_bzP.set(0,-1,0)); m.quaternion.setFromRotationMatrix(_pm).multiply(fix);
+    m.position.set(0,0,0); root.updateMatrixWorld(true);
+    const Fb=m.getWorldQuaternion(new THREE.Quaternion()), q=(x,y,z)=>new THREE.Quaternion().setFromEuler(new THREE.Euler(x*RD,y*RD,z*RD,'XYZ'));
+    const pw=clamp(P.paddle||0,0,1), ph=(P.stroke||0)*360, rest=165;
+    // each arm's angle round the shoulder (0 = reaching ahead, 90 = straight down into the water, 180 = along the side)
+    const arm=a=>{ a=((a%360)+360)%360; return lerp(rest,a,pw); }, aL=arm(ph), aR=arm(ph+180);
+    const bend=a=>a>190&&a<350?Math.sin((a-190)/160*Math.PI)*55*pw:0;   // the elbow folds as the arm comes back over the top
+    R.drive={};
+    const set=(k,qq)=>{ if(bp[k]) R.drive[k]=qq; };
+    set('Hips',q(0,0,0)); set('Abdomen',q(-8,0,0)); set('Torso',q(-16,0,0)); set('Chest',q(-24,0,0)); set('Neck',q(-38,0,0)); set('Head',q(-50,0,0));
+    set('ShoulderL',q(0,0,8)); set('ShoulderR',q(0,0,-8));
+    set('UpperArmL',q(aL,0,0).multiply(q(0,0,90))); set('UpperArmR',q(aR,0,0).multiply(q(0,0,-90)));
+    set('LowerArmL',q(aL+bend(aL),0,0).multiply(q(0,0,90))); set('LowerArmR',q(aR+bend(aR),0,0).multiply(q(0,0,-90)));
+    set('WristL',q(aL+bend(aL)*1.2,0,0).multiply(q(0,0,90))); set('WristR',q(aR+bend(aR)*1.2,0,0).multiply(q(0,0,-90)));
+    set('UpperLegL',q(0,0,4)); set('UpperLegR',q(0,0,-4)); set('LowerLegL',q(14,0,0)); set('LowerLegR',q(14,0,0)); set('FootL',q(88,0,0)); set('FootR',q(88,0,0));
+    const applyAbs=kk=>{ const b=bp[kk]; if(!b||!R.drive[kk]) return; const par=b.parent; par.updateWorldMatrix(true,false); par.getWorldQuaternion(_q);
+      const target=_q2.copy(Fb).multiply(R.drive[kk]).multiply(R.bind[kk]); b.quaternion.copy(_q.invert().multiply(target)); b.updateMatrix(); b.updateMatrixWorld(true); };
+    R.order.forEach(applyAbs); m.updateMatrixWorld(true);
+    // on the deck: the hips a little behind the middle of the board, just above it
+    const hp=rig.worldToLocal(bp.Hips.getWorldPosition(new THREE.Vector3()));
+    m.position.set(-hp.x,(P.deck||.08)+.12-hp.y,-nose*.12-hp.z); m.updateMatrixWorld(true);
+    R.ik={on:false,state:'prone (FK)'}; finishBoard(P,0); }
   /* the chairlift seat: no IK, the legs hang */
   function poseSeated(P,rot){ const sw=Math.sin(P.t*2.2)*P.swing;
     rot('UpperLegL',-84+sw*.3,7,0); rot('UpperLegR',-86-sw*.3,-5,0); rot('LowerLegL',-4+sw,7,0); rot('LowerLegR',-8-sw,-5,0); rot('FootL',0,0,0); rot('FootR',0,0,0);
