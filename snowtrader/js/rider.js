@@ -63,6 +63,8 @@
     grp.userData.edge=steel; return grp;
   }
   let boardObj=null;
+  /* another board (the beach's kiteboard): any object, laid out like the snowboard (along Z, its top at the feet) */
+  R.setBoardObj=function(obj){ if(boardObj) trick.remove(boardObj); boardObj=obj; boardObj.position.y=-.9; boardObj.visible=!R.walking; trick.add(boardObj); R.boardObj=boardObj; };
   R.setBoard=function(i){ if(boardObj){ trick.remove(boardObj); } boardObj=makeBoard(BOARDS[i]||BOARDS[0]); boardObj.position.y=-.9; boardObj.visible=!R.walking; trick.add(boardObj); R.boardIndex=i; R.boardObj=boardObj; };   // walking in the town: put away
   trick.position.y=.9; rig.position.y=-.9;   // spin and flips turn about the body's centre, not the soles
 
@@ -143,7 +145,7 @@
     set('Skin',k.skin); set('Skin2',k.skin); set('Hair',k.hair); set('Hair2',k.hair); set('Top',k.jacket); set('Top2',0x1a1c22); set('Accent',0xffffff); set('Pants',k.pants); set('Shoe',0x22242b); set('Sole',0xeeeeee);
     if(M.Top){ M.Top.roughness=.55; M.Top.metalness=.05; } };
   R.addGear=function(){
-    if(R.spec&&R.spec.gear===false){ R.helm=null; R.lens=null; return; }   // the model brings its own helmet, goggles and gloves
+    if(R.spec&&R.spec.gear===false||R.noGear){ R.helm=null; R.lens=null; return; }   // the model brings its own helmet, goggles and gloves (or it is summer: none)
     const head=R.bones.Head; if(!head) return;
     const hp=head.getWorldPosition(new THREE.Vector3()), mp=R.model.getWorldPosition(new THREE.Vector3());
     const gear=new THREE.Group(), GM=ST.Assets?ST.Assets.got.gear:{};
@@ -330,6 +332,7 @@
     if(D&&D.k>.02&&!gArm){ const hs=D.toe?front:back, zz=D.toe?-dir*.22:dir*.3, xe=D.toe?.16:-.16;
       const pe=rig.localToWorld(new THREE.Vector3(xe,0,zz)), pa=rig.localToWorld(new THREE.Vector3(xe+(D.toe?1:-1),0,zz)), dx=pa.x-pe.x, dz=pa.z-pe.z, dl=Math.hypot(dx,dz)||1;
       const sx=pe.x+dx/dl*.3, sz=pe.z+dz/dl*.3; handT[hs].p.lerp(new THREE.Vector3(sx,ST.World.groundY(sx,sz)+.04,sz),D.k); R.handDrag={sd:hs,k:D.k,touch:false,pos:new THREE.Vector3()}; }
+    if(P.handsTo){ const H2=P.handsTo; if(gArm){ const o=gArm==='L'?'R':'L'; handT[o].p.copy(H2.C); } else { handT.L.p.copy(H2.L); handT.R.p.copy(H2.R); } }   // the kite's bar
     const sw2=Math.max(R._legs.sitW,R._legs.bump*.8*(R._legs.gu<.55?1:0));
     if(sw2>.01) ['L','R'].forEach(sd=>{ if(sd===gArm) return; handT[sd].p.lerp(rig.localToWorld(new THREE.Vector3(-.66,.05,(sd==='L'?-1:1)*.3)),clamp(sw2,0,1)); });
     info.hands={}; info.reach.armL=0; info.reach.armR=0;

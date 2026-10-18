@@ -64,6 +64,26 @@
   A.trick=function(n){ if(!ctx) return; const t=ctx.currentTime; for(let i=0;i<3;i++) tone(660*Math.pow(1.122,i*2+n),t+i*.05,.25,'triangle',.1); };
   A.wipe=function(){ if(!ctx) return; const t=ctx.currentTime; noiseHit(t,.8,.55,900); tone(130,t,.7,'sawtooth',.2,null,40); };
   A.win=function(){ if(!ctx) return; const t=ctx.currentTime; [523,659,784,1047,1319].forEach((f,i)=>tone(f,t+i*.11,.6,'square',.09)); };
+  /* ---------- the beach ----------
+     The sea: a low wash of noise that swells and breaks on a slow beat (each wave reaching the sand), with a foamy hiss on top;
+     louder at the waterline. The board on the water: a wet swoosh in the middle of the band that rises with the speed and the
+     edge, fluttering with the chop. A splash: a burst that falls in pitch. Gulls now and then over the town. */
+  let seaG=null, seaF=null, foamG=null, waterG=null, waterF=null, seaPh=0;
+  function seaInit(){ if(seaG) return;
+    const s1=ctx.createBufferSource(); s1.buffer=noiseBuf; s1.loop=true; seaF=ctx.createBiquadFilter(); seaF.type='lowpass'; seaF.frequency.value=520; seaG=ctx.createGain(); seaG.gain.value=0; s1.connect(seaF); seaF.connect(seaG); seaG.connect(master); s1.start(0,.4);
+    const s2=ctx.createBufferSource(); s2.buffer=noiseBuf; s2.loop=true; const f2=ctx.createBiquadFilter(); f2.type='highpass'; f2.frequency.value=3200; foamG=ctx.createGain(); foamG.gain.value=0; s2.connect(f2); f2.connect(foamG); foamG.connect(master); s2.start(0,1.1);
+    const s3=ctx.createBufferSource(); s3.buffer=noiseBuf; s3.loop=true; waterF=ctx.createBiquadFilter(); waterF.type='bandpass'; waterF.frequency.value=900; waterF.Q.value=.8; waterG=ctx.createGain(); waterG.gain.value=0; s3.connect(waterF); waterF.connect(waterG); waterG.connect(master); s3.start(0,.7); }
+  /* level 0..1 (the waterline is 1); call every frame with dt */
+  A.sea=function(level,dt){ if(!ctx) return; seaInit(); const t=ctx.currentTime; seaPh+=(dt||0)/8.5; const ph=seaPh%1, brk=ph<.18?ph/.18:Math.exp(-(ph-.18)*4.2);   // a wave builds, breaks, runs out
+    const k=Math.max(0,Math.min(1,level)); seaG.gain.setTargetAtTime(k*(.05+.17*brk),t,.12); seaF.frequency.setTargetAtTime(380+brk*700*k,t,.15); foamG.gain.setTargetAtTime(k*k*.035*brk,t,.2); };
+  /* the board on the water: speed (m/s), edge (0..1), in the air */
+  A.water=function(speed,edge,air){ if(!ctx) return; seaInit(); const t=ctx.currentTime, k=Math.min(1,speed/12);
+    waterG.gain.setTargetAtTime(air?0:k*(.07+.1*Math.min(1,edge||0))*(.8+Math.random()*.4),t,.05); waterF.frequency.setTargetAtTime(650+k*900+Math.random()*180,t,.06); };
+  A.splash=function(k){ if(!ctx) return; const t=ctx.currentTime, v=Math.max(.15,Math.min(1.3,k||1)); noiseHit(t,.5*v+.15,.28*v,2400); noiseHit(t+.04,.7*v+.2,.22*v,700); };
+  A.gull=function(){ if(!ctx) return; const t=ctx.currentTime, f=1500+Math.random()*500, n=1+Math.floor(Math.random()*3);
+    for(let i=0;i<n;i++){ const t0=t+i*.32, o=ctx.createOscillator(), g=ctx.createGain(), bp=ctx.createBiquadFilter(), lfo=ctx.createOscillator(), lg=ctx.createGain(); o.type='sawtooth'; bp.type='bandpass'; bp.frequency.value=f*1.1; bp.Q.value=2.5;
+      o.frequency.setValueAtTime(f,t0); o.frequency.linearRampToValueAtTime(f*1.18,t0+.06); o.frequency.exponentialRampToValueAtTime(f*.72,t0+.26); lfo.frequency.value=38; lg.gain.value=f*.025; lfo.connect(lg); lg.connect(o.frequency);
+      env(g,t0,.02,.24,.035); o.connect(bp); bp.connect(g); g.connect(master); o.start(t0); o.stop(t0+.32); lfo.start(t0); lfo.stop(t0+.32); } };
   /* synthwave loop: Am F C G */
   const CH=[[57,60,64],[53,57,60],[48,52,55],[55,59,62]], mtof=n=>440*Math.pow(2,(n-69)/12);
   function sched(){ if(!ctx||!musicOn) return; while(next<ctx.currentTime+.25){ const bar=Math.floor(step/16)%4, s=step%16, ch=CH[bar], t=next;

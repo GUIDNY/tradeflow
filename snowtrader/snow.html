@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d1a">
+<link rel="icon" href="data:,">
+<title>Snow Rush · סנובורד</title>
+<meta name="description" content="משחק סנובורד תלת־ממדי: יורדים במסלול, מבצעים תרגילים, אוספים גבישים וצוברים ניקוד.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="speedfx"></div>
+<div id="flash"></div>
+<div id="flare"><i class="fa"></i><i class="fb"></i><i class="fc"></i><i class="fd"></i></div>
+
+<!-- loading -->
+<div id="loading"><div class="logo">SNOW<b>RUSH</b></div><div class="bar"><i id="loadbar"></i></div><div id="loadtxt">טוענים את ההר…</div></div>
+
+<!-- the town: the home screen. Walk about the village; the rider, the run and the lift are a tap away -->
+<div id="menu" hidden>
+  <div id="tzone"></div>
+  <div id="tjoy" hidden><i></i></div>
+  <div class="ttop">
+    <div class="logo sm">SNOW<b>RUSH</b></div>
+    <div class="tright"><div class="wallet sm"><span>ניקוד</span><b id="walletN">0</b></div><button id="tWorld" class="tico" aria-label="עולמות">🌍</button><button id="tMute" class="tico" aria-label="צליל">🔊</button><button id="tSet" class="tico" aria-label="הגדרות">⚙️</button></div>
+  </div>
+  <div id="tHint" hidden><span class="tl">גררו כאן כדי ללכת<small>עד הקצה = ריצה</small></span><span class="tr">גררו כאן כדי להסתובב</span><span class="tk">חיצים / WASD: הליכה · Shift: ריצה · גרירה בעכבר: מצלמה · Enter: רכבל</span></div>
+  <button id="tLift" class="tlift" hidden>🚡 עולים לרכבל</button>
+  <div class="tbar">
+    <button id="tChar" class="tbtn"><b>🏂</b><span>רוכב ולוח</span></button>
+    <button id="tMap" class="tbtn"><b>🗺️</b><span id="tMapName">BUNNY HILL</span></button>
+    <button id="playBtn" class="tgo">🚡 לרכבל</button>
+  </div>
+  <div id="sheet-char" class="sheet" hidden><div class="shead"><h3>הרוכב שלכם <small id="riderState"></small></h3><button class="sx" aria-label="סגירה">✕</button></div>
+    <div id="riderRow"></div><h3 class="sh3">הלוח</h3><div id="boardCards"></div></div>
+  <div id="sheet-map" class="sheet" hidden><div class="shead"><h3>לאן גולשים?</h3><button class="sx" aria-label="סגירה">✕</button></div>
+    <div class="mapcard"><div id="trailMap"></div><div id="trackInfo"></div></div><button class="cta sgo">🚡 לרכבל</button></div>
+  <div id="sheet-set" class="sheet" hidden><div class="shead"><h3>הגדרות</h3><button class="sx" aria-label="סגירה">✕</button></div>
+    <button id="ctlBtn" class="ghost"></button><button id="helpBtn" class="ghost">? מסך השליטה</button><div class="howto"><span id="howtoTxt"></span></div></div>
+</div>
+
+<!-- HUD -->
+<div id="hud" hidden>
+  <div class="radar"><canvas id="radar" width="220" height="220"></canvas><div id="radarTxt"></div></div>
+  <div class="money"><div id="moneyN">0</div><div id="moneyD"></div><div class="spd"><b id="spdN">0</b> קמ״ש</div></div>
+  <div class="prog"><i id="progBar"></i><span id="progTxt">0 מ׳</span></div>
+  <div id="combo" hidden><b id="comboX">x2</b><span>קומבו</span><i id="comboBar"></i></div>
+  <div id="toast"></div>
+  <div id="big"></div>
+  <div id="subtitle"></div>
+  <div id="pause" class="iconbtn" title="השהיה">❚❚</div>
+  <div id="mute" class="iconbtn" title="צליל">🔊</div>
+  <div id="joyzone"><div id="joy"><div id="knob"></div></div></div>
+  <!-- touch buttons: steer strip on the left thumb (slide across; both = brake), actions on the right thumb that change in the air -->
+  <div id="steer"><button id="btnL" class="act dir" aria-label="שמאלה">◀</button><button id="btnR" class="act dir" aria-label="ימינה">▶</button><span class="hint">שתיהן = בלימה</span></div>
+  <div id="btns"><button id="btnFlip" class="act small">סלטה</button><div class="row"><button id="btnGrab" class="act"><span class="g">מהירות</span><span class="a">תפיסה</span></button><button id="btnJump" class="act big"><span class="g">קפיצה</span><span class="a">סיבוב</span></button></div></div>
+  <div id="tip" hidden></div>
+  <div id="liftHud" hidden><div class="lt"><b>⏩ ×12</b> מעלית לפסגה</div><div id="liftFact"></div><button id="liftSkip" class="ghost">דלגו למעלה ›</button></div>
+</div>
+
+<!-- pause -->
+<div id="pausemenu" hidden><div class="panel"><h2>הפסקה</h2><button id="resumeBtn" class="cta">להמשיך</button><button id="restartBtn" class="ghost">התחלה מחדש</button><button id="helpBtn2" class="ghost">שליטה</button><button id="quitBtn" class="ghost">חזרה לכפר</button></div></div>
+
+<!-- controls: shown before the first run, and from the menu and the pause menu -->
+<div id="controls" hidden><div class="panel ctlpanel"><h2>שליטה</h2>
+  <div class="ctlgrid"><section class="ctlcard" id="ctlKeys"><h3>⌨️ מקלדת</h3><div class="list"></div></section><section class="ctlcard" id="ctlTouch"><h3>📱 מגע</h3><div class="list"></div></section></div>
+  <button id="ctlOk" class="cta">הבנתי · יוצאים</button></div></div>
+
+<!-- results -->
+<div id="end" hidden><div class="panel result">
+  <div id="endTitle" class="mission">ריצה מושלמת</div>
+  <div class="stars" id="stars"></div>
+  <canvas id="profile" width="640" height="170"></canvas>
+  <div class="rows" id="endRows"></div>
+  <div class="total"><span>ניקוד ריצה</span><b id="endTotal">0</b></div>
+  <div class="endbtns"><button id="againBtn" class="cta">עוד ריצה</button><button id="menuBtn" class="ghost">לטייל בכפר</button></div>
+</div></div>
+
+<div id="rotate" hidden>📱↻<br>סובבו את המכשיר לרוחב לחוויה מלאה</div>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/gltf-loader.js"></script>
+<script src="lib/meshopt_decoder.js"></script>
+<script src="lib/post.js"></script>
+<script src="js/util.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/resort.js"></script>
+<script src="js/world.js"></script>
+<script src="js/park.js"></script>
+<script src="js/village.js"></script>
+<script src="js/walk.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/people.js"></script>
+<script src="js/rider.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/trailmap.js"></script>
+<script src="js/main.js"></script>
+<script src="js/debug.js"></script>
+</body>
+</html>

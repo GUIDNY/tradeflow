@@ -23,7 +23,7 @@ const exe=process.env.CHROME||(fs.existsSync('/opt/pw-browsers/chromium-1194/chr
 const browser=await chromium.launch({executablePath:exe,headless:!process.env.HEADFUL,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--no-sandbox']});
 const errors=[];
 async function open(q,init){ const p=await browser.newPage({viewport:{width:640,height:400}}); p.on('pageerror',e=>errors.push(e.message)); if(init) await p.addInitScript(init);
-  await p.goto(`http://localhost:${PORT}/index.html?q=0&fx=0&nolift=1&${q||''}`); await p.waitForFunction('window.READY',null,{timeout:120000});
+  await p.goto(`http://localhost:${PORT}/snow.html?q=0&fx=0&nolift=1&${q||''}`); await p.waitForFunction('window.READY',null,{timeout:120000});
   await p.waitForFunction('ST.Rider.current!=="hero"',null,{timeout:240000}).catch(()=>{});
   // shared helpers in the page
   await p.evaluate(()=>{ window.T={
@@ -254,6 +254,81 @@ await test('assets',async()=>{ const g=await page.evaluate(async()=>{ const PP=S
     meshyGrounded:r.meshy.footLow>.05&&r.meshy.footLow<.2,meshyInPlace:r.meshy.hipsOff<.3,part:r.part.n===1&&r.part.worstMm<1,gear:r.gear.models>=2&&r.gear.mittsOnWrists===2,trees:r.trees.model&&r.trees.near>0&&r.trees.firBuilt,
     cafe:r.village.cafeOffM!==null&&r.village.cafeOffM<.5,benches:r.village.benches===4,glow:r.village.glowMats>=1,lodges:r.lodgeMeshes>=3,noErrors:errors.length===0}, bad=Object.keys(checks).filter(k=>!checks[k]);
   return {ok:!bad.length,detail:JSON.stringify(r)+(bad.length?' FAILED: '+bad.join(','):'')}; });
+
+/* ---------- the opening menu and the beach (Surf Rush) ---------- */
+await test('worlds',async()=>{ const out={}; for(const [n,vp] of [['wide',{width:960,height:540}],['phone',{width:390,height:844}]]){ const ctx=await browser.newContext({viewport:vp}); const p=await ctx.newPage(); const errs=[]; p.on('pageerror',e=>errs.push(e.message));
+    await p.goto(`http://localhost:${PORT}/index.html`); await p.waitForTimeout(400);
+    out[n]=await p.evaluate(()=>({links:[...document.querySelectorAll('a.world')].map(a=>a.getAttribute('href')),cards:[...document.querySelectorAll('a.world')].map(a=>{ const r=a.getBoundingClientRect(); return Math.round(Math.min(r.width,r.height)); }),scroll:document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight}));
+    out[n].errors=errs.length; await ctx.close(); }
+  const ok=['wide','phone'].every(n=>out[n].links.join()==='snow.html,beach.html'&&out[n].cards.every(c=>c>150)&&!out[n].scroll&&!out[n].errors);
+  return {ok,detail:JSON.stringify(out)}; });
+
+const beachErrors=[]; let beach=null;
+async function openBeach(){ if(beach) return beach; beach=await browser.newPage({viewport:{width:640,height:400}}); beach.on('pageerror',e=>beachErrors.push(e.message));
+  await beach.goto(`http://localhost:${PORT}/beach.html?q=0&fx=0`); await beach.waitForFunction('window.READY',null,{timeout:180000});
+  // a rider bot in the page: the physics stepped directly at its fixed rate, steering for a course (degrees off straight downwind)
+  await beach.evaluate(()=>{ const K=ST.Kite, S=K.S, D=K.D, CW=K.CW, Cst=ST.Coast, H=1/120, wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
+    window.KB={ ctl:()=>({steer:0,power:false,depow:false,jump:false,spin:false,spinDir:1,grab:false,flip:false}),
+      course(phi,side){ const a=phi*Math.PI/180; return Math.atan2(Math.cos(a)*D.x+side*Math.sin(a)*CW.x,Math.cos(a)*D.z+side*Math.sin(a)*CW.z); },
+      steer(c,h){ c.steer=Math.max(-1,Math.min(1,wrap(S.h-h)*3)); },
+      step(c,n,f){ const ev=[]; for(let i=0;i<n;i++){ if(f) f(c,i); Cst.time+=H; K.step(H,c); ev.push(...K.events); K.events.length=0; } return ev; },
+      // heading in toward the beach (side -1) the bot starts further out
+      start(side){ const x=-60; Cst.time=0; K.reset({x,z:Cst.shoreZ(x)-(side<0?330:160),side:side||1});   /* the same sea every time: the checks do not depend on the waves' phase */ const c=this.ctl(); let t=0; while(S.fall&&t<10){ this.step(c,1); t+=H; } return t; },
+      cruise(phi,secs,c){ c=c||this.ctl(); const side=S.kite.side; let sum=0, n=0, vmg=0; this.step(c,Math.round(secs*120),(c,i)=>{ this.steer(c,this.course(phi,side)); if(i>secs*120*.6){ sum+=S.speed; vmg-=S.vx*D.x+S.vz*D.z; n++; } }); return {kmh:+(sum/n*3.6).toFixed(1),vmg:+(vmg/n).toFixed(2)}; },
+      jump(load,during){ const c=this.ctl(); this.cruise(95,10,c); c.jump=true; this.step(c,Math.round(load*120),c=>this.steer(c,this.course(95,S.kite.side))); c.jump=false;
+        let land=null, crash=null, t=0; while(t<8&&!land){ const ev=this.step(c,1,during); t+=H; for(const e of ev){ if(e.type==='land') land=e; if(e.type==='crash') crash=e.why; } } return {land,crash}; } }; });
+  return beach; }
+
+await test('beach',async()=>{ const p=await openBeach(); const r=await p.evaluate(async()=>{ const D=ST.debug, L=ST.BeachTown.spots.launch, out={mode:D.mode,walking:ST.Rider.walking,people:ST.People.regs.length,kiters:ST.Kite.ai.length};
+    D.save.ctlSeen=0; D.townPlace({x:L.x+2,z:L.z+3,hd:Math.PI}); for(let i=0;i<10;i++) D.tick(1/60); out.offer=!document.querySelector('#tLift').hidden;
+    document.querySelector('#tLift').click(); out.controlsFirst=!document.querySelector('#controls').hidden&&D.mode==='menu';
+    document.querySelector('#ctlOk').click(); out.session=D.mode==='kite'&&!document.querySelector('#hud').hidden&&document.querySelector('#menu').hidden;
+    out.kiteShown=ST.Kite.group.visible; out.board=!!ST.Rider.boardObj&&ST.Rider.boardObj.visible&&!!ST.Rider.boardObj.userData.kiteboard;
+    // ride on the game's own loop and input (keys): it gets up and planes
+    for(let i=0;i<480;i++) D.tick(1/60); out.kmh=+(ST.Kite.S.speed*3.6).toFixed(1); out.up=!ST.Kite.S.fall;
+    out.ik=ST.Rider.ik&&{feet:Math.max(ST.Rider.ik.err.L,ST.Rider.ik.err.R)*100,hands:Math.max(ST.Rider.ik.hands.L,ST.Rider.ik.hands.R)};
+    // pause, resume; the clock runs out: results, then back on the sand
+    document.querySelector('#pause').click(); out.paused=D.mode==='pause'; document.querySelector('#resumeBtn').click();
+    D.sess.t=D.sess.len-.5; for(let i=0;i<240&&D.mode==='kite';i++) D.tick(1/60); out.results=D.mode==='end'&&!document.querySelector('#end').hidden;
+    document.querySelector('#menuBtn').click(); for(let i=0;i<10;i++) D.tick(1/60);
+    out.back=D.mode==='menu'&&ST.Rider.walking&&!ST.Rider.boardObj.visible&&!ST.Kite.group.visible&&Math.hypot(D.town.x-L.x,D.town.z-L.z)<4;
+    return out; });
+  const ok=r.mode==='menu'&&r.walking&&r.people>40&&r.kiters>=3&&r.offer&&r.controlsFirst&&r.session&&r.kiteShown&&r.board&&r.up&&r.kmh>15&&r.ik&&r.ik.feet<3&&r.ik.hands<3&&r.paused&&r.results&&r.back&&beachErrors.length===0;
+  return {ok,detail:JSON.stringify(r)+(beachErrors.length?' errors: '+beachErrors.slice(0,2).join(' | '):'')}; });
+
+await test('kite',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const S=ST.Kite.S, out={};
+    out.waterStart=+KB.start(1).toFixed(2);
+    out.beam=[1,-1].map(sd=>{ KB.start(sd); return KB.cruise(90,22); });
+    KB.start(1); out.upwind=KB.cruise(115,25);
+    KB.start(1); const dc=KB.ctl(); dc.depow=true; out.depow=KB.cruise(90,22,dc);
+    KB.start(1); const pc=KB.ctl(); pc.power=true; out.power=KB.cruise(90,22,pc);
+    KB.start(1); const j=KB.jump(.5); out.jump=j.land&&{h:j.land.h,air:j.land.air,clean:j.land.clean,imp:j.land.imp};
+    KB.start(1); const sp=KB.jump(.7,(c)=>{ c.spin=S.air&&S.airT>.12&&S.airT<1.0; }); out.spin360=sp.land&&{turns:sp.land.turns,clean:sp.land.clean};
+    KB.start(1); const br=KB.jump(.7,(c)=>{ c.flip=S.air&&S.airT>.12&&S.airT<1.1; }); out.backroll=br.land&&{rolls:br.land.rolls,clean:br.land.clean};
+    // a board that comes down across its line (turned square to the travel just before the water): a crash, then the kite
+    // relaunched and the rider pulled up again. (Holding a spin all the way down is not a sure crash: it lands clean if the
+    // turns happen to come round.)
+    KB.start(1); const cr=KB.jump(.7,()=>{ if(S.air&&S.vy<-1&&S.airT>.5) S.h=Math.atan2(S.vx,S.vz)+Math.PI/2; }); let t=0; while(S.fall&&t<10){ KB.step(KB.ctl(),1); t+=1/120; } out.crash={why:cr.crash,clean:cr.land&&cr.land.clean,upAfter:+t.toFixed(2)};
+    // a transition: carve downwind through the wind onto the other tack, the kite over the top
+    KB.start(1); const c=KB.ctl(); KB.cruise(90,10,c); const s0=S.kite.side; t=0; let vmin=99, back=null;
+    while(t<10&&back==null){ KB.step(c,1,(c)=>{ KB.steer(c,t<1.2?KB.course(20,s0):KB.course(90,-s0)); }); t+=1/120; vmin=Math.min(vmin,S.speed); if(S.kite.side===-s0&&S.speed*3.6>20) back=t; }
+    out.transition={side:S.kite.side===-s0,backS:back&&+back.toFixed(2),minKmh:+(vmin*3.6).toFixed(1),fell:!!S.fall};
+    return out; });
+  const checks={waterStart:r.waterStart>.5&&r.waterStart<4,beam:r.beam.every(b=>b.kmh>25&&b.kmh<42),symmetric:Math.abs(r.beam[0].kmh-r.beam[1].kmh)<2.5,upwind:r.upwind.vmg>1&&r.upwind.kmh>18,
+    depow:r.depow.kmh<r.beam[0].kmh*.8,power:r.power.kmh>r.beam[0].kmh*1.1,jump:!!r.jump&&r.jump.clean&&r.jump.h>2&&r.jump.h<7&&r.jump.air>1.4&&r.jump.air<3.6,
+    spin:!!r.spin360&&r.spin360.clean&&r.spin360.turns===1,roll:!!r.backroll&&r.backroll.clean&&r.backroll.rolls===1,crash:r.crash.why==='off the line'&&r.crash.clean===false&&r.crash.upAfter>1&&r.crash.upAfter<7,
+    transition:r.transition.side&&r.transition.backS!=null&&r.transition.backS<7&&!r.transition.fell}, bad=Object.keys(checks).filter(k=>!checks[k]);
+  return {ok:!bad.length,detail:JSON.stringify(r)+(bad.length?' FAILED: '+bad.join(','):'')}; });
+
+await test('kitefps',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const D=ST.debug, S=ST.Kite.S;
+    // the same session input at 60 and at 20 frames a second: the fixed-step physics rides the same way
+    const run=dt=>{ D.startSession(); const I=D.input; let t=0, maxH=0;
+      while(t<14){ I.jump=t>7&&t<7.5; D.tick(dt); t+=dt; if(S.air&&S.jump) maxH=Math.max(maxH,S.y-S.jump.y0); }
+      I.jump=false; return {kmh:+(S.speed*3.6).toFixed(1),maxH:+maxH.toFixed(2),jumps:D.sess.jumps}; };
+    const a=run(1/60), b=run(1/20); D.toBeach(); return {fps60:a,fps20:b}; });
+  const ok=r.fps60.jumps===1&&r.fps20.jumps===1&&Math.abs(r.fps60.maxH-r.fps20.maxH)<.6&&Math.abs(r.fps60.kmh-r.fps20.kmh)<6;
+  return {ok,detail:JSON.stringify(r)}; });
+if(beach) await beach.close();
 
 await browser.close(); server.close();
 const failed=results.filter(r=>!r.ok);

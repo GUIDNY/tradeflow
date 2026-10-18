@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b2a3a">
+<link rel="icon" href="data:,">
+<title>Surf Rush · קייטסרף</title>
+<meta name="description" content="עיירת חוף תלת־ממדית: מטיילים בטיילת, יוצאים למים וגולשים קייטסרף.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="beach">
+<canvas id="c"></canvas>
+<div id="speedfx"></div>
+<div id="flash"></div>
+
+<div id="loading"><div class="logo">SURF<b>RUSH</b></div><div class="bar"><i id="loadbar"></i></div><div id="loadtxt">יוצאים לחוף…</div></div>
+
+<!-- the beach town: walk the promenade; the rider and the water are a tap away -->
+<div id="menu" hidden>
+  <div id="tzone"></div>
+  <div id="tjoy" hidden><i></i></div>
+  <div class="ttop">
+    <div class="logo sm">SURF<b>RUSH</b></div>
+    <div class="tright"><div class="wallet sm"><span>ניקוד</span><b id="walletN">0</b></div><button id="tWorld" class="tico" aria-label="עולמות">🌍</button><button id="tMute" class="tico" aria-label="צליל">🔊</button><button id="tSet" class="tico" aria-label="הגדרות">⚙️</button></div>
+  </div>
+  <div id="tHint" hidden><span class="tl">גררו כאן כדי ללכת<small>עד הקצה = ריצה</small></span><span class="tr">גררו כאן כדי להסתובב</span><span class="tk">חיצים / WASD: הליכה · Shift: ריצה · גרירה בעכבר: מצלמה · Enter: למים</span></div>
+  <button id="tLift" class="tlift" hidden>🪁 יוצאים למים</button>
+  <div class="tbar">
+    <button id="tChar" class="tbtn"><b>🏄</b><span>רוכב וקייט</span></button>
+    <button id="playBtn" class="tgo">🪁 קייטסרף</button>
+  </div>
+  <div id="sheet-char" class="sheet" hidden><div class="shead"><h3>הרוכב שלכם <small id="riderState"></small></h3><button class="sx" aria-label="סגירה">✕</button></div>
+    <div id="riderRow"></div><h3 class="sh3">הקייט</h3><div id="kiteRow"></div></div>
+  <div id="sheet-set" class="sheet" hidden><div class="shead"><h3>הגדרות</h3><button class="sx" aria-label="סגירה">✕</button></div>
+    <button id="ctlBtn" class="ghost"></button><button id="helpBtn" class="ghost">? מסך השליטה</button><div class="howto"><span id="howtoTxt"></span></div></div>
+</div>
+
+<!-- on the water -->
+<div id="hud" hidden>
+  <div class="money"><div id="moneyN">0</div><div id="moneyD"></div><div class="spd"><b id="spdN">0</b> קמ״ש</div></div>
+  <div class="prog"><i id="progBar"></i><span id="progTxt">3:00</span></div>
+  <div id="wind"><i id="windArrow">➤</i><span id="windTxt">18 קשר</span></div>
+  <div id="jumpH"></div>
+  <div id="combo" hidden><b id="comboX">x2</b><span>קומבו</span><i id="comboBar"></i></div>
+  <div id="toast"></div>
+  <div id="big"></div>
+  <div id="subtitle"></div>
+  <div id="pause" class="iconbtn" title="השהיה">❚❚</div>
+  <div id="mute" class="iconbtn" title="צליל">🔊</div>
+  <div id="joyzone"><div id="joy"><div id="knob"></div></div></div>
+  <div id="steer"><button id="btnL" class="act dir" aria-label="שמאלה">◀</button><button id="btnR" class="act dir" aria-label="ימינה">▶</button><span class="hint">שתיהן = פחות כוח</span></div>
+  <div id="btns"><button id="btnFlip" class="act small">בקרול</button><div class="row"><button id="btnGrab" class="act"><span class="g">כוח</span><span class="a">תפיסה</span></button><button id="btnJump" class="act big"><span class="g">קפיצה</span><span class="a">סיבוב</span></button></div></div>
+  <div id="tip" hidden></div>
+</div>
+
+<div id="pausemenu" hidden><div class="panel"><h2>הפסקה</h2><button id="resumeBtn" class="cta">להמשיך</button><button id="restartBtn" class="ghost">סשן חדש</button><button id="helpBtn2" class="ghost">שליטה</button><button id="quitBtn" class="ghost">חזרה לחוף</button></div></div>
+
+<div id="controls" hidden><div class="panel ctlpanel"><h2>שליטה</h2>
+  <div class="ctlgrid"><section class="ctlcard" id="ctlKeys"><h3>⌨️ מקלדת</h3><div class="list"></div></section><section class="ctlcard" id="ctlTouch"><h3>📱 מגע</h3><div class="list"></div></section></div>
+  <button id="ctlOk" class="cta">הבנתי · למים</button></div></div>
+
+<div id="end" hidden><div class="panel result">
+  <div id="endTitle" class="mission">סשן מעולה</div>
+  <div class="stars" id="stars"></div>
+  <div class="rows" id="endRows"></div>
+  <div class="total"><span>ניקוד סשן</span><b id="endTotal">0</b></div>
+  <div class="endbtns"><button id="againBtn" class="cta">עוד סשן</button><button id="menuBtn" class="ghost">לטייל בחוף</button></div>
+</div></div>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/gltf-loader.js"></script>
+<script src="lib/meshopt_decoder.js"></script>
+<script src="lib/post.js"></script>
+<script src="js/util.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/coast.js"></script>
+<script src="js/beachtown.js"></script>
+<script src="js/walk.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/people.js"></script>
+<script src="js/rider.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/kite.js"></script>
+<script src="js/beachmain.js"></script>
+</body>
+</html>

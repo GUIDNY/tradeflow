@@ -5,100 +5,93 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d1a">
 <link rel="icon" href="data:,">
-<title>Snow Rush · סנובורד</title>
-<meta name="description" content="משחק סנובורד תלת־ממדי: יורדים במסלול, מבצעים תרגילים, אוספים גבישים וצוברים ניקוד.">
+<title>Rush · בחרו עולם</title>
+<meta name="description" content="שני עולמות תלת־ממדיים: כפר סקי עם סנובורד, ועיירת חוף עם קייטסרף.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="prefetch" href="lib/three.min.js">
+<style>
+  /* the opening menu: two worlds side by side (stacked on an upright phone), each a card drawn in CSS */
+  :root{--g:#16e08a;--gold:#ffc83a;--font:'Rubik',system-ui,sans-serif;--display:'Anton','Rubik',Impact,sans-serif}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b0d1a;color:#fff;font-family:var(--font);overscroll-behavior:none}
+  main{position:fixed;inset:0;display:flex;flex-direction:column;padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));gap:12px}
+  header{display:flex;align-items:baseline;justify-content:center;gap:14px;flex:0 0 auto}
+  header h1{margin:0;font:400 clamp(30px,5.4vw,52px)/1 var(--display);letter-spacing:.08em;direction:ltr;text-shadow:0 3px 0 #000}
+  header h1 b{font-weight:400;color:var(--gold)}
+  header p{margin:0;font-weight:700;font-size:clamp(13px,1.8vw,17px);opacity:.75}
+  .worlds{flex:1 1 auto;display:flex;gap:14px;min-height:0}
+  .world{display:block;text-decoration:none;position:relative;flex:1 1 0;border:0;border-radius:24px;overflow:hidden;cursor:pointer;color:#fff;text-align:right;padding:0;font:inherit;isolation:isolate;
+    box-shadow:0 14px 40px rgba(0,0,0,.45),inset 0 0 0 2px rgba(255,255,255,.18);transition:transform .18s ease,box-shadow .18s ease}
+  .world:hover,.world:focus-visible{transform:translateY(-3px) scale(1.01);box-shadow:0 20px 50px rgba(0,0,0,.55),inset 0 0 0 3px rgba(255,255,255,.55);outline:none}
+  .world:active{transform:scale(.985)}
+  .art{position:absolute;inset:0;z-index:-1}
+  /* snow: a cold sky, two ranges of peaks with snow caps, pines, falling snow */
+  .snow .art{background:linear-gradient(180deg,#3b6fb6 0%,#8fb8e6 52%,#e8f2ff 100%)}
+  .snow .art::before{content:'';position:absolute;left:-10%;right:-10%;bottom:30%;height:58%;background:#c6d8ef;
+    clip-path:polygon(0 100%,8% 58%,17% 74%,29% 22%,38% 50%,47% 34%,58% 70%,68% 18%,79% 56%,88% 40%,100% 72%,100% 100%)}
+  .snow .art::after{content:'';position:absolute;left:-6%;right:-6%;bottom:0;height:62%;background:linear-gradient(180deg,#ffffff 0%,#eaf3ff 55%,#d6e6fa 100%);
+    clip-path:polygon(0 30%,12% 8%,22% 34%,34% 0,47% 30%,57% 14%,69% 38%,80% 6%,91% 28%,100% 18%,100% 100%,0 100%)}
+  .pines{position:absolute;z-index:1;bottom:14%;left:0;right:0;height:22%;display:flex;justify-content:space-around;align-items:flex-end;opacity:.9}
+  .pines i{display:block;width:5%;height:100%;background:#1f4a3a;clip-path:polygon(50% 0,100% 100%,0 100%)}
+  .pines i:nth-child(2n){height:72%} .pines i:nth-child(3n){height:86%}
+  .flakes{position:absolute;z-index:2;inset:0;background-image:radial-gradient(#fff 1.3px,transparent 1.6px),radial-gradient(#fff 1px,transparent 1.3px);background-size:46px 46px,29px 29px;background-position:0 0,13px 19px;opacity:.75;animation:fall 7s linear infinite}
+  @keyframes fall{to{background-position:0 46px,13px 77px}}
+  /* the beach: a warm sky and sun, the sea with its swell, the sand, a kite */
+  .beach .art{background:linear-gradient(180deg,#2b8fd6 0%,#7cc6ee 46%,#bfe7f5 62%,#1e8fb0 62.2%,#0e6f97 74%,#1aa5b8 82%,#f2d9a2 82.2%,#e9c98a 100%)}
+  .sun{position:absolute;top:12%;left:14%;width:16%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#fffbe0 0 46%,#ffe27a 60%,rgba(255,226,122,0) 72%)}
+  .swell{position:absolute;left:0;right:0;height:3px;background:rgba(255,255,255,.55);border-radius:3px;animation:swell 5s ease-in-out infinite}
+  .swell.a{top:66%;transform:scaleX(.7)} .swell.b{top:72%;animation-delay:-1.6s} .swell.c{top:78.5%;animation-delay:-3.2s;opacity:.85}
+  @keyframes swell{0%,100%{transform:translateX(-6%) scaleX(.85)}50%{transform:translateX(6%) scaleX(1)}}
+  .kite{position:absolute;top:18%;right:22%;width:24%;aspect-ratio:2.4;animation:fly 4s ease-in-out infinite}
+  .kite::before{content:'';position:absolute;inset:0;border-radius:100% 100% 18% 18%/140% 140% 30% 30%;background:linear-gradient(90deg,#111 0 10%,#ff3b30 10% 42%,#fff 42% 58%,#ff3b30 58% 90%,#111 90%);border-top:5px solid #111}
+  .kite::after{content:'';position:absolute;left:50%;top:60%;width:1.5px;height:190%;background:rgba(20,20,20,.55);transform-origin:top;transform:rotate(28deg)}
+  @keyframes fly{0%,100%{transform:translate(0,0) rotate(-4deg)}50%{transform:translate(-8%,6%) rotate(5deg)}}
+  .palm{position:absolute;bottom:9%;left:7%;width:3.4%;height:30%;background:#7a5634;border-radius:40% 40% 0 0;transform:rotate(-6deg);transform-origin:bottom}
+  .palm::before{content:'';position:absolute;top:-22%;left:-260%;width:620%;height:36%;background:#2f8a43;clip-path:polygon(50% 60%,0 20%,22% 52%,6% 82%,40% 66%,50% 100%,60% 66%,94% 82%,78% 52%,100% 20%)}
+  /* the words on a card */
+  .txt{position:absolute;inset:auto 0 0 0;padding:clamp(14px,2.6vw,26px);background:linear-gradient(0deg,rgba(6,10,24,.82) 0%,rgba(6,10,24,.55) 62%,rgba(6,10,24,0) 100%)}
+  .txt h2{margin:0 0 4px;font:400 clamp(30px,5vw,58px)/1 var(--display);letter-spacing:.06em;direction:ltr;text-align:right;text-shadow:0 3px 0 #000}
+  .txt h2 b{font-weight:400;color:var(--gold)} .beach .txt h2 b{color:#39e1ff}
+  .txt .sub{font-weight:900;font-size:clamp(15px,2.1vw,21px)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 12px}
+  .chips span{font-size:12px;font-weight:700;padding:4px 10px;border-radius:30px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25)}
+  .chips span.soon{opacity:.6;border-style:dashed}
+  .go{display:inline-flex;align-items:center;gap:10px;padding:10px 22px;border-radius:16px;font:900 clamp(16px,2vw,20px) var(--font);color:#05140c;background:linear-gradient(180deg,#3df2a6,#12c47a);box-shadow:0 6px 0 #0a7d4c}
+  .beach .go{background:linear-gradient(180deg,#5ee7ff,#13b6e0);box-shadow:0 6px 0 #0a6f8a;color:#03222c}
+  .best{position:absolute;top:14px;right:14px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:12px;background:rgba(6,10,24,.55);backdrop-filter:blur(6px)}
+  .best:empty{display:none}
+  @media (orientation:portrait){ .worlds{flex-direction:column} .txt h2{font-size:clamp(30px,9vw,46px)} .chips{margin:7px 0 10px} }
+  @media (max-height:430px){ header p{display:none} .chips{display:none} .txt h2{font-size:34px} }
+  @media (prefers-reduced-motion:reduce){ .flakes,.swell,.kite{animation:none} }
+</style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="speedfx"></div>
-<div id="flash"></div>
-<div id="flare"><i class="fa"></i><i class="fb"></i><i class="fc"></i><i class="fd"></i></div>
-
-<!-- loading -->
-<div id="loading"><div class="logo">SNOW<b>RUSH</b></div><div class="bar"><i id="loadbar"></i></div><div id="loadtxt">טוענים את ההר…</div></div>
-
-<!-- the town: the home screen. Walk about the village; the rider, the run and the lift are a tap away -->
-<div id="menu" hidden>
-  <div id="tzone"></div>
-  <div id="tjoy" hidden><i></i></div>
-  <div class="ttop">
-    <div class="logo sm">SNOW<b>RUSH</b></div>
-    <div class="tright"><div class="wallet sm"><span>ניקוד</span><b id="walletN">0</b></div><button id="tMute" class="tico" aria-label="צליל">🔊</button><button id="tSet" class="tico" aria-label="הגדרות">⚙️</button></div>
+<main>
+  <header><h1>SNOW<b>·</b>SURF <b>RUSH</b></h1><p>בחרו לאן יוצאים היום</p></header>
+  <div class="worlds">
+    <a class="world snow" href="snow.html" id="goSnow">
+      <div class="art"><div class="pines"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="flakes"></div></div>
+      <div class="best" id="bestSnow"></div>
+      <div class="txt"><h2>SNOW <b>RUSH</b></h2><div class="sub">כפר סקי · סנובורד</div>
+        <div class="chips"><span>🏂 מסלולים ופארק</span><span>🚡 רכבל</span><span>🏘️ כפר לטייל בו</span></div>
+        <span class="go">🏔️ לכפר הסקי</span></div>
+    </a>
+    <a class="world beach" href="beach.html" id="goBeach">
+      <div class="art"><div class="sun"></div><div class="swell a"></div><div class="swell b"></div><div class="swell c"></div><div class="kite"></div><div class="palm"></div></div>
+      <div class="best" id="bestBeach"></div>
+      <div class="txt"><h2>SURF <b>RUSH</b></h2><div class="sub">עיירת חוף · קייטסרף</div>
+        <div class="chips"><span>🪁 קייטסרף</span><span>🌴 טיילת לטייל בה</span><span class="soon">🌊 גלים — בקרוב</span><span class="soon">⛵ רוח — בקרוב</span></div>
+        <span class="go">🏖️ לעיירת החוף</span></div>
+    </a>
   </div>
-  <div id="tHint" hidden><span class="tl">גררו כאן כדי ללכת<small>עד הקצה = ריצה</small></span><span class="tr">גררו כאן כדי להסתובב</span><span class="tk">חיצים / WASD: הליכה · Shift: ריצה · גרירה בעכבר: מצלמה · Enter: רכבל</span></div>
-  <button id="tLift" class="tlift" hidden>🚡 עולים לרכבל</button>
-  <div class="tbar">
-    <button id="tChar" class="tbtn"><b>🏂</b><span>רוכב ולוח</span></button>
-    <button id="tMap" class="tbtn"><b>🗺️</b><span id="tMapName">BUNNY HILL</span></button>
-    <button id="playBtn" class="tgo">🚡 לרכבל</button>
-  </div>
-  <div id="sheet-char" class="sheet" hidden><div class="shead"><h3>הרוכב שלכם <small id="riderState"></small></h3><button class="sx" aria-label="סגירה">✕</button></div>
-    <div id="riderRow"></div><h3 class="sh3">הלוח</h3><div id="boardCards"></div></div>
-  <div id="sheet-map" class="sheet" hidden><div class="shead"><h3>לאן גולשים?</h3><button class="sx" aria-label="סגירה">✕</button></div>
-    <div class="mapcard"><div id="trailMap"></div><div id="trackInfo"></div></div><button class="cta sgo">🚡 לרכבל</button></div>
-  <div id="sheet-set" class="sheet" hidden><div class="shead"><h3>הגדרות</h3><button class="sx" aria-label="סגירה">✕</button></div>
-    <button id="ctlBtn" class="ghost"></button><button id="helpBtn" class="ghost">? מסך השליטה</button><div class="howto"><span id="howtoTxt"></span></div></div>
-</div>
-
-<!-- HUD -->
-<div id="hud" hidden>
-  <div class="radar"><canvas id="radar" width="220" height="220"></canvas><div id="radarTxt"></div></div>
-  <div class="money"><div id="moneyN">0</div><div id="moneyD"></div><div class="spd"><b id="spdN">0</b> קמ״ש</div></div>
-  <div class="prog"><i id="progBar"></i><span id="progTxt">0 מ׳</span></div>
-  <div id="combo" hidden><b id="comboX">x2</b><span>קומבו</span><i id="comboBar"></i></div>
-  <div id="toast"></div>
-  <div id="big"></div>
-  <div id="subtitle"></div>
-  <div id="pause" class="iconbtn" title="השהיה">❚❚</div>
-  <div id="mute" class="iconbtn" title="צליל">🔊</div>
-  <div id="joyzone"><div id="joy"><div id="knob"></div></div></div>
-  <!-- touch buttons: steer strip on the left thumb (slide across; both = brake), actions on the right thumb that change in the air -->
-  <div id="steer"><button id="btnL" class="act dir" aria-label="שמאלה">◀</button><button id="btnR" class="act dir" aria-label="ימינה">▶</button><span class="hint">שתיהן = בלימה</span></div>
-  <div id="btns"><button id="btnFlip" class="act small">סלטה</button><div class="row"><button id="btnGrab" class="act"><span class="g">מהירות</span><span class="a">תפיסה</span></button><button id="btnJump" class="act big"><span class="g">קפיצה</span><span class="a">סיבוב</span></button></div></div>
-  <div id="tip" hidden></div>
-  <div id="liftHud" hidden><div class="lt"><b>⏩ ×12</b> מעלית לפסגה</div><div id="liftFact"></div><button id="liftSkip" class="ghost">דלגו למעלה ›</button></div>
-</div>
-
-<!-- pause -->
-<div id="pausemenu" hidden><div class="panel"><h2>הפסקה</h2><button id="resumeBtn" class="cta">להמשיך</button><button id="restartBtn" class="ghost">התחלה מחדש</button><button id="helpBtn2" class="ghost">שליטה</button><button id="quitBtn" class="ghost">חזרה לכפר</button></div></div>
-
-<!-- controls: shown before the first run, and from the menu and the pause menu -->
-<div id="controls" hidden><div class="panel ctlpanel"><h2>שליטה</h2>
-  <div class="ctlgrid"><section class="ctlcard" id="ctlKeys"><h3>⌨️ מקלדת</h3><div class="list"></div></section><section class="ctlcard" id="ctlTouch"><h3>📱 מגע</h3><div class="list"></div></section></div>
-  <button id="ctlOk" class="cta">הבנתי · יוצאים</button></div></div>
-
-<!-- results -->
-<div id="end" hidden><div class="panel result">
-  <div id="endTitle" class="mission">ריצה מושלמת</div>
-  <div class="stars" id="stars"></div>
-  <canvas id="profile" width="640" height="170"></canvas>
-  <div class="rows" id="endRows"></div>
-  <div class="total"><span>ניקוד ריצה</span><b id="endTotal">0</b></div>
-  <div class="endbtns"><button id="againBtn" class="cta">עוד ריצה</button><button id="menuBtn" class="ghost">לטייל בכפר</button></div>
-</div></div>
-
-<div id="rotate" hidden>📱↻<br>סובבו את המכשיר לרוחב לחוויה מלאה</div>
-
-<script src="lib/three.min.js"></script>
-<script src="lib/gltf-loader.js"></script>
-<script src="lib/meshopt_decoder.js"></script>
-<script src="lib/post.js"></script>
-<script src="js/util.js"></script>
-<script src="js/engine.js"></script>
-<script src="js/resort.js"></script>
-<script src="js/world.js"></script>
-<script src="js/park.js"></script>
-<script src="js/village.js"></script>
-<script src="js/assets.js"></script>
-<script src="js/people.js"></script>
-<script src="js/rider.js"></script>
-<script src="js/physics.js"></script>
-<script src="js/audio.js"></script>
-<script src="js/trailmap.js"></script>
-<script src="js/main.js"></script>
-<script src="js/debug.js"></script>
+</main>
+<script>
+  // what each world remembers: its best score, shown on its card
+  (function(){ const fmt=n=>Math.round(n).toLocaleString('en-US'), read=k=>{ try{ return JSON.parse(localStorage.getItem(k)||'{}'); }catch(e){ return {}; } };
+    const s=read('snowtrader.v1'), b=read('surfrush.v1');
+    const sBest=s.best?Math.max(0,...Object.values(s.best).map(v=>v&&v.profit||0)):0; if(sBest>0) document.getElementById('bestSnow').textContent='שיא: '+fmt(sBest);
+    if(b.best>0) document.getElementById('bestBeach').textContent='שיא סשן: '+fmt(b.best); })();
+</script>
 </body>
 </html>

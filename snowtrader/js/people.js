@@ -131,10 +131,15 @@
 
   const JACKETS=[0xffc21a,0xe8283f,0x2f79ff,0xf2f5ff,0x16c97a,0xff7a1a,0xd63bff,0x1fc8e8,0x111418], PANTS=[0x15171d,0x1fa35a,0x23304a,0x3a3f4a,0xd9d9e0,0x6b2d2d];
   function dressOutfit(model,jacket,pants){ model.traverse(o=>{ if(!o.isSkinnedMesh||!o.userData.cat||o.userData.cat==='skin') return; const c=o.userData.cat;
-      if(c==='outfit'){ if(!o.userData.own){ o.material=outfitMaterial(); o.userData.own=true; } const C=o.material.userData.cols; C.jacket.setHex(jacket).convertSRGBToLinear(); C.pants.setHex(pants).convertSRGBToLinear(); return; }
+      if(c==='outfit'){ if(!o.userData.own){ o.material=outfitMaterial(); o.userData.own=true; } const C=o.material.userData.cols; C.jacket.setHex(jacket).convertSRGBToLinear(); C.pants.setHex(pants).convertSRGBToLinear();
+        C.boots.setHex(P.feetCol).convertSRGBToLinear(); C.gloves.setHex(P.handCol).convertSRGBToLinear(); return; }
       const mt=o.material.clone();
       mt.color.setHex(c==='jacket'?jacket:c==='pants'?pants:0x0e1015).convertSRGBToLinear(); mt.roughness=c==='jacket'?.5:.7; mt.metalness=0; mt.map=null; o.material=mt; }); }
-  P.dressOutfit=dressOutfit; P.JACKETS=JACKETS; P.PANTS=PANTS;
+  P.dressOutfit=dressOutfit; P.JACKETS=JACKETS; P.PANTS=PANTS; P.feetCol=0x303038; P.handCol=0x303038;   // (sRGB of the linear .03 the kit always had)
+  /* another season's clothes (the beach): the palettes the guests are painted from (shirts, trousers or shorts, hats or hair),
+     bare hands and sandals instead of mitts and boots, and no beanies */
+  P.setPalette=function(o){ if(o.jackets) JACKETS.splice(0,JACKETS.length,...o.jackets); if(o.pants) PANTS.splice(0,PANTS.length,...o.pants); if(o.hats) BEAN.splice(0,BEAN.length,...o.hats);
+    if(o.hands!=null) P.handCol=o.hands; if(o.feet!=null) P.feetCol=o.feet; P.noHat=!!o.noHat; };
 
   const BEAN=[0xff3d6e,0x2f8bff,0xffc83a,0x16e08a,0xff7a1a,0xb04bff,0x22d3ee,0xf5f5f5,0xe11d48];
   const beanGeo=new THREE.SphereGeometry(.125,14,10,0,Math.PI*2,0,Math.PI*.55), pomGeo=new THREE.SphereGeometry(.045,8,6);
@@ -157,7 +162,7 @@
     m.scale.multiplyScalar(T.k*(r.sc||1)); m.position.set(T.x0*(r.sc||1),T.y*(r.sc||1),T.z0*(r.sc||1)); scene.add(g);
     const mixer=new THREE.AnimationMixer(m), acts={}; Object.keys(T.clips).forEach(n=>{ const a=mixer.clipAction(T.clips[n]); a.setLoop(THREE.LoopRepeat,Infinity); acts[n]=a; });
     const want=r.anim||r.type; if(want==='Sit') acts.Sit=mixer.clipAction(sitClip(T)); const a=acts[want]||acts.Idle; a.play(); a.time=hash2(r.id,5)*a.getClip().duration; mixer.update(0);
-    g.position.set(r.x,r.y+(want==='Sit'?T.sitY:0),r.z); g.rotation.y=r.ry||0; g.updateMatrixWorld(true); if(T.E.hat!==false) winterize(m,r.id,T);
+    g.position.set(r.x,r.y+(want==='Sit'?T.sitY:0),r.z); g.rotation.y=r.ry||0; g.updateMatrixWorld(true); if(T.E.hat!==false&&!P.noHat) winterize(m,r.id,T);
     return {r,g,m,mixer,acts,T,cur:acts[want]?want:'Idle',t:Math.random()*10,dir:1}; }
   function setAnim(a,name){ if(a.cur===name) return; if(name==='Sit'&&!a.acts.Sit) a.acts.Sit=a.mixer.clipAction(sitClip(a.T)); const act=a.acts[name]||a.acts.Idle, prev=a.acts[a.cur];
     act.reset(); act.setLoop(THREE.LoopRepeat,Infinity); act.play(); if(prev&&prev!==act) prev.crossFadeTo(act,name==='Sit'||a.cur==='Sit'?.2:.35,false); a.cur=name; }

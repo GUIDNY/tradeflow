@@ -453,67 +453,28 @@
      The rider stands on the square in the clothes of the run and walks about (left thumb: a joystick that appears where it
      touches; keys: arrows / WASD, Shift runs). The other thumb turns the camera by dragging. From the town: the rider (and
      board), the run (trail map), and the lift, which starts the run; walking up to the lift's gates offers it too. */
-  const town={x:0,z:0,y:0,hd:0,v:0,vEff:0,camYaw:0,camPitch:.3,tx:0,ty:0,tz:0,snap:true,dragT:0,wave:0,sheet:null,near:false,moved:0,fov:0};
-  const WALK_V=1.25, RUN_V=3.6, wrapA=a=>Math.atan2(Math.sin(a),Math.cos(a));
+  const town=ST.makeWalker({walk:1.25,run:3.6});   // the shared walker (js/walk.js); the village is the place
+  town.setPlace({ground:(x,z)=>World.groundY(x,z),
+    out:(p,r)=>{ const V=ST.Village; if(V&&V.walkOut) V.walkOut(p,r); },
+    inside:(x,z,pad)=>{ const V=ST.Village; return !!(V&&V.inside&&V.inside(x,z,pad)); },
+    // the village's edges: up the run-out a little, the wooded banks, the hill behind the church
+    bounds:p=>{ const L=track.len, s=-p.z, d=clamp(s-L,-40,203), s2=L+d, u=clamp(p.x-World.cx(s),-56,56); p.z=-s2; p.x=World.cx(s2)+u; }});
   function townPlace(at){ const V=ST.Village; let x=P.x, z=P.z, hd=at&&at.hd!=null?at.hd:0;
     if(at){ x=at.x; z=at.z; }
     else if(V&&V.loadPt){ hd=Math.atan2(V.loadPt.x-x,V.loadPt.z-z); }   // facing the lift
-    town.x=x; town.z=z; town.hd=hd; town.v=0; town.vEff=0; town.camYaw=hd+PI; town.camPitch=.3; town.snap=true; town.near=false; town.wave=0; town.moved=0; $('#tLift').hidden=true;
-    const p={x,z}; if(V&&V.walkOut) V.walkOut(p,.4); town.x=p.x; town.z=p.z; town.y=World.groundY(town.x,town.z); P.x=town.x; P.z=town.z; P.s=-town.z; P.y=town.y; }
+    town.put({x,z,hd}); town.near=false; $('#tLift').hidden=true; P.x=town.x; P.z=town.z; P.s=-town.z; P.y=town.y; }
   /* the rider's own model walks (the clips are made for it once); until then it stands */
   function townWalk(){ Rider.walkPrep().then(()=>{ if(mode==='menu'){ Rider.walkSet(true); Rider.root.visible=true; } }).catch(e=>console.warn('walk',e)); }
-  // touch: a floating joystick on the left part, camera drag on the right part (a mouse always turns the camera)
-  const tzEl=$('#tzone'), tjEl=$('#tjoy'), tkEl=$('#tjoy i'), tj={id:null,cx:0,cy:0,x:0,y:0,cam:null,lx:0,ly:0};
-  tzEl.addEventListener('pointerdown',e=>{ e.preventDefault(); Audio.init(); if(town.sheet){ closeSheets(); return; }
-    const left=e.pointerType!=='mouse'&&e.clientX<innerWidth*.5;
-    if(left&&tj.id===null){ tj.id=e.pointerId; tj.cx=e.clientX; tj.cy=e.clientY; tj.x=tj.y=0; tjEl.style.left=e.clientX+'px'; tjEl.style.top=e.clientY+'px'; tjEl.hidden=false; tkEl.style.transform=''; }
-    else if(tj.cam===null){ tj.cam=e.pointerId; tj.lx=e.clientX; tj.ly=e.clientY; }
-    try{ tzEl.setPointerCapture(e.pointerId); }catch(_){} });
-  tzEl.addEventListener('pointermove',e=>{ if(e.pointerId===tj.id){ let dx=e.clientX-tj.cx, dy=e.clientY-tj.cy; const R=52, d=Math.hypot(dx,dy); if(d>R){ dx*=R/d; dy*=R/d; } tj.x=dx/R; tj.y=dy/R; tkEl.style.transform=`translate(${dx}px,${dy}px)`; }
-    else if(e.pointerId===tj.cam){ const k=e.pointerType==='mouse'?.0055:.0085; town.camYaw-=(e.clientX-tj.lx)*k; town.camPitch=clamp(town.camPitch+(e.clientY-tj.ly)*k*.6,.05,.85); tj.lx=e.clientX; tj.ly=e.clientY; town.dragT=1.6; } });
-  const tzUp=e=>{ if(e.pointerId===tj.id){ tj.id=null; tj.x=tj.y=0; tjEl.hidden=true; } if(e.pointerId===tj.cam) tj.cam=null; };
-  tzEl.addEventListener('pointerup',tzUp); tzEl.addEventListener('pointercancel',tzUp);
-  tzEl.addEventListener('wheel',e=>{ town.camPitch=clamp(town.camPitch+e.deltaY*.0008,.05,.85); },{passive:true});
+  town.bindTouch($('#tzone'),$('#tjoy'),$('#tjoy i'),()=>{ Audio.init(); if(town.sheet){ closeSheets(); return true; } return false; });
   function townUpdate(dt){ const V=ST.Village, L=track.len;
-    // where to: the stick (or the keys) relative to the camera; pushed to the rim, or with Shift, the rider runs
-    let ix=tj.x+(input.k.r?1:0)-(input.k.l?1:0), iy=tj.y+(input.k.d?1:0)-(input.k.u?1:0), mag=Math.hypot(ix,iy); if(mag>1){ ix/=mag; iy/=mag; mag=1; }
-    if(town.sheet) mag=0;
-    const run=mag>.12&&(input.grab||Math.hypot(tj.x,tj.y)>.93); let want=mag<.12?0:run?RUN_V:WALK_V*clamp((mag-.12)/.55,.4,1);
-    if(want>0){ const fx=-Math.sin(town.camYaw), fz=-Math.cos(town.camYaw), mx=fx*(-iy)+(-fz)*ix, mz=fz*(-iy)+fx*ix, tgt=Math.atan2(mx,mz), d=wrapA(tgt-town.hd);
-      town.hd=wrapA(town.hd+d*(1-Math.exp(-dt*(run?6.5:8.5)))); want*=Math.max(.2,Math.cos(Math.min(Math.abs(d),PI/2))); }   // turn first, then go
-    town.v=damp(town.v,want,want>town.v?4.5:9,dt);
-    const p={x:town.x+Math.sin(town.hd)*town.v*dt,z:town.z+Math.cos(town.hd)*town.v*dt};
-    if(V&&V.walkOut) V.walkOut(p,.4);
-    // step round the villagers close by
-    for(const a of ST.People.active){ const r=a.r; if(r.hide) continue; const dx=p.x-r.x, dz=p.z-r.z, dl=Math.hypot(dx,dz); if(dl<.75&&dl>1e-3){ p.x=r.x+dx/dl*.75; p.z=r.z+dz/dl*.75; } }
-    // the village's edges: up the run-out a little, the wooded banks, the hill behind the church
-    { const s=-p.z, d=clamp(s-L,-40,203), s2=L+d, u=clamp(p.x-World.cx(s),-56,56); p.z=-s2; p.x=World.cx(s2)+u; }
-    const moved=Math.hypot(p.x-town.x,p.z-town.z); town.vEff=damp(town.vEff,moved/Math.max(dt,1e-4),14,dt); town.moved+=moved;
-    town.x=p.x; town.z=p.z; town.y=World.groundY(town.x,town.z); P.x=town.x; P.z=town.z; P.s=-town.z; P.y=town.y;
-    if(town.wave>0) town.wave-=dt; if(town.dragT>0) town.dragT-=dt;
+    town.step(dt,{u:input.k.u,d:input.k.d,l:input.k.l,r:input.k.r,run:input.grab}); P.x=town.x; P.z=town.z; P.s=-town.z; P.y=town.y;
     // the lift: at its gates (or the queue's entry) the way up is offered
     let near=false; if(V&&V.queuePath&&V.queuePath.length){ const ends=[V.queuePath[0],V.queuePath[V.queuePath.length-1]]; for(const q of ends){ const s=L+q.d, x=World.cx(s)+q.u, z=-s; if(Math.hypot(x-town.x,z-town.z)<4.2) near=true; } }
     if(near!==town.near){ town.near=near; $('#tLift').hidden=!near; }
     if(town.moved>6&&!save.walked){ save.walked=1; persist(); $('#tHint').hidden=true; }
     Rider.walkFrame(dt,{x:town.x,y:town.y,z:town.z,hd:town.hd,speed:town.vEff,wave:town.wave>0&&town.v<.2});
   }
-  const _tc=new THREE.Vector3(), _tl=new THREE.Vector3();
-  function townCamera(dt){ const W=innerWidth, H=innerHeight, portrait=H>W*1.05, show=town.sheet==='char', V=ST.Village;
-    // the camera swings behind the walker (not while the player turns it by hand); with the rider's sheet open it comes round to the front
-    let yawT=null; if(show) yawT=town.hd+.45; else if(town.vEff>.5&&town.dragT<=0) yawT=town.hd+PI;
-    if(yawT!=null) town.camYaw+=wrapA(yawT-town.camYaw)*(1-Math.exp(-dt*(show?3.5:1.5*clamp(town.vEff/1.6,.5,1.6))));
-    const k=town.snap?1:1-Math.exp(-dt*9); town.tx+=(town.x-town.tx)*k; town.tz+=(town.z-town.tz)*k; town.ty+=(town.y-town.ty)*(town.snap?1:1-Math.exp(-dt*6));
-    const pitch=show?.1:town.camPitch, look=show?.95:1.35; let dist=show?(portrait?3.6:3.1):(portrait?5.4:4.5)+clamp(town.vEff-2,0,2)*.35;
-    const ox=Math.sin(town.camYaw)*Math.cos(pitch), oy=Math.sin(pitch), oz=Math.cos(town.camYaw)*Math.cos(pitch), ty=town.ty+look;
-    // a wall between: the camera comes in front of it
-    if(V&&V.inside){ for(let t=.18;t<=1.001;t+=.06){ const x=town.tx+ox*dist*t, z=town.tz+oz*dist*t; if(V.inside(x,z,.35)){ dist=Math.max(1.3,dist*(t-.08)); break; } } }
-    _tc.set(town.tx+ox*dist,ty+oy*dist,town.tz+oz*dist); _tc.y=Math.max(_tc.y,World.groundY(_tc.x,_tc.z)+.5);
-    camera.position.copy(_tc); _tl.set(town.tx,ty,town.tz); camera.lookAt(_tl);
-    const fov=(ST.baseFov||62)+(portrait?12:-2)+(show?-6:0); if(town.snap||Math.abs(camera.fov-fov)>.05){ camera.fov=town.snap?fov:damp(camera.fov,fov,5,dt); camera.updateProjectionMatrix(); }
-    // with a sheet open the rider is framed in the part of the screen the sheet leaves free
-    const want=town.sheet?(portrait?[0,H*.21]:[W*.2,0]):null;   // portrait: above the sheet; landscape: beside it (the sheet is on the right)
-    if(want){ camera.setViewOffset(W,H,want[0],want[1],W,H); } else if(camera.view&&camera.view.enabled) camera.clearViewOffset();
-    town.snap=false; }
+  function townCamera(dt){ town.cam(camera,dt,{show:town.sheet==='char',sheet:!!town.sheet}); }
   function townTick(dt){ if(Rider.walking){ townUpdate(dt); townCamera(dt); } else { P.t+=dt; updateRider(dt,true); menuCamera(tAcc); } }
   /* sheets: the rider, the run, the settings (one at a time; a tap on the town closes it) */
   function openSheet(id){ closeSheets(); town.sheet=id; $('#sheet-'+id).hidden=false; document.body.classList.add('sheet-open'); if(id==='char'){ town.wave=0; } }
@@ -525,6 +486,7 @@
   document.querySelectorAll('.sgo').forEach(b=>b.onclick=()=>$('#playBtn').onclick());
   $('#tLift').onclick=()=>$('#playBtn').onclick();
   $('#tMute').onclick=()=>$('#mute').onclick();
+  $('#tWorld').onclick=()=>{ location.href='./'; };   // the opening menu: the snow or the beach
   let bellT=6;   // the church bell rings soon after the village comes into view, then every minute or so
   /* the chairlift's machinery is heard near either terminal */
   function stationHum(){ const tw=ST.Resort.towers&&ST.Resort.towers(); if(!tw||!tw.length) return 0; const c=camera.position; let best=1e9; [tw[0],tw[tw.length-1]].forEach(w=>{ const d=Math.hypot(c.x-w.x,c.z-w.z); if(d<best) best=d; }); return clamp(1-(best-8)/45,0,1); }
