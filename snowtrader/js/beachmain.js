@@ -94,7 +94,7 @@
     if(e.turns){ parts.push(e.turns*360+''); pts+=e.turns*260*(1+(e.turns-1)*.5); }
     if(e.rolls){ parts.push(e.rolls>1?e.rolls+'× BACKROLL':'BACKROLL'); pts+=e.rolls*420*(1+(e.rolls-1)*.6); }
     if(e.grabT>.25&&e.grabs.length){ parts.push(e.grabs.join(' + ')+' GRAB'); pts+=Math.min(e.grabT,2.5)*120+(e.grabs.length-1)*140; }
-    let name=parts.join(' + ')||(e.h>=5?'BIG AIR':'AIR'); name+=' · '+e.h.toFixed(1)+' מ׳';
+    let name=parts.join(' + ')||(e.h>=5?'BIG AIR':'AIR'); name+=' · '+e.h.toFixed(1)+'M';   // the trick line is Latin (left to right): metres as M
     score(name,pts,e.sketchy); if(e.h>=6) flash('#fff6c0',.35); }
   const WHY={sideways:'נחיתה בצד',rotation:'סיבוב לא גמור','too hard':'נחיתה קשה מדי','off the line':'הלוח לא בכיוון',shallow:'רדוד מדי — רכבו החוצה לים'};
   function onEvent(e){
