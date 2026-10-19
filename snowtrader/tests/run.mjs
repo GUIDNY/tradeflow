@@ -334,7 +334,7 @@ await test('surf',async()=>{ const p=await openBeach(); const r=await p.evaluate
     const ctl=()=>({steer:0,paddle:false,pop:false,pump:false,spin:false,spinDir:1,grab:false});
     const head=(th,f)=>Math.atan2(Math.cos(th)*f.ax-Math.sin(th)*f.nx,Math.cos(th)*f.az-Math.sin(th)*f.nz);
     // lying just outside the break, a little down the line from wave i's peak, its crest 18 m out
-    const lineup=i=>{ const px=SU.peak+((i*37)%21+21)%21-10, x=px+8, off=SU.offB+8, f=fr(x); C.time=i*SU.period+(SU.off0-(off+18))/SU.c; SF.reset({x,z:C.shoreZ(x)-off,h:Math.atan2(f.nx,f.nz)}); };
+    const lineup=i=>{ const px=SU.peak+((i*37)%21+21)%21-10, x=px+8, off=SU.breakOff(SU.H[i%8])+8, f=fr(x); C.time=i*SU.period+(SU.off0-(off+18))/SU.c; SF.reset({x,z:C.shoreZ(x)-off,h:Math.atan2(f.nx,f.nz)}); };
     // one wave: how = 'idle' (nothing), 'straight' (stand up and go to the beach), 'trim' (down the line holding the middle of the face, pumping), 'carve' (bottom and top turns)
     const ride=(i,how)=>{ lineup(i); const c=ctl(); let t=0, rideT=null, x0=0, maxV=0, evs=[], mode='drop';
       while(t<(how==='idle'?15:30)){   /* idle: just this wave (later ones find a drifting surfer further in) */ const sw=S.face, f=fr(S.x);
@@ -372,8 +372,63 @@ await test('surfflow',async()=>{ const p=await openBeach(); const r=await p.eval
     return out; });
   const ok=r.offer&&r.controlsFirst&&r.session&&r.prone==='prone (FK)'&&r.stood&&r.popCue&&r.standing!=='prone (FK)'&&r.feet<3&&r.kmh>12&&r.paused&&r.resumed&&r.results&&r.back&&beachErrors.length===0;
   return {ok,detail:JSON.stringify(r)+(beachErrors.length?' errors: '+beachErrors.slice(0,2).join(' | '):'')}; });
-if(beach) await beach.close();
 
+// the breaking wave: the lip thrown over the face (its own mesh), the patch of fine water under it, the whitewater's particles
+await test('wave',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const D=ST.debug, C=ST.Coast, S=C.SURF, out={};
+    D.save.sctlSeen=1; D.startSurf(); D.setMode('pause'); ST.Surf.S.x=-400; ST.Surf.S.z=-200;
+    const i=Math.floor(C.time/S.period)+2, H=S.H[i%8]; C.time=i*S.period+(S.off0-S.breakOff(H))/S.c+3; C.surfFocus=i;
+    const w=C.surfWaves(C.time).find(v=>v.i===i), xb=w.px+S.peel*w.dtb, zc=C.shoreZ(xb)-w.off; ST.camera.position.set(xb+9,1.6,zc+9); ST.camera.lookAt(xb-3,1.5,zc-1);
+    for(let k=0;k<90;k++) C.update(1/60,{x:xb,y:0,z:zc});
+    const lip=ST.scene.getObjectByName('lip'), patch=ST.scene.getObjectByName('surfPatch'), F=C._FP; let live=0; for(let k=0;k<F.N;k++) if(F.life[k]>0) live++;
+    out.lip=lip.visible; out.patch=patch.visible&&C.patchWave&&C.patchWave.i===i; out.particles=live;
+    // in the barrel (3.6 m behind the break point, where the lip is fully thrown) it arcs out over the face: its tip far in front of the crest, and low
+    const w2=C.surfWaves(C.time).find(v=>v.i===i), L=C.lipAt(w2,-3.6,{}); out.lam=+L.lam.toFixed(2); out.throw=+(L.X*L.lam/L.Hu).toFixed(2); out.Hu=+L.Hu.toFixed(2);
+    // the mesh: some vertex of the lip is out in front of the crest by at least the face's length, and some vertex is near the water
+    const a=lip.geometry.attributes.position.array; let maxF=-1e9, minY=1e9; for(let k=0;k<a.length;k+=3){ const f=(a[k+2])-(C.shoreZ(a[k])-w2.off); maxF=Math.max(maxF,f); minY=Math.min(minY,a[k+1]); }
+    out.lipFront=+maxF.toFixed(2); out.lipLow=+minY.toFixed(2); out.Lf=+L.Lf.toFixed(2);
+    // the waves still carry the board: the JS surface under a point equals what the sea draws there (the same function both sides)
+    const W=C.water(xb+20,zc-1,null,{}); out.waterOk=isFinite(W.y)&&W.sw!==null;
+    return out; });
+  const ok=r.lip&&r.patch&&r.particles>100&&r.lam>.9&&r.throw>1&&r.lipFront>r.Lf&&r.lipLow<.6*r.Hu&&r.waterOk;
+  return {ok,detail:JSON.stringify(r)}; });
+// riding the barrel: stall for the lip to throw over, then hold a low line under it; the camera goes into the tube and the score counts it
+await test('barrel',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const D=ST.debug, SF=ST.Surf, S=SF.S, C=ST.Coast, SU=C.SURF, out={};
+    D.save.sctlSeen=1; D.startSurf(); D.setMode('pause'); const H=1/120, wrap=a=>Math.atan2(Math.sin(a),Math.cos(a)), fr=x=>{ const sd=10/170*Math.cos(x/170)+4/53*Math.cos(x/53+1.3), l=Math.hypot(sd,1); return {ax:1/l,az:sd/l,nx:-sd/l,nz:1/l}; };
+    const head=(th,f)=>Math.atan2(Math.cos(th)*f.ax-Math.sin(th)*f.nx,Math.cos(th)*f.az-Math.sin(th)*f.nz), res=[];
+    for(const i of [6,2,1]){ const px=SU.peak+((i*37)%21+21)%21-10, x0=px+8, off=SU.breakOff(SU.H[i%8])+8, f0=fr(x0); C.time=i*SU.period+(SU.off0-(off+18))/SU.c; SF.reset({x:x0,z:C.shoreZ(x0)-off,h:Math.atan2(f0.nx,f0.nz)}); SF.camReset(); SF.camMode('channel');
+      const c={steer:0,paddle:false,pop:false,pump:false,stall:false,spin:false,spinDir:1,grab:false}; let mode='drop', tube=0, t=0, evs=[], camIn=0;
+      while(t<30){ const sw=S.face, f=fr(S.x);
+        if(S.ph==='wait'||S.ph==='paddle'){ c.paddle=!!sw&&sw.u>-12&&sw.u<2; c.steer=Math.max(-1,Math.min(1,wrap(S.h-head(-75*Math.PI/180,f))*3)); c.pop=!!sw&&S.speed>SF.C.popMin&&sw.u>-sw.Lf; }
+        else if(S.ph==='ride'){ c.paddle=c.pop=false; const qa=sw?sw.qa:99; if(mode==='drop'&&S.f<.35) mode='wait'; if(mode==='wait'&&qa<-1.5) mode='tube'; if(mode==='tube'&&(tube>2.2||qa<-SU.tube+2.2)) mode='out';
+          const th=mode==='drop'?-55*Math.PI/180:Math.max(-.8,Math.min(.6,(.4-S.f)*2.6)); c.stall=mode==='wait'&&qa>-1.2&&S.f<.5; c.pump=mode==='out'||mode==='tube'&&qa<-SU.tube+3.2;
+          c.steer=Math.max(-1,Math.min(1,wrap(S.h-head(th,f))*4)); if(S.tube>.9) tube+=H; }
+        else { c.steer=0; c.paddle=c.pop=c.pump=c.stall=false; }
+        C.time+=H; SF.step(H,c); evs.push(...SF.events.map(e=>e.type+(e.why?':'+e.why:''))); SF.events.length=0; t+=H;
+        if(Math.round(t*120)%2===0){ C.surfFocus=S.waveI; SF.visuals(1/60,ST.Rider); SF.camera(1/60); if(S.tube>.9&&SF.camState().tk>.5) camIn+=1/60; }
+        if(S.ph==='wipe'||S.ph==='out') break; }
+      res.push({i,tube:+tube.toFixed(1),camIn:+camIn.toFixed(1),evs:evs.filter(e=>e!=='pop'&&e!=='ride').join()}); }
+    out.rides=res; SF.camMode('follow'); out.follow=SF.camMode(); SF.camMode('channel'); out.channel=SF.camMode(); return out; });
+  const good=r.rides.filter(x=>x.tube>=2&&x.camIn>=1&&!x.evs.includes('wipe'));
+  return {ok:good.length>=2&&r.follow==='follow'&&r.channel==='channel',detail:JSON.stringify(r)}; });
+// the kite gear: a leading-edge kite with struts and bridle, the harness on the rider, the bar in the hands, five lines
+await test('kitegear',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const D=ST.debug, K=ST.Kite, S=K.S, I=D.input, R=ST.Rider, out={};
+    D.save.ctlSeen=1; D.startSession(); for(let i=0;i<600;i++){ I.k={}; D.tick(1/60); }
+    const km=K.kiteMesh, kids=km.children.map(o=>o.type); out.kite=kids.join('+');
+    const H=K.harness; out.harness=H&&H.fit; const hook=H.hook.getWorldPosition(new THREE.Vector3()), belly=R.bones.Abdomen.getWorldPosition(new THREE.Vector3());
+    out.hookFromBelly=+hook.distanceTo(belly).toFixed(2); out.harnessShown=H.g.visible;
+    const bar=K.group.children.find(o=>o.type==='Group'&&!o.userData.kite&&o.children.length>8), wl=R.bones.WristL.getWorldPosition(new THREE.Vector3()), wr=R.bones.WristR.getWorldPosition(new THREE.Vector3());
+    out.handsOnBar=+Math.max(wl.distanceTo(bar.position),wr.distanceTo(bar.position)).toFixed(2);
+    const la=K.group.children.find(o=>o.type==='LineSegments').geometry.attributes.position.array; out.lines=la.length/6; out.finite=[...la].every(Number.isFinite);
+    // the back lines end at the wingtips, ~2.8 m out from the kite's middle; the centre line starts at the hook
+    const tip=new THREE.Vector3(la[3],la[4],la[5]); out.tipFromKite=+tip.distanceTo(km.position).toFixed(1); out.centreFromHook=+new THREE.Vector3(la[24],la[25],la[26]).distanceTo(hook).toFixed(2);
+    // the body leans back against the pull, in one line (no sitting at the waist)
+    const Wb=k=>R.bones[k].getWorldPosition(new THREE.Vector3()), d=km.position.clone().sub(Wb('Hips')).setY(0).normalize(), ang=(a,b)=>{ const v=b.clone().sub(a); return Math.atan2(-v.dot(d),v.y)*57.3; };
+    const ft=Wb('FootL').add(Wb('FootR')).multiplyScalar(.5), sh=Wb('UpperArmL').add(Wb('UpperArmR')).multiplyScalar(.5); out.legs=+ang(ft,Wb('Hips')).toFixed(0); out.trunk=+ang(Wb('Hips'),sh).toFixed(0);
+    D.toBeach(); for(let i=0;i<5;i++) D.tick(1/60); out.harnessAfter=H.g.visible; out.wetsuitOff=R.look.wetsuit===false; return out; });
+  const ok=r.kite==='Mesh+Mesh+LineSegments'&&r.harness&&r.harness.n>50&&r.hookFromBelly<.35&&r.harnessShown&&r.handsOnBar<.3&&r.lines===5&&r.finite&&r.tipFromKite>2&&r.tipFromKite<4&&r.centreFromHook<.25
+    &&r.legs>15&&r.trunk>12&&Math.abs(r.legs-r.trunk)<20&&!r.harnessAfter&&r.wetsuitOff;
+  return {ok,detail:JSON.stringify(r)}; });
+if(beach) await beach.close();
 await browser.close(); server.close();
 const failed=results.filter(r=>!r.ok);
 console.log(`\n${results.length-failed.length}/${results.length} passed`+(failed.length?' — failed: '+failed.map(r=>r.name).join(', '):''));

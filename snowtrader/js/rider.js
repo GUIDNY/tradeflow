@@ -77,6 +77,7 @@
   const _q=new THREE.Quaternion(), _q2=new THREE.Quaternion(), _e=new THREE.Euler(), _v=new THREE.Vector3(), _v2=new THREE.Vector3(), _v3=new THREE.Vector3(), _v4=new THREE.Vector3(), _v5=new THREE.Vector3(), _v6=new THREE.Vector3(), _p0=new THREE.Vector3(), _p1=new THREE.Vector3(), _p2=new THREE.Vector3(), _dq=new THREE.Quaternion(), _wq=new THREE.Quaternion(), _pq=new THREE.Quaternion();
   /* where each ankle must be, in the rig frame (board level): over the middle of each binding (front foot forward = -Z), ankle height of a boot on a binding */
   R.bindT={L:new THREE.Vector3(0,.205,-.28),R:new THREE.Vector3(0,.205,.28)}; R.ikOn=true;
+  R.setStance=w=>{ R.bindT.L.z=-w/2; R.bindT.R.z=w/2; };   // the distance between the feet (a snowboard's bindings .56 m; a surfer's feet wider)
   /* rotate a bone (about its own joint) so the segment toward its child points at a world target */
   function aimBone(bone,child,target){ bone.updateWorldMatrix(true,false); child.updateWorldMatrix(true,false); bone.getWorldPosition(_p0); child.getWorldPosition(_p1);
     _v.subVectors(_p1,_p0).normalize(); _v2.subVectors(target,_p0).normalize(); _dq.setFromUnitVectors(_v,_v2); bone.getWorldQuaternion(_wq); _wq.premultiply(_dq);
@@ -142,8 +143,9 @@
     const B={}; m.traverse(o=>{ if(o.isBone) B[o.name]=o; });
     adopt(m,key=>B[T.map[key]]||null,T.k,Math.PI/2); R.mats={}; R.current=name; };
   R.dress=function(){ if(R.current!=='hero'&&R.current) return; const k=R.look, M=R.mats; const set=(n,c)=>{ if(M[n]) M[n].color.setHex(c).convertSRGBToLinear(); };
-    set('Skin',k.skin); set('Skin2',k.skin); set('Hair',k.hair); set('Hair2',k.hair); set('Top',k.jacket); set('Top2',0x1a1c22); set('Accent',0xffffff); set('Pants',k.pants); set('Shoe',0x22242b); set('Sole',0xeeeeee);
-    if(M.Top){ M.Top.roughness=.55; M.Top.metalness=.05; } };
+    set('Skin',k.skin); set('Skin2',k.skin); set('Hair',k.hair); set('Hair2',k.hair); set('Top',k.jacket); set('Top2',k.top2!=null?k.top2:0x1a1c22); set('Accent',k.accent!=null?k.accent:0xffffff); set('Pants',k.pants);
+    set('Shoe',k.barefoot?k.skin:0x22242b); set('Sole',k.barefoot?k.skin:0xeeeeee);   // in the water: barefoot
+    if(M.Top){ M.Top.roughness=k.wetsuit?.38:.55; M.Top.metalness=.05; } if(M.Pants) M.Pants.roughness=k.wetsuit?.38:M.Pants.roughness; };   // wet neoprene has a sheen
   R.addGear=function(){
     if(R.spec&&R.spec.gear===false||R.noGear){ R.helm=null; R.lens=null; return; }   // the model brings its own helmet, goggles and gloves (or it is summer: none)
     const head=R.bones.Head; if(!head) return;
@@ -219,14 +221,14 @@
       const eAbs=Math.abs(toeE)*(1-a);
       const def=R._grabDef||0;
       // a deep carve at speed: the rider sinks, bends into the turn and drags the inside glove through the snow
-      const drag=smooth01(44,60,eAbs)*smooth01(6,10,P.speed||0)*live*(1-a)*(1-br);
+      const drag=P.surf?0:smooth01(44,60,eAbs)*smooth01(6,10,P.speed||0)*live*(1-a)*(1-br);
       let kn=28+P.crouch*45+ch*55+P.absorb*42-P.ext*28+a*(tk*55+g*(55+def*160)+flipK*25)+br*18+P.skate*8+eAbs*.75+(toeE<0?eAbs*.35:0)+(1-a)*tk*20+drag*24;
       kn=clamp(kn,4,145);
       // a press loads one leg: the knee over the pressed end folds, the other straightens as its end of the board lifts.
       // On a jib the knees stay soft and the body sways with the balance (balC: + toward the toes).
       const pr=P.press||0, prL=Math.max(0,pr), prT=Math.max(0,-pr), jb=P.jib||0, balC=dir*(P.bal||0)*jb;
       const kF=S('kF',kn*1.03+buzz+(toeE>0?3:0)+prL*32-prT*16+jb*6,8.5,.5), kB=S('kB',kn*.98-buzz*.7+Math.abs(omC)*4+(toeE<0?3:0)+prT*32-prL*16+jb*6,12,.62);
-      const fold=S('fold',kn*.2+tk*(1-a)*55+tk*a*10+g*(70+def*120)+ch*22+bump*60+Math.abs(pr)*10,9,.7);
+      const fold=S('fold',kn*.2*(1-(P.upright||0)*.85)+tk*(1-a)*55+tk*a*10+g*(70+def*120)+ch*22+bump*60+Math.abs(pr)*10,9,.7);   // upright: a kiter's trunk stays in line with the legs (no bend at the waist)
       // where the travel is, seen from the figure (it faces the toe edge, the nose is to its left): eyes and shoulders go there
       const look=clamp(90+slipC-omC*16+(P.menu?Math.sin(P.t*.5)*14:0),-20,115);
       // spinning: the shoulders lead the rotation; loading a jump while turning winds them the other way first (the wind-up)
@@ -253,8 +255,10 @@
       const tkG=tk*(1-a), mix=(base,list)=>{ const o=base.slice(); list.forEach(([w,v])=>{ for(let i=0;i<3;i++) o[i]+=(v[i]-o[i])*clamp(w,0,1); }); return o; };
       const wavF=[Math.cos(P.t*10)*.24,Math.sin(P.t*10)*.28,0], wavB=[Math.cos(P.t*10+2.4)*.24,Math.sin(P.t*10+2.4)*.28,0];
       const carveZ=.14*clamp(Math.abs(toeE)/50,0,1)*(1-a), heelUp=toeE<0?.1*clamp(-toeE/50,0,1):0;
-      let hF=mix([.25,-.33,.13+carveZ],[[P.menu?1:0,[.1,-.46,.07]],[a,[.4,-.1,.06]],[tkG,[.1,-.28,.38]],[br,[.43,-.2,.1]],[ch,[.18,-.4,-.2]],[P.ext,[.28,-.04,.3]],[P.skate,[.35,-.25,.2]]]);
-      let hB=mix([-.24,-.38,.06+carveZ],[[P.menu?1:0,[-.1,-.46,.06]],[a,[-.4,-.1,0]],[tkG,[-.08,-.28,.36]],[br,[-.4,-.22,.05]],[ch,[-.16,-.4,-.22]],[P.ext,[-.26,-.04,.28]],[P.skate,[-.3,-.3,-.05]]]);
+      // surfing: the front arm loosely forward down the line, the rear arm low beside or a little behind (the hands about waist high)
+      const sf=P.surf||0, hF0=sf?[.44,-.3,.2+carveZ]:[.25,-.33,.13+carveZ], hB0=sf?[-.27,-.46,.17+carveZ]:[-.24,-.38,.06+carveZ];
+      let hF=mix(hF0,[[P.menu?1:0,[.1,-.46,.07]],[a,[.4,-.1,.06]],[tkG,[.1,-.28,.38]],[br,[.43,-.2,.1]],[ch,[.18,-.4,-.2]],[P.ext,[.28,-.04,.3]],[P.skate,[.35,-.25,.2]]]);
+      let hB=mix(hB0,[[P.menu?1:0,[-.1,-.46,.06]],[a,[-.4,-.1,0]],[tkG,[-.08,-.28,.36]],[br,[-.4,-.22,.05]],[ch,[-.16,-.4,-.22]],[P.ext,[-.26,-.04,.28]],[P.skate,[-.3,-.3,-.05]]]);
       hF[1]+=heelUp; hB[1]+=heelUp; for(let i=0;i<3;i++){ hF[i]+=wavF[i]*wob; hB[i]+=wavB[i]*wob; }
       // on a jib the arms go out along the board for balance and swing against the lean; a press reaches toward the pressed end
       if(jb>.01){ hF=mix(hF,[[jb,[.52,-.1,.02]]]); hB=mix(hB,[[jb,[-.52,-.13,0]]]); hF[2]-=balC*.2; hB[2]-=balC*.2; hF[1]+=balC*.1; hB[1]-=balC*.1; }
@@ -267,7 +271,7 @@
       R._legs={kF,kB,sitW,bump,gu,live}; R._drag={k:drag,toe:toeE>0};
       // pelvis targets in the board frame (x toward the toes, z along the board, front foot at -z when regular)
       const ecx=.12*Math.tanh(toeE/9);                                                         // the edge carrying the weight
-      const px=S('px',(-.05-P.crouch*.05+ecx+.85*Math.sin(lamRel/DEG*live))*live+sitW*-.42+bump*.12,10,.75);
+      const px=S('px',(-.05-P.crouch*.05+ecx+.85*Math.sin(lamRel/DEG*live)+(P.hipsIn||0))*live+sitW*-.42+bump*.12,10,.75);   // hipsIn: the hips pushed toward the toes (a kiter's toward the bar)
       const pz=S('pz',-dir*(.35*P.fa+.06*P.skate+.14*pr)*live,9,.75);                         // a press moves the hips over the pressed end
       R._pelvis={px,pz};
     }
@@ -287,7 +291,7 @@
       const hp=bp.Hips?rig.worldToLocal(bp.Hips.getWorldPosition(new THREE.Vector3())):null;
       if(low<1e8) R.model.position.set(hp?-hp.x:0,.205-low,hp?-hp.z:0); R.ik={on:false,state:'seated (FK)'}; finishBoard(P,0); return; }
     // legs start each frame from a neutral bend (so IK never inherits yesterday's twist); feet sit on their bindings
-    const kL=dir>0?R._legs.kF:R._legs.kB, kR=dir>0?R._legs.kB:R._legs.kF, yawL=20, yawR=-8;
+    const kL=dir>0?R._legs.kF:R._legs.kB, kR=dir>0?R._legs.kB:R._legs.kF, yawL=P.surf?30:20, yawR=P.surf?10:-8;
     R.drive.UpperLegL=new THREE.Quaternion().setFromEuler(new THREE.Euler(-(kL*.6+6)*RAD,yawL*RAD,4*RAD,'ZYX')); R.drive.LowerLegL=new THREE.Quaternion().setFromEuler(new THREE.Euler(kL*RAD,yawL*RAD,0,'ZYX'));
     R.drive.UpperLegR=new THREE.Quaternion().setFromEuler(new THREE.Euler(-(kR*.6+6)*RAD,yawR*RAD,-4*RAD,'ZYX')); R.drive.LowerLegR=new THREE.Quaternion().setFromEuler(new THREE.Euler(kR*RAD,yawR*RAD,0,'ZYX'));
     const toeL=P.edge*dir*DEG, ankL=clamp(toeL*.12,-6,6);
@@ -335,6 +339,7 @@
       const pe=rig.localToWorld(new THREE.Vector3(xe,0,zz)), pa=rig.localToWorld(new THREE.Vector3(xe+(D.toe?1:-1),0,zz)), dx=pa.x-pe.x, dz=pa.z-pe.z, dl=Math.hypot(dx,dz)||1;
       const sx=pe.x+dx/dl*.3, sz=pe.z+dz/dl*.3; handT[hs].p.lerp(new THREE.Vector3(sx,ST.World.groundY(sx,sz)+.04,sz),D.k); R.handDrag={sd:hs,k:D.k,touch:false,pos:new THREE.Vector3()}; }
     if(P.handsTo){ const H2=P.handsTo; if(gArm){ const o=gArm==='L'?'R':'L'; handT[o].p.copy(H2.C); } else { handT.L.p.copy(H2.L); handT.R.p.copy(H2.R); } }   // the kite's bar
+    if(P.handTo&&P.handTo.k>.01&&!gArm){ const hd=P.handTo, sd=hd.sd==='F'?front:back; handT[sd].p.lerp(hd.p,clamp(hd.k,0,1)); }   // a hand trailing in the wave
     const sw2=Math.max(R._legs.sitW,R._legs.bump*.8*(R._legs.gu<.55?1:0));
     if(sw2>.01) ['L','R'].forEach(sd=>{ if(sd===gArm) return; handT[sd].p.lerp(rig.localToWorld(new THREE.Vector3(-.66,.05,(sd==='L'?-1:1)*.3)),clamp(sw2,0,1)); });
     info.hands={}; info.reach.armL=0; info.reach.armR=0;
@@ -361,13 +366,13 @@
     _pm.makeBasis(_bxP.set(nose,0,0),_byP.set(0,0,nose),_bzP.set(0,-1,0)); m.quaternion.setFromRotationMatrix(_pm).multiply(fix);
     m.position.set(0,0,0); root.updateMatrixWorld(true);
     const Fb=m.getWorldQuaternion(new THREE.Quaternion()), q=(x,y,z)=>new THREE.Quaternion().setFromEuler(new THREE.Euler(x*RD,y*RD,z*RD,'XYZ'));
-    const pw=clamp(P.paddle||0,0,1), ph=(P.stroke||0)*360, rest=165;
+    const pw=clamp(P.paddle||0,0,1), ph=(P.stroke||0)*360, rest=165, pu=clamp(P.push||0,0,1);   // pu: the first half of the pop-up, pressing up off the deck
     // each arm's angle round the shoulder (0 = reaching ahead, 90 = straight down into the water, 180 = along the side)
-    const arm=a=>{ a=((a%360)+360)%360; return lerp(rest,a,pw); }, aL=arm(ph), aR=arm(ph+180);
-    const bend=a=>a>190&&a<350?Math.sin((a-190)/160*Math.PI)*55*pw:0;   // the elbow folds as the arm comes back over the top
+    const arm=a=>{ a=((a%360)+360)%360; return lerp(lerp(rest,a,pw),112,pu); }, aL=arm(ph), aR=arm(ph+180);
+    const bend=a=>a>190&&a<350?Math.sin((a-190)/160*Math.PI)*55*pw*(1-pu):0;   // the elbow folds as the arm comes back over the top
     R.drive={};
     const set=(k,qq)=>{ if(bp[k]) R.drive[k]=qq; };
-    set('Hips',q(0,0,0)); set('Abdomen',q(-8,0,0)); set('Torso',q(-16,0,0)); set('Chest',q(-24,0,0)); set('Neck',q(-38,0,0)); set('Head',q(-50,0,0));
+    set('Hips',q(0,0,0)); set('Abdomen',q(-8-12*pu,0,0)); set('Torso',q(-16-16*pu,0,0)); set('Chest',q(-24-18*pu,0,0)); set('Neck',q(-38+8*pu,0,0)); set('Head',q(-50+14*pu,0,0));
     set('ShoulderL',q(0,0,8)); set('ShoulderR',q(0,0,-8));
     set('UpperArmL',q(aL,0,0).multiply(q(0,0,90))); set('UpperArmR',q(aR,0,0).multiply(q(0,0,-90)));
     set('LowerArmL',q(aL+bend(aL),0,0).multiply(q(0,0,90))); set('LowerArmR',q(aR+bend(aR),0,0).multiply(q(0,0,-90)));

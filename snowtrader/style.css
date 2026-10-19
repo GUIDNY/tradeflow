@@ -252,3 +252,6 @@ body.surfing #btnFlip{display:none}
 @media (max-width:700px){ .tgo2 .tgo{font-size:18px} }
 body.beach #combo{top:128px}
 @media (max-width:520px) and (orientation:portrait){ body.beach #combo{top:150px} }
+/* the surf camera button: only while surfing */
+#camBtn{display:none}body.surfing #camBtn{display:flex;left:200px}
+@media (max-width:700px){ body.surfing #camBtn{left:180px;top:10px} }

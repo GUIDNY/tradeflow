@@ -38,13 +38,22 @@
   $('#tWorld').onclick=()=>{ location.href='./'; };   // the opening menu: the snow or the beach
   const setMute=m=>{ save.muted=m; Audio.setMuted(m); $('#tMute').textContent=$('#mute').textContent=m?'🔇':'🔊'; persist(); };
   $('#tMute').onclick=()=>setMute(!save.muted); $('#mute').onclick=()=>setMute(!save.muted);
+  // the surf camera: from the channel (the default) or behind the surfer
+  const camNames={channel:'מהערוץ',follow:'מאחור'};
+  const setCam=m=>{ SF.camMode(m); save.scam=m; persist(); $('#camBtn').title='מצלמה: '+camNames[m]; };
+  const camCycle=()=>{ const L=SF.camModes, m=L[(L.indexOf(SF.camMode())+1)%L.length]; setCam(m); subtitle('מצלמה: '+camNames[m],1200); };
+  $('#camBtn').onclick=camCycle; if(save.scam) SF.camMode(save.scam);
   /* the riders: the hero and the village guests (the Meshy rider is in ski kit: not on the beach) */
   const choices=()=>Rider.choices.filter(n=>n!=='meshy_rider');
   function renderRiders(){ const row=$('#riderRow'), list=choices(); row.innerHTML=list.map((n,i)=>'<button data-n="'+n+'" class="'+(Rider.current===n?'sel':'')+'">'+(i+1)+'</button>').join('');
     row.querySelectorAll('button').forEach(b=>b.onclick=async()=>{ const n=b.dataset.n; if(Rider.current===n) return; const st=$('#riderState'); st.textContent='טוענים…'; Rider.root.visible=false;
       try{ await Rider.swap(n); applyLook(); await Rider.walkPrep(); if(mode==='menu'){ Rider.walkSet(true); town.wave=2.4; } save.rider=Rider.choices.indexOf(n); persist(); }catch(e){ console.warn(e); st.textContent='שגיאה'; setTimeout(()=>st.textContent='',1500); }
       Rider.root.visible=true; st.textContent=''; renderRiders(); }); }
-  function applyLook(){ Rider.setLook({jacket:0x00b4d8,pants:0x1d3557,helmet:0x111111}); }
+  // on the sand: a light top and trousers; in the water: a black wetsuit with coloured panels (turquoise surfing, orange kiting), barefoot
+  const LOOKS={town:{jacket:0x00b4d8,pants:0x1d3557,helmet:0x111111,accent:0xffffff,top2:0x1a1c22,barefoot:false,wetsuit:false},
+    surf:{jacket:0x15171c,pants:0x15171c,helmet:0x111111,accent:0x22c7d6,top2:0x22c7d6,barefoot:true,wetsuit:true},
+    kite:{jacket:0x15171c,pants:0x15171c,helmet:0x111111,accent:0xff7a1a,top2:0xff7a1a,barefoot:true,wetsuit:true}};
+  function applyLook(kind){ Rider.setLook(LOOKS[kind||(mode==='surf'||mode==='kite'||mode==='end'||mode==='pause'?sport:'town')]||LOOKS.town); }
   /* the kites: four canopies */
   function renderKites(){ const row=$('#kiteRow'); row.innerHTML=K.KITES.map((k,i)=>{ const c=n=>'#'+n.toString(16).padStart(6,'0');
       return '<button data-k="'+i+'" class="kite'+(i===save.kite?' sel':'')+'" style="--a:'+c(k.a)+';--b:'+c(k.b)+';--c:'+c(k.c)+'"><i></i><span>'+k.name+'</span></button>'; }).join('');
@@ -84,10 +93,10 @@
   /* surfing: ◀ ▶ steer (paddle the board round lying down, carve standing, spin in the air); the left button paddles lying
      down and pumps standing (in the air: grab); the big one stands up when the wave has the board, ollies off the lip standing
      (in the air: spin). Keys: arrows steer, ↑ paddle / pump, Space stand up / ollie, Shift grab. */
-  const sctl={steer:0,paddle:false,pop:false,pump:false,spin:false,spinDir:1,grab:false};
+  const sctl={steer:0,paddle:false,pop:false,pump:false,stall:false,spin:false,spinDir:1,grab:false};
   function surfControls(){ const air=SS.air, kx=(input.k.r?1:0)-(input.k.l?1:0), prone=SS.ph==='wait'||SS.ph==='paddle';
     const tgt=tb.both?0:tb.r?1:tb.l?-1:0; tb.steer=damp(tb.steer,tgt,tgt?7:12,FIXED);
-    sctl.steer=clamp(kx+tb.steer,-1,1); sctl.paddle=prone&&(tb.power||!!input.k.u); sctl.pump=!prone&&!air&&(tb.power||!!input.k.u); sctl.pop=!!input.jump;
+    sctl.steer=clamp(kx+tb.steer,-1,1); sctl.paddle=prone&&(tb.power||!!input.k.u); sctl.pump=!prone&&!air&&(tb.power||!!input.k.u); sctl.stall=!prone&&!air&&(tb.both||!!input.k.d); sctl.pop=!!input.jump;
     if(!air&&Math.abs(sctl.steer)>.3) tb.lastDir=Math.sign(sctl.steer);
     sctl.spin=air&&(tb.spin||kx!==0); sctl.spinDir=kx?Math.sign(kx):tb.r&&!tb.l?1:tb.l&&!tb.r?-1:tb.lastDir; sctl.grab=air&&input.grab; return sctl; }
 
@@ -120,11 +129,11 @@
   function runPhysics(dt){ acc+=dt; let n=0; while(acc>=FIXED&&n<12){ acc-=FIXED; n++; Cst.time+=FIXED; K.step(FIXED,readControls()); for(const e of K.events) onEvent(e); K.events.length=0; } if(n>=12) acc=0; }
   function startSession(){ closeSheets(); Audio.init(); $('#controls').hidden=true;
     if(!board) board=K.makeKiteboard();
-    Rider.walkSet(false); Rider.setBoardObj(board); Rider.root.visible=true; K.build(K.KITES[save.kite]||K.KITES[0]);
+    Rider.walkSet(false); Rider.setBoardObj(board); Rider.setStance(.56); applyLook('kite'); Rider.root.visible=true; K.build(K.KITES[save.kite]||K.KITES[0]);
     const L=BT.spots.launch, x=L.x-8; K.reset({x,z:Cst.shoreZ(x)-26,side:1}); K.show(true); K.camReset(); K.events.length=0;
     Object.assign(sess,{t:0,score:0,shown:0,combo:0,comboT:0,tricks:0,best:null,maxH:0,maxV:0,buoys:0,crashes:0,jumps:0,ups:0,showH:0,lastH:0}); acc=0;
     sess.firstTip=touch()?'◀ ▶ היגוי · שתיהן = פחות כוח · החזיקו קפיצה ושחררו · כוח = מהר יותר':'← → היגוי · ↑ כוח · ↓ פחות כוח · רווח: החזיקו ושחררו לקפיצה';
-    sport='kite'; document.body.classList.remove('surfing'); SF.show(false); el.wind.textContent='➤'; el.windTxt.textContent=K.WIND.knots+' קשר'; $('#cue').className='';
+    sport='kite'; document.body.classList.remove('surfing'); $('#steer .hint').textContent='שתיהן = פחות כוח'; SF.show(false); el.wind.textContent='➤'; el.windTxt.textContent=K.WIND.knots+' קשר'; $('#cue').className='';
     { const g=bG.querySelector('.g'), j=bJ.querySelector('.g'); if(g) g.textContent='כוח'; if(j) j.textContent='קפיצה'; }
     mode='kite'; el.menu.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.hud.hidden=false; tb.side.clear(); stSync(); input.jump=input.grab=false; tb.spin=tb.power=tb.flip=false;
     subtitle('הקייט עולה… מחכים למשיכה',2400); last=performance.now(); }
@@ -140,7 +149,7 @@
     $('#endTotal').textContent=fmt(total)+(record&&total>0?' ★':''); el.end.hidden=false; }
   /* back on the sand: walk out of the water at the school of the sport */
   function toBeach(){ mode='menu'; el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; $('#controls').hidden=true; el.menu.hidden=false; $('#cue').className=''; document.body.classList.remove('surfing');
-    K.show(false); SF.show(false); Rider.walkSet(true); Rider.root.visible=true; const L=sport==='surf'?BT.spots.surf:BT.spots.launch; townPlace({x:L.x,z:L.z+2,hd:0}); }
+    K.show(false); SF.show(false); Rider.walkSet(true); applyLook('town'); Rider.root.visible=true; const L=sport==='surf'?BT.spots.surf:BT.spots.launch; townPlace({x:L.x,z:L.z+2,hd:0}); }
   let pausedFrom=null;
   function togglePause(){ if(mode==='kite'||mode==='surf'){ pausedFrom=mode; mode='pause'; el.pause.hidden=false; Audio.water(0,0,true); Audio.update(0,0,false,0); Audio.spin(0,0); }
     else if(mode==='pause'){ mode=pausedFrom||'kite'; el.pause.hidden=true; last=performance.now(); } }
@@ -159,13 +168,15 @@
      back out at the lineup for the next wave. */
   const surf={rides:0,bestRide:0,longest:0,ride:null,back:0,turn:null,tubeT:0,cut:0,nextT:0,waveH:0,lastPh:''};
   let surfBoard=null;
-  function lineup(){ const S=Cst.SURF, t=Cst.time, off=S.offB+8, lead=(S.off0-(off+16))/S.c;   // just outside the break; the wave's crest 16 m out from the surfer: time to paddle
-    const i=Math.ceil((t+4-lead)/S.period), px=S.peak+((i*37)%21+21)%21-10, x=px+8;
+  function lineup(){ const S=Cst.SURF, t=Cst.time;   // just outside where the next wave breaks (bigger waves further out); its crest 16 m out from the surfer: time to paddle
+    const at=i=>{ const H=S.H[((i%8)+8)%8], off=S.breakOff(H)+8; return {H,off,lead:(S.off0-(off+16))/S.c}; };
+    let i=Math.floor(t/S.period)-1, L=at(i); while(i*S.period+L.lead<t+4) L=at(++i);
+    const off=L.off, lead=L.lead, px=S.peak+((i*37)%21+21)%21-10, x=px+8;
     const sd=10/170*Math.cos(x/170)+4/53*Math.cos(x/53+1.3), nl=Math.hypot(sd,1);
     SF.reset({x,z:Cst.shoreZ(x)-off,h:Math.atan2(-sd/nl+.25/nl,1/nl)}); surf.nextT=i*S.period+lead; surf.waveH=S.H[((i%8)+8)%8]; surf.ride=null; surf.turn=null; surf.cutS=null; surf.tubeT=0; }
-  function startSurf(){ closeSheets(); Audio.init(); $('#controls').hidden=true; sport='surf'; document.body.classList.add('surfing');
+  function startSurf(){ closeSheets(); Audio.init(); $('#controls').hidden=true; sport='surf'; document.body.classList.add('surfing'); $('#steer .hint').textContent='שתיהן = האטה';
     if(!surfBoard){ surfBoard=SF.makeBoard(SF.BOARDS[1].col); } SF.placeBoard(surfBoard);
-    Rider.walkSet(false); Rider.setBoardObj(surfBoard); Rider.root.visible=true; SF.build(); SF.show(true); K.show(false);
+    Rider.walkSet(false); Rider.setBoardObj(surfBoard); Rider.setStance(.64); applyLook('surf'); Rider.root.visible=true; SF.build(); SF.show(true); K.show(false);
     Object.assign(sess,{t:0,score:0,shown:0,combo:0,comboT:0,tricks:0,best:null,maxH:0,maxV:0,buoys:0,crashes:0,jumps:0,ups:0,showH:0,lastH:0}); Object.assign(surf,{rides:0,bestRide:0,longest:0,back:0}); acc=0;
     lineup(); SF.camReset(); SF.events.length=0;
     mode='surf'; el.menu.hidden=true; el.end.hidden=true; el.pause.hidden=true; el.hud.hidden=false; tb.side.clear(); stSync(); input.jump=input.grab=false; tb.spin=tb.power=tb.flip=false;
@@ -200,7 +211,7 @@
     else if(e.type==='wipe'){ sess.crashes++; sess.combo=0; sess.comboT=0; if(surf.ride){ surf.ride.along=(SS.x-surf.ride.x0)*Cst.SURF.dir; rideOver(false); } Audio.wipe(); Audio.splash(1.3); bigText('WIPEOUT','wasted'); flash('#ffffff',.35); SF.splash(SS.x,SS.y,SS.z,50,1.4); subtitle(SWHY[e.why]||'',2400); surf.back=2.6; }
     else if(e.type==='end'){ if(surf.ride){ surf.ride.along=(SS.x-surf.ride.x0)*Cst.SURF.dir; rideOver(true); } subtitle(e.why==='kick'?'יציאה נקייה מהגל':e.why==='over'?'הגל עבר מתחתיכם':'הגל נגמר',2000); surf.back=1.8; }
   }
-  function runSurf(dt){ acc+=dt; let n=0; while(acc>=FIXED&&n<12){ acc-=FIXED; n++; Cst.time+=FIXED; SF.step(FIXED,surfControls()); for(const e of SF.events) onSurf(e); SF.events.length=0; surfTurns(FIXED); } if(n>=12) acc=0;
+  function runSurf(dt){ Cst.surfFocus=SS.ph==='ride'||SS.ph==='air'||SS.ph==='pop'||SS.ph==='wipe'?SS.waveI:-1; acc+=dt; let n=0; while(acc>=FIXED&&n<12){ acc-=FIXED; n++; Cst.time+=FIXED; SF.step(FIXED,surfControls()); for(const e of SF.events) onSurf(e); SF.events.length=0; surfTurns(FIXED); } if(n>=12) acc=0;
     // a wave missed (it went under the board while lying down): the next one; after a ride, back out to the lineup
     if((SS.ph==='wait'||SS.ph==='paddle')&&Cst.time>surf.nextT+6) lineup();
     if(surf.back>0){ surf.back-=dt; if(surf.back<=0){ flash('#e8fbff',.6); lineup(); SF.camReset(); } } }
@@ -218,10 +229,10 @@
     [['←','→'],'באוויר: סיבוב 360'],[['↓'],'באוויר: בקרול'],[['Shift'],'באוויר: תפיסה','לחיצה נוספת = תפיסה אחרת'],[['P'],'הפסקה']];
   const CTL_BTN=[[['◀','▶'],'היגוי','החזיקו = פנייה חדה יותר'],[['◀ ▶'],'שתיהן יחד = פחות כוח'],[['קפיצה'],'החזיקו לטעינה, שחררו לקפיצה'],[['כוח'],'מניעים את הקייט: מהר יותר'],
     [['סיבוב'],'באוויר, במקום קפיצה','◀ ▶ בוחרים את הכיוון'],[['תפיסה'],'באוויר, במקום כוח','לחיצה נוספת = תפיסה אחרת'],[['בקרול'],'מופיע באוויר'],[['❚❚'],'הפסקה']];
-  const SCTL_KEYS=[[['↑'],'שוכבים: חתירה','כשהגל מגיע מאחור'],[['רווח'],'כשהגל מרים את הגלשן: קום!'],[['←','→'],'היגוי','במורד הגל = מהירות · למעלה = לאט יותר'],[['↑'],'עומדים: פמפום','עוד מהירות על הקיר'],
-    [['רווח'],'עומדים: קפיצה מהשפה'],[['←','→'],'באוויר: סיבוב'],[['Shift'],'באוויר: תפיסה'],[['P'],'הפסקה']];
-  const SCTL_BTN=[[['חתירה'],'החזיקו כשהגל מגיע'],[['קום'],'כשהגל מרים אתכם'],[['◀','▶'],'היגוי','למטה בקיר = מהירות · למעלה = לאט'],[['פמפום'],'החזיקו לעוד מהירות'],
-    [['קפיצה'],'ליד השפה: אוויר'],[['סיבוב'],'באוויר, ◀ ▶ בוחרים כיוון'],[['תפיסה'],'באוויר'],[['❚❚'],'הפסקה']];
+  const SCTL_KEYS=[[['↑'],'שוכבים: חתירה','כשהגל מגיע מאחור'],[['רווח'],'כשהגל מרים את הגלשן: קום!'],[['←','→'],'היגוי','במורד הגל = מהירות · למעלה = לאט יותר'],[['↑'],'עומדים: פמפום','עוד מהירות על הקיר'],[['↓'],'עומדים: האטה','לתת לצינור לתפוס אתכם'],
+    [['רווח'],'עומדים: קפיצה מהשפה'],[['←','→'],'באוויר: סיבוב'],[['Shift'],'באוויר: תפיסה'],[['C'],'מצלמה: מהערוץ / מאחור'],[['P'],'הפסקה']];
+  const SCTL_BTN=[[['חתירה'],'החזיקו כשהגל מגיע'],[['קום'],'כשהגל מרים אתכם'],[['◀','▶'],'היגוי','למטה בקיר = מהירות · למעלה = לאט'],[['פמפום'],'החזיקו לעוד מהירות'],[['◀ ▶'],'שתיהן יחד = האטה','לתת לצינור לתפוס אתכם'],
+    [['קפיצה'],'ליד השפה: אוויר'],[['סיבוב'],'באוויר, ◀ ▶ בוחרים כיוון'],[['תפיסה'],'באוויר'],[['🎥'],'מצלמה: מהערוץ / מאחור'],[['❚❚'],'הפסקה']];
   let ctlThen=null, ctlFor='kite';
   function showControls(then,which){ ctlFor=which||sport; const sf=ctlFor==='surf', row=(r,b)=>'<div class="r"><span>'+r[1]+(r[2]?'<span class="air">'+r[2]+'</span>':'')+'</span><span class="k">'+r[0].map(k=>'<kbd'+(b?' class="b"':'')+'>'+k+'</kbd>').join('')+'</span></div>';
     $('#ctlKeys .list').innerHTML=(sf?SCTL_KEYS:CTL_KEYS).map(r=>row(r,false)).join(''); $('#ctlTouch .list').innerHTML=(sf?SCTL_BTN:CTL_BTN).map(r=>row(r,true)).join('');
@@ -239,7 +250,7 @@
     if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=true; if(e.code==='Space'){ input.jump=true; e.preventDefault(); }
     if((e.code==='Escape'||e.code==='KeyP')&&(mode==='kite'||mode==='surf'||mode==='pause')){ togglePause(); return; }
     if(mode==='menu'){ if(e.code==='Enter'&&$('#controls').hidden) $('#playBtn').onclick(); if(e.code==='KeyC') town.sheet==='char'?closeSheets():openSheet('char'); if(e.code==='Escape') closeSheets(); }
-    if((mode==='kite'||mode==='surf')&&e.code==='KeyR') again(); if(e.code==='KeyH') document.body.classList.toggle('hud-hidden'); });
+    if((mode==='kite'||mode==='surf')&&e.code==='KeyR') again(); if(mode==='surf'&&(e.code==='KeyC'||e.code==='KeyV')) camCycle(); if(e.code==='KeyH') document.body.classList.toggle('hud-hidden'); });
   addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) input.k[k]=false; if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='KeyE') input.grab=false; if(e.code==='Space') input.jump=false; });
   document.addEventListener('visibilitychange',()=>{ if(document.hidden&&(mode==='kite'||mode==='surf')) togglePause(); });
   addEventListener('blur',()=>{ input.k={}; input.grab=input.jump=false; tb.side.clear(); stSync(); tb.spin=tb.power=tb.flip=false; if(mode==='kite'||mode==='surf') togglePause(); });

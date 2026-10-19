@@ -20,9 +20,11 @@
     grip:240, gripV:32,             // the rail across the board, standing (N per m/s, more at speed)
     turn0:1.0, turnV:.22, turnMax:3.2, proneTurn:1.3,   // rad/s
     pump:110,                       // N, pumping the board on the face
-    pop:.42, popMin:2.6,            // seconds to stand up; m/s the board must already have (the wave has it)
+    pop:.62, popMin:2.6,            // seconds to stand up (a recreational surfer takes about 1.2 s, a good one well under 1); m/s the board must already have (the wave has it)
     lipV:2.4,                       // m/s up the face at the lip that throws the board into the air
+    lipVmax:3.4,                    // m/s up off the lip at most by itself (a steep face turns the speed up; the surfer absorbs the rest)
     ollie:2.2,                      // m/s of pop off the lip with the jump button
+    stall:26,                       // N per m/s: stalling (the back foot down, a hand dragged in the face) to let the barrel catch up
     spinW:6.5,                      // rad/s
     landYaw:.7, landImp:9, landAlong:.45   // a clean landing (on a face that falls away: harder impacts are fine)
   };
@@ -38,7 +40,7 @@
   function wipe(why){ setPh('wipe',why); S.air=false; S.grabbed=false; S.spin=0; S.wsp=0; ev({type:'wipe',why}); }
   const GRABS=['RAIL','TAIL','NOSE','STALE'];
   function assist(a,w){ const n=a/TAU; if(w>.5){ const t=Math.ceil(n-.02)*TAU; return t-a<.6*TAU?t:Math.floor(n)*TAU; } if(w<-.5){ const t=Math.floor(n+.02)*TAU; return a-t<.6*TAU?t:Math.ceil(n)*TAU; } return Math.round(n)*TAU; }
-  /* one physics step; c = {steer -1..1 (+ = right), paddle (held), pop (pressed: stand up / ollie), pump (held), spin (held, air), spinDir, grab (held, air)} */
+  /* one physics step; c = {steer -1..1 (+ = right), paddle (held), pop (pressed: stand up / ollie), pump (held), stall (held), spin (held, air), spinDir, grab (held, air)} */
   SF.step=function(dt,c){ S.t+=dt; S.phT+=dt; S.yawRes=damp(S.yawRes,0,9,dt);
     const W=Cst.water(S.x,S.z,null,_w); S.face=W.sw;
     if(S.ph==='wipe'||S.ph==='out'){
@@ -59,6 +61,7 @@
     // the surfer's own push: paddling lying down, pumping standing on a face
     if(prone&&S.ph!=='pop'&&c.paddle){ const th=C.paddle*Math.max(0,1-vf/C.paddleV); ax+=th/MASS*fx; az+=th/MASS*fz; if(S.ph==='wait') setPh('paddle'); } else if(S.ph==='paddle'&&!c.paddle) setPh('wait');   // arms push no faster than they move
     S.pump=damp(S.pump,!prone&&c.pump?1:0,6,dt); if(!prone&&c.pump){ const onFace=smooth(.08,.3,Math.sqrt(s2)); ax+=C.pump/MASS*onFace*fx; az+=C.pump/MASS*onFace*fz; }
+    S.stall=damp(S.stall||0,!prone&&c.stall&&!c.pump?1:0,5,dt); if(S.stall>.01){ const k=C.stall*S.stall/MASS; ax-=k*vf*fx; az-=k*vf*fz; }
     S.vx+=ax*dt; S.vz+=az*dt; S.x+=S.vx*dt; S.z+=S.vz*dt;
     // on the surface: how fast it carries the board up or down; off the lip into the air
     const W2=Cst.water(S.x,S.z,null,_w2), vys=(W2.y-S.y)/dt, ys0=S.y; S.y=W2.y;
@@ -68,7 +71,7 @@
     if(S.ph==='ride'&&sw&&sw.u>-1.2&&sw.u<1.5&&(climbing&&S.vys>C.lipV&&vys<S.vys-C.lipV*.8||popNow&&S.f>.55)){
       // the lip throws the board with it: shoreward as fast as the water there (so it comes down on the wave, not behind it)
       const vIn=S.vx*sw.nx+S.vz*sw.nz, want=Math.hypot(W2.ux,W2.uz)*.95; if(vIn<want){ S.vx+=(want-vIn)*.85*sw.nx; S.vz+=(want-vIn)*.85*sw.nz; }
-      takeoff(ys0,Math.max(S.vys,0)+(popNow?C.ollie:0)); S.prevJump=c.pop; S.prevGrab=c.grab; return; }
+      takeoff(ys0,clamp(S.vys,0,C.lipVmax)+(popNow?C.ollie:0)); S.prevJump=c.pop; S.prevGrab=c.grab; return; }
     S.vys=vys;
     // standing up: when the wave has the board; a dig-in on a steep drop, or the whitewater, knocks the surfer off
     if(prone&&S.ph!=='pop'&&popNow&&S.speed>C.popMin){ setPh('pop'); S.wave=sw?sw.w:null; S.waveI=sw?sw.w.i:-1; ev({type:'pop'}); }
@@ -76,13 +79,13 @@
       if(down>.95) wipe('pearl'); else if(W2.brk>.5) wipe('whitewater'); else { setPh('ride'); ev({type:'ride'}); } }
     else if(S.ph==='ride'){
       if(W2.brk>.5) wipe('whitewater');
-      else if(sw&&sw.qa<1.2&&sw.qa>-2&&S.f>.72&&sw.u<.5) wipe('lip');        // on the lip as it pitches: over the falls
+      else if(sw&&sw.qa<1.5&&sw.qa>-Cst.SURF.tube-.5&&S.f>.72&&sw.u<.5) wipe('lip');   // high on the face where the lip pitches or has been thrown: over the falls
       else if(W2.depth<1.1||sw&&sw.w.off<22) end('kick');   // the wave dies in the shallows: the surfer kicks out
       else if(!sw||sw.u>9||sw.Hu<.35) end(sw&&sw.u>9?'over':'flat'); }
     else if(prone&&W2.brk>.6&&S.ph!=='pop') wipe('caught inside');
     // the rail in the water and the lean into a carve
     const turn=prone?0:c.steer*clamp(sp0/6,0,1); S.edge=damp(S.edge,prone?0:clamp(turn*.55,-.6,.6),8,dt); S.lean=damp(S.lean,S.edge*1.15,6,dt);
-    S.tube=S.ph==='ride'&&sw&&sw.qa>0&&sw.qa<4.5&&sw.k>.75&&S.f<.7?Math.min(1,S.tube+dt*3):Math.max(0,S.tube-dt*3);
+    S.tube=S.ph==='ride'&&sw&&sw.bar>.5&&S.f<.7&&sw.u>-1.1*sw.Lf?Math.min(1,S.tube+dt*3):Math.max(0,S.tube-dt*3);   // under the thrown lip, low on the face: in the barrel
     S.prevJump=c.pop; S.prevGrab=c.grab; if(S.land>0) S.land-=dt; };
   function end(why){ setPh('out',why); ev({type:'end',why}); }
   function takeoff(y0,vy){ setPh('air'); S.air=true; S.airT=0; S.vy=vy; S.spin=0; S.wsp=0; S.grabs=[]; S.grabbed=false; S.jump={y0,maxY:y0,t0:S.t}; ev({type:'air',vy:+vy.toFixed(1)}); }
@@ -121,7 +124,7 @@
     g.save(); g.translate(64,190); g.rotate(-PI/2); g.fillStyle='rgba(255,255,255,.85)'; g.font='bold 34px Anton, Impact'; g.textAlign='center'; g.fillText('SURF RUSH',0,12); g.restore();
     const tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; const uv=new Float32Array(pa.count*2); for(let i=0;i<pa.count;i++){ uv[i*2]=pa.getX(i)/.56+.5; uv[i*2+1]=(L/2-pa.getZ(i))/L; } geo.setAttribute('uv',new THREE.BufferAttribute(uv,2));
     const deck=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:tex,roughness:.3,metalness:.02})); deck.castShadow=true; inner.add(deck);
-    const finM=new THREE.MeshStandardMaterial({color:0x22262e,roughness:.4}); [[-.13,.78,.1],[.13,.78,.1],[0,.86,.12]].forEach(([x,z,h])=>{ const f=new THREE.Mesh(new THREE.BoxGeometry(.008,h,.11),finM); f.position.set(x,.012-h/2+rock(clamp((L/2-z)/L,0,1)),z); f.rotation.y=x*.6; inner.add(f); });
+    const finM=new THREE.MeshStandardMaterial({color:0x22262e,roughness:.4}); [[-.19,.67,.11],[.19,.67,.11],[0,.86,.11]].forEach(([x,z,h])=>{ const f=new THREE.Mesh(new THREE.BoxGeometry(.008,h,.11),finM); f.position.set(x,.012-h/2+rock(clamp((L/2-z)/L,0,1)),z); f.rotation.y=-Math.sign(x)*.05; f.rotation.z=Math.sign(x)*.1; inner.add(f); });
     grp.userData.surfboard=1; grp.userData.inner=inner; return grp; }
   SF.makeBoard=makeBoard;
   SF.BOARDS=[{name:'Classic',col:['#fffdf5','#f4efe1','#e8dfc8']},{name:'Sunburst',col:['#ffd166','#ff7b54','#ef476f']},{name:'Lagoon',col:['#e0fbfc','#5ce1e6','#118ab2']},{name:'Night',col:['#3a3f58','#22223b','#0b0b14']}];
@@ -143,9 +146,18 @@
   SF.build=function(){ if(built) return; built=true; scene.add(grp); grp.visible=false; };
   SF.show=function(on){ grp.visible=on; };
   /* ---------- every frame: the board on the water, the surfer's pose, spray ---------- */
-  const _n=new THREE.Vector3(), _q=new THREE.Quaternion(), _y=new THREE.Vector3(0,1,0), _wv={};
+  const _n=new THREE.Vector3(), _q=new THREE.Quaternion(), _y=new THREE.Vector3(0,1,0), _wv={}, _hp=new THREE.Vector3(), _wh={};
+  /* the leash: 6 ft of coiled cord from the back ankle (the left, goofy) to the plug in the tail, hanging slack */
+  const LN=10, leashGeo=new THREE.BufferGeometry(); leashGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(LN*3),3));
+  const leash=new THREE.Line(leashGeo,new THREE.LineBasicMaterial({color:0x101216})); leash.frustumCulled=false; leash.visible=false;
+  const _la=new THREE.Vector3(), _lb=new THREE.Vector3();
+  function leashUpdate(R,standing){ const b=R.boardObj&&R.boardObj.userData.inner, foot=R.bones&&R.bones[SF.stance.goofy?'FootL':'FootR']; if(!b||!foot||!grp.visible){ leash.visible=false; return; }
+    if(!leash.parent) grp.add(leash); leash.visible=true; foot.getWorldPosition(_la); _la.y-=.05; b.localToWorld(_lb.set(0,.06,.93));
+    const a=leashGeo.attributes.position.array, d=_la.distanceTo(_lb), sag=Math.max(0,.9-d)*.5+.04;
+    for(let i=0;i<LN;i++){ const t=i/(LN-1); a[i*3]=lerp(_la.x,_lb.x,t); a[i*3+1]=lerp(_la.y,_lb.y,t)-Math.sin(Math.PI*t)*sag; a[i*3+2]=lerp(_la.z,_lb.z,t); }
+    leashGeo.attributes.position.needsUpdate=true; }
   let stroke=0;
-  SF.visuals=function(dt,R){ const prone=S.ph==='wait'||S.ph==='paddle'||S.ph==='pop'&&S.phT<C.pop*.55, goofy=SF.stance.goofy, dir=goofy?-1:1;
+  SF.visuals=function(dt,R){ const prone=S.ph==='wait'||S.ph==='paddle'||S.ph==='pop'&&S.phT<C.pop*.5, goofy=SF.stance.goofy, dir=goofy?-1:1;
     const W=Cst.water(S.x,S.z,null,_wv), fx=Math.sin(S.h), fz=Math.cos(S.h);
     const sink=S.ph==='wipe'?-.5:S.air?0:prone?lerp(-.07,-.02,smooth(1,4,S.speed)):lerp(-.1,-.02,smooth(1.5,5,S.speed));
     R.root.position.set(S.x,S.y+sink,S.z); const yaw=Math.atan2(-fx,-fz); R.root.rotation.set(0,yaw,0);
@@ -154,42 +166,70 @@
     const e=S.edge, hw=.24; R.rollG.rotation.z=-e; R.rollG.position.set(Math.sign(e)*hw*(1-Math.cos(e)),hw*Math.abs(Math.sin(e)),0);
     R.trick.rotation.order='YXZ'; R.trick.rotation.y=(goofy?PI:0)-(S.spin+S.yawRes); R.trick.rotation.x=0; R.trick.rotation.z=0;
     const p=R.P; p.t=S.t; p.menu=false; p.dir=dir;
-    if(prone){ stroke+=dt*(S.ph==='paddle'?1.15:0); p.prone=1; p.noseZ=goofy?1:-1; p.paddle=damp(p.paddle||0,S.ph==='paddle'?1:0,6,dt); p.stroke=stroke; p.deck=.075; p.handsTo=null; R.pose({}); R.root.visible=true; updateSpray(dt); return; }
+    if(prone){ stroke+=dt*(S.ph==='paddle'?1.15:0); p.prone=1; p.noseZ=goofy?1:-1; p.paddle=damp(p.paddle||0,S.ph==='paddle'?1:0,6,dt); p.stroke=stroke; p.deck=.075; p.handsTo=null;
+      p.push=S.ph==='pop'?smooth(0,C.pop*.45,S.phT):0; R.pose({}); R.root.visible=true; leashUpdate(R,false); updateSpray(dt); return; }
     p.prone=0; p.sit=0; p.handsTo=null;
     const pump=S.pump*Math.sin(S.t*7.5);
-    p.crouch=damp(p.crouch,S.ph==='wipe'?.2:clamp(.42+S.pump*.18+pump*.12+(S.land>0?.3:0)+(S.ph==='pop'?.45:0)+S.tube*.35,0,1),8,dt);
+    p.crouch=damp(p.crouch,S.ph==='wipe'?.2:clamp(.42+S.pump*.18+pump*.12+(S.land>0?.3:0)+(S.ph==='pop'?.45:0)+S.tube*.35+(S.stall||0)*.3,0,1),8,dt);
     p.charge=0; p.tuck=damp(p.tuck,S.air?(S.grabbed?.55:.3):S.tube*.6,9,dt); p.air=damp(p.air,S.air?1:0,12,dt); p.grab=damp(p.grab,S.grab,12,dt); if(S.grabbed) p.grabName=S.grabName==='RAIL'?'INDY':S.grabName;
-    p.spinW=S.air?S.wsp:0; p.flipW=0; p.body=S.lean; p.edge=S.edge; p.fa=pump*.12; p.om=0; p.slip=0; p.speed=S.speed; p.brake=0; p.skid=0;
+    // the face under the board rises toward the surfer's toes (a goofy surfer faces this left-hand wave): the board lies on it,
+    // the surfer stays nearly upright over it (angulation: the hips in toward the face, the knees bent into it)
+    const tx=goofy?fz:-fz, tz=goofy?-fx:fx, slope=S.air?0:Math.atan(-(W.nx*tx+W.nz*tz));
+    p.surf=1; p.push=0; p.upright=0; p.hipsIn=0; p.spinW=S.air?S.wsp:0; p.flipW=0; p.body=S.lean; p.edge=S.edge-.85*slope*dir; p.fa=pump*.12; p.om=0; p.slip=0; p.speed=S.speed; p.brake=0; p.skid=0;
+    // in the barrel, and low on the face turning hard up it, the trailing hand drags in the wall
+    const hk=S.ph==='ride'?Math.max(S.tube*.95,S.f<.4&&Math.abs(S.edge)>.28?.75:0):0; S.hand=damp(S.hand||0,hk,hk>(S.hand||0)?6:3,dt);
+    if(S.hand>.02){ const hx=S.x+tx*.62-fx*.35, hz=S.z+tz*.62-fz*.35; _hp.set(hx,Cst.water(hx,hz,null,_wh).y+.05,hz); p.handTo={sd:'B',p:_hp,k:S.hand}; } else p.handTo=null;
     p.absorb=damp(p.absorb,S.land>0?clamp(S.landImp/6,0,1):0,16,dt); p.ext=0; p.rough=0; p.press=0; p.jib=0; p.bal=0; p.windup=0; p.spinA=S.air?S.spin:0; p.wobble=0; p.skate=0; p.popKind=''; p.popT=9; p.airT=S.airT;
     const wiped=S.ph==='wipe'; p.ground=wiped?1:0; p.getup=0; p.fallPh=wiped?'down':'';
-    R.pose({}); R.root.visible=true;
+    R.pose({}); R.root.visible=true; leashUpdate(R,true);
     // spray off the rail in a turn, and a sheet off the tail at speed
     if(S.ph==='ride'&&S.speed>3.5){ const n=Math.min(7,Math.floor(Math.abs(S.edge)*14+S.speed*.25)); const sx=Math.sign(S.edge||1), ox=fz*sx, oz=-fx*sx;
       for(let i=0;i<n;i++) emit(S.x-fx*.6+ox*.25,S.y+.05,S.z-fz*.6+oz*.25,ox*(1.2+Math.random()*2.4)-fx*1.5,1.4+Math.random()*2.6*Math.abs(S.edge)+S.speed*.08,oz*(1.2+Math.random()*2.4)-fz*1.5,.12+Math.random()*.18,.35+Math.random()*.35); }
-    // the lip: where the wave pitches over, a curtain of spray
-    const sw=S.face; if(sw&&sw.w.dtb>0&&Math.random()<.85){ const w=sw.w, xp=w.px+Cst.SURF.peel*w.dtb*Cst.SURF.dir; for(let k=0;k<3;k++){ const x=xp+(Math.random()-.7)*3; if(x<Cst.SURF.x0+40||x>Cst.SURF.x1-40) continue;
-      const z=Cst.shoreZ(x)-w.off+.3, o={}; Cst.surfAt(x,z,Cst.time,o); emit(x,(o.Hu||1.5)*.95+Math.random()*.4,z,(Math.random()-.5)*1.5,1+Math.random()*2.5,2.5+Math.random()*3,.3+Math.random()*.3,.5+Math.random()*.5); } }
     updateSpray(dt); };
   /* ---------- the camera ----------
-     Waiting and paddling: in front, a little to the side, looking back past the surfer at the waves coming in. Riding: behind
-     and in front of the wave (never inside it), looking down the line; further back in the air. */
-  const cam={p:new THREE.Vector3(),l:new THREE.Vector3(),first:true,k:0}, _a=new THREE.Vector3(), _b=new THREE.Vector3(), _cw={};
+     Waiting and paddling: in front, a little to the side, looking back past the surfer at the waves coming in. Riding, two
+     views (SF.camMode): 'channel', the default and the way surf is filmed: out in front of the wave on the shoulder side, a
+     three-quarter view at the height of the face with a longer lens, moving with the wave and looking back at the surfer on
+     the face with the curl behind; 'follow': behind the surfer down the line (and in front of the wave, never inside it).
+     In the barrel the channel view moves in to the mouth of the tube and looks back in at the surfer under the lip. */
+  const cam={p:new THREE.Vector3(),l:new THREE.Vector3(),first:true,k:0,tk:0,mode:'channel',sx:0,sy:0,sz:0,hu:2}, _a=new THREE.Vector3(), _b=new THREE.Vector3(), _c=new THREE.Vector3(), _d=new THREE.Vector3(), _e=new THREE.Vector3(), _f=new THREE.Vector3(), _cw={}, _tl={};
+  const CAM={ahead:9,front:12.5,y0:.35,yH:.5,fov:-16,tube:{ahead:6.2,lens:-6}};   // channel view: metres along the line ahead of the surfer, in front of the crest, height (+ per metre of wave), fov change; the tube view
+  SF.camModes=['channel','follow'];
+  SF.camMode=function(m){ if(m&&SF.camModes.includes(m)) cam.mode=m; return cam.mode; };
+  SF.CAM=CAM;
   SF.camera=function(dt){ const sd=10/170*Math.cos(S.x/170)+4/53*Math.cos(S.x/53+1.3), nl=Math.hypot(sd,1), nx=-sd/nl, nz=1/nl, ax=1/nl, az=sd/nl;   // shoreward and along the shore
     const riding=S.ph==='ride'||S.ph==='air'||S.ph==='pop'&&S.phT>C.pop*.5||(S.ph==='wipe'||S.ph==='out')&&cam.k>.5;
     cam.k=damp(cam.k,riding?1:0,riding?2.2:1.2,dt);
-    const vx=S.speed>1.5?S.vx/S.speed:Math.sin(S.h), vz=S.speed>1.5?S.vz/S.speed:Math.cos(S.h), air=S.air?1:0;
+    const vx=S.speed>1.5?S.vx/S.speed:Math.sin(S.h), vz=S.speed>1.5?S.vz/S.speed:Math.cos(S.h), air=S.air?1:0, SU=Cst.SURF;
+    // the surfer, smoothed (the channel view follows this, not every bob up and down the face)
+    if(cam.first){ cam.sx=S.x; cam.sy=S.y; cam.sz=S.z; } else { cam.sx=damp(cam.sx,S.x,3,dt); cam.sy=damp(cam.sy,S.y,2.2,dt); cam.sz=damp(cam.sz,S.z,3,dt); }
+    if(S.face&&S.face.Hu>.3) cam.hu=damp(cam.hu,S.face.Hu,1,dt);
     // the lineup view
     _a.set(S.x+nx*8.5+ax*3,S.y+2.3,S.z+nz*8.5+az*3); _b.set(S.x-nx*7,S.y+.9,S.z-nz*7);
-    // the ride view: behind along the board's travel, shifted shoreward off the face
-    const ra=S.ph==='ride'||S.ph==='air'?1:0;
-    _a.lerp(new THREE.Vector3(S.x-vx*(5+air*2)+nx*3.2,S.y+1.5+air*1.2,S.z-vz*(5+air*2)+nz*3.2),cam.k);
-    _b.lerp(new THREE.Vector3(S.x+vx*5-nx*.6,S.y+1.1+air*.8,S.z+vz*5-nz*.6),cam.k);
-    _a.y+=Math.sin(PI*clamp(cam.k,0,1))*2.4;   // swinging round from in front to behind, it goes up and over rather than through the surfer
-    if(cam.first){ cam.p.copy(_a); cam.l.copy(_b); cam.first=false; } else { cam.p.lerp(_a,1-Math.exp(-dt*3.4)); cam.l.lerp(_b,1-Math.exp(-dt*5)); }
-    { const dx=cam.p.x-S.x, dz=cam.p.z-S.z, d=Math.hypot(dx,dz); if(d<4.2&&d>1e-3){ cam.p.x=S.x+dx/d*4.2; cam.p.z=S.z+dz/d*4.2; } }   // never closer than 4 m
-    const Wc=Cst.water(cam.p.x,cam.p.z,null,_cw); if(cam.p.y<Wc.y+.9) cam.p.y=Wc.y+.9;
-    camera.position.copy(cam.p); camera.lookAt(cam.l); const fov=(ST.baseFov||62)+(ra?clamp(S.speed-5,0,6)*.8:0)+air*4; if(Math.abs(camera.fov-fov)>.05){ camera.fov=damp(camera.fov,fov,3,dt); camera.updateProjectionMatrix(); }
+    // the ride view
+    const ra=S.ph==='ride'||S.ph==='air'?1:0, offC=S.waveI>=0?SU.off0-SU.c*(Cst.time-S.waveI*SU.period):null, chan=cam.mode==='channel'&&offC!==null&&offC>4;
+    cam.tk=damp(cam.tk,chan&&S.ph==='ride'&&S.tube>.5?1:0,S.tube>.5?2.5:1.6,dt);
+    if(chan){ // in front of the crest of the surfer's wave, ahead along the line, at the height of the face: the face, the surfer and the curl
+      const xa=cam.sx+SU.dir*CAM.ahead, zc=Cst.shoreZ(xa)-offC;
+      _c.set(xa,CAM.y0+CAM.yH*cam.hu+air*1.6,zc+CAM.front);
+      _d.set(cam.sx-SU.dir*1.4,cam.sy+.85+air*.6,cam.sz);
+      if(cam.tk>.001){ // in the barrel: further along the tube toward its mouth, inside it (under the thrown lip), back in at the surfer
+        const w=S.face&&S.face.w; if(w){ const xt=S.x+SU.dir*CAM.tube.ahead, qa=(xt-w.px)*SU.dir-SU.peel*Math.max(w.dtb,0), L=Cst.lipAt(w,qa,_tl), zt=Cst.shoreZ(xt)-offC;
+          const hs=-(Cst.shoreZ(S.x)-offC-S.z), lam=L.lam, l2=lam*lam;   // hs: the surfer's place in front of the crest
+          // the middle of the tube's hollow: halfway out to where the lip lands, a little under half the wave's height; or beside the surfer where it hasn't thrown
+          let h=lerp(hs+.25*L.Lf,.5*(L.h0+L.X*lam),l2), y=lerp(S.y+.6,.42*L.Hu,l2);
+          const sc=clamp((h-L.h0)/L.X,0,lam), yl=L.y0+L.A*sc-L.B*sc*sc-L.tau*.5; if(lam>.2) y=Math.min(y,yl-.35);   // under the lip
+          _e.set(xt,Math.max(y,.6),zt+h); _f.set(S.x-SU.dir*.6,S.y+.7,S.z);
+          _c.lerp(_e,cam.tk); _d.lerp(_f,cam.tk); } } }
+    else { _c.set(S.x-vx*(5+air*2)+nx*3.2,S.y+1.5+air*1.2,S.z-vz*(5+air*2)+nz*3.2); _d.set(S.x+vx*5-nx*.6,S.y+1.1+air*.8,S.z+vz*5-nz*.6); }
+    _a.lerp(_c,cam.k); _b.lerp(_d,cam.k);
+    if(!chan) _a.y+=Math.sin(PI*clamp(cam.k,0,1))*2.4;   // swinging round from in front to behind, it goes up and over rather than through the surfer
+    if(cam.first){ cam.p.copy(_a); cam.l.copy(_b); cam.first=false; } else { const tf=1+cam.tk*2; cam.p.lerp(_a,1-Math.exp(-dt*(chan?6*tf:3.4))); cam.l.lerp(_b,1-Math.exp(-dt*(chan?7*tf:5))); }
+    { const md=4.2-cam.tk*.6, dx=cam.p.x-S.x, dz=cam.p.z-S.z, d=Math.hypot(dx,dz); if(d<md&&d>1e-3){ cam.p.x=S.x+dx/d*md; cam.p.z=S.z+dz/d*md; } }   // never closer than 4 m (3 in the tube)
+    const Wc=Cst.water(cam.p.x,cam.p.z,null,_cw); if(cam.p.y<Wc.y+.7) cam.p.y=Wc.y+.7;
+    camera.position.copy(cam.p); camera.lookAt(cam.l); const fov=(ST.baseFov||62)+(chan?(CAM.fov+(CAM.tube.lens-CAM.fov)*cam.tk)*cam.k:0)+(ra&&!chan?clamp(S.speed-5,0,6)*.8:0)+air*4; if(Math.abs(camera.fov-fov)>.05){ camera.fov=damp(camera.fov,fov,3,dt); camera.updateProjectionMatrix(); }
     if(camera.view&&camera.view.enabled) camera.clearViewOffset(); };
-  SF.camReset=()=>{ cam.first=true; cam.k=0; };
+  SF.camReset=()=>{ cam.first=true; cam.k=0; cam.tk=0; };
+  SF.camState=()=>({mode:cam.mode,k:cam.k,tk:cam.tk});
   ST.Surf=SF;
 })(window.ST);

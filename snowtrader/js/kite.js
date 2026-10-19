@@ -159,24 +159,70 @@
     S.spin=0; S.flip=0; S.wsp=0; S.wfl=0; S.grab=0; S.grabbed=false; S.jump=null; S.send=0; S.redirect=0;
     if(!clean){ S.yawRes=S.rollRes=0; fall(yawErr>=C.landYaw?'sideways':rollErr>=C.landRoll?'rotation':imp>=C.landImp?'too hard':'off the line'); }
     ev(out); }
-  /* ---------- meshes: the kite, its lines and bar, the board ---------- */
+  /* ---------- meshes: the kite, its lines and bar, the board ----------
+     The kite: a 12 m² leading-edge inflatable, the freeride kind. 7.5 m of leading edge laid flat; in the air about 5.5 m
+     across and 2 m deep (flatter in the middle, curving hard into the tips); a 2 m chord in the middle tapering to 45 cm at the
+     swept-back tips; the leading edge an inflated tube 18 cm thick in the middle and 8 at the tips, and three struts along the
+     chord on the side toward the rider; the canopy cambered, billowing between the struts, in big panels of colour with the
+     logo across the middle. The bridle: each front line ends in a pigtail ~2.7 m under the kite that fans out to four points
+     on its half of the leading edge; the back lines tie to the wingtips. In the kite's own frame: x across the span, y away
+     from the rider (the tips bend toward -y), z upwind (the leading edge forward). */
   K.KITES=[{name:'Fire',a:0xff3b30,b:0xffffff,c:0x111111},{name:'Ocean',a:0x00a6fb,b:0xffffff,c:0x0b2545},{name:'Lime',a:0x9ef01a,b:0x111111,c:0xffffff},{name:'Sunset',a:0xff8800,b:0xffd000,c:0x7b2cbf}];
-  function kiteGeo(scheme){ const N=16, M=4, rho=4.6, P=[], Cc=[], I=[]; const ca=new THREE.Color(scheme.a).convertSRGBToLinear(), cb=new THREE.Color(scheme.b).convertSRGBToLinear(), cc=new THREE.Color(scheme.c).convertSRGBToLinear();
-    // the canopy: an arc across the span (tips bent toward the rider), chord tapering to the tips; leading edge forward (+z)
-    for(let i=0;i<=N;i++){ const t=i/N*2-1, al=t*1.08, x=rho*Math.sin(al), y=-rho*(1-Math.cos(al)), ch=2.5*(1-.55*t*t);
-      for(let j=0;j<=M;j++){ const u=j/M, z=lerp(.3*ch,-.7*ch,u), camber=Math.sin(u*PI)*.18*ch; P.push(x,y+camber,z);
-        const band=Math.abs(t)<.18?cb:Math.abs(t)>.8?cc:ca; const c=u<.12?cc:band; Cc.push(c.r,c.g,c.b); } }
-    for(let i=0;i<N;i++) for(let j=0;j<M;j++){ const a=i*(M+1)+j, b=a+M+1; I.push(a,b,a+1,a+1,b,b+1); }
-    // the leading edge's inflated tube (a fat rim on the front)
-    const base=P.length/3; for(let i=0;i<=N;i++){ const t=i/N*2-1, al=t*1.08, x=rho*Math.sin(al), y=-rho*(1-Math.cos(al)), ch=2.5*(1-.55*t*t), r=.16*(1-.4*t*t), z0=.3*ch;
-      for(let k=0;k<6;k++){ const a=k/6*PI*2; P.push(x,y+Math.cos(a)*r+.05,z0+Math.sin(a)*r); Cc.push(cc.r,cc.g,cc.b); } }
-    for(let i=0;i<N;i++) for(let k=0;k<6;k++){ const a=base+i*6+k, b=base+i*6+(k+1)%6, c=a+6, d=b+6; I.push(a,c,b,b,c,d); }
-    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(Cc,3)); g.setIndex(I); g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
-  K.kiteGeo=kiteGeo;
-  const kiteMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.55,metalness:0,side:THREE.DoubleSide});
-  /* the tips and the middle of the leading edge in the kite's frame (for the lines) */
-  const KP={tipL:new THREE.Vector3(-4.6*Math.sin(1.08),-4.6*(1-Math.cos(1.08)),-.2),tipR:new THREE.Vector3(4.6*Math.sin(1.08),-4.6*(1-Math.cos(1.08)),-.2),
-    leL:new THREE.Vector3(-4.6*Math.sin(.8),-4.6*(1-Math.cos(.8)),.5),leR:new THREE.Vector3(4.6*Math.sin(.8),-4.6*(1-Math.cos(.8)),.5)};
+  const KD={S:3.75,a:.232,b:.0144,c0:2,c1:.45,sweep:.7,r0:.09,r1:.04,struts:[-1.85,0,1.85],bridle:[.35,1.15,1.95,2.75],pig:{x:1.05,y:-2.7}};
+  // the leading edge at arc length s from the middle: where (x,y,z), its outward normal (nx,ny), the chord and the tube's radius there
+  function leAt(s,o){ const as=Math.min(Math.abs(s),KD.S), sg=s<0?-1:1, n=24, ds=as/n; let x=0,y=0;
+    for(let i=0;i<n;i++){ const t=(i+.5)*ds, th=KD.a*t+KD.b*t*t*t; x+=Math.cos(th)*ds; y-=Math.sin(th)*ds; }
+    const th=KD.a*as+KD.b*as*as*as, u=as/KD.S; o.x=sg*x; o.y=y; o.z=-KD.sweep*u*u; o.nx=sg*Math.sin(th); o.ny=Math.cos(th); o.c=lerp(KD.c0,KD.c1,Math.pow(u,1.6)); o.r=lerp(KD.r0,KD.r1,Math.pow(u,1.4)); return o; }
+  // between two struts the canopy billows and its trailing edge curves in
+  const panelK=s=>{ const B=[-KD.S].concat(KD.struts,[KD.S]); for(let i=0;i<B.length-1;i++) if(s>=B[i]&&s<=B[i+1]){ const f=Math.sin(PI*(s-B[i])/(B[i+1]-B[i])); return f*f; } return 0; };
+  // a point on the canopy: span s, chord fraction u (0 the leading edge, 1 the trailing edge)
+  const _ka={};
+  function canopyAt(s,u,o){ const L=leAt(s,_ka), pk=panelK(s), c=L.c*(1-.05*pk*u*u), cam=c*(.085+.025*pk)*Math.pow(u,.6)*(1-u)/.347;
+    o.set(L.x+L.nx*cam,L.y+L.ny*cam,L.z-L.r*.6-c*u); return o; }
+  // the canopy's look: panels parallel to the leading edge, a big block of colour, the logo across the middle (one per scheme)
+  const kiteTex={};
+  function kiteTexture(sc){ const key=sc.name; if(kiteTex[key]) return kiteTex[key];
+    const cv=document.createElement('canvas'); cv.width=1024; cv.height=256; const g=cv.getContext('2d'), hex=c=>'#'+new THREE.Color(c).getHexString();
+    const A=hex(sc.a), B=hex(sc.b), Cc=hex(sc.c);
+    g.fillStyle=B; g.fillRect(0,0,1024,256);
+    g.fillStyle=A; g.beginPath(); g.moveTo(0,0); g.lineTo(380,0); g.bezierCurveTo(330,90,300,170,250,256); g.lineTo(0,256); g.fill();   // the outer panels in the main colour
+    g.beginPath(); g.moveTo(1024,0); g.lineTo(644,0); g.bezierCurveTo(694,90,724,170,774,256); g.lineTo(1024,256); g.fill();
+    g.fillStyle=Cc; g.fillRect(0,0,1024,22); g.fillRect(0,0,60,256); g.fillRect(964,0,60,256);   // a band behind the leading edge, the tips
+    g.fillStyle=A; g.globalAlpha=.9; g.fillRect(380,200,264,56); g.globalAlpha=1;   // a stripe along the trailing edge in the middle
+    g.strokeStyle='rgba(0,0,0,.16)'; g.lineWidth=2; for(const v of [64,128,192]){ g.beginPath(); g.moveTo(0,v); g.lineTo(1024,v); g.stroke(); }   // the seams of the panels
+    for(const u of KD.struts.map(s=>(s+KD.S)/(2*KD.S)*1024)){ g.strokeStyle='rgba(0,0,0,.22)'; g.lineWidth=5; g.beginPath(); g.moveTo(u,0); g.lineTo(u,240); g.stroke(); }
+    g.save(); g.translate(512,118); g.fillStyle=sc.b===0x111111?'#ffffff':Cc; g.font='bold 92px Anton, Impact, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('SURF RUSH',0,0);
+    g.font='bold 34px Anton, Impact, sans-serif'; g.fillText('12',300,62); g.restore();
+    const t=new THREE.CanvasTexture(cv); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; return kiteTex[key]=t; }
+  // the geometry: the canopy (a textured surface), the tubes (leading edge and struts, a solid colour), the bridle (lines)
+  function kiteGeo(sc){ const NS=44, NC=12, P=[], U=[], I=[], v=new THREE.Vector3();
+    for(let i=0;i<=NS;i++){ const s=-KD.S+2*KD.S*i/NS; for(let j=0;j<=NC;j++){ const u=Math.pow(j/NC,1.2); canopyAt(s,u,v); P.push(v.x,v.y,v.z); U.push(i/NS,1-u); } }
+    for(let i=0;i<NS;i++) for(let j=0;j<NC;j++){ const a=i*(NC+1)+j, b=a+NC+1; I.push(a,b,a+1,a+1,b,b+1); }
+    const canopy=new THREE.BufferGeometry(); canopy.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); canopy.setAttribute('uv',new THREE.Float32BufferAttribute(U,2)); canopy.setIndex(I); canopy.computeVertexNormals();
+    // the tubes: a ring of 10 round the leading edge at each step; each strut a tapering tube along the chord on the rider's side
+    const T=[], TI=[], ring=(cx,cy,cz,ax,ay,az,r,k)=>{ // a ring round the axis (ax,ay,az)
+      const a=new THREE.Vector3(ax,ay,az).normalize(), b=Math.abs(a.y)<.9?new THREE.Vector3(0,1,0):new THREE.Vector3(1,0,0), e1=new THREE.Vector3().crossVectors(a,b).normalize(), e2=new THREE.Vector3().crossVectors(a,e1);
+      for(let q=0;q<k;q++){ const t=q/k*2*PI; T.push(cx+(e1.x*Math.cos(t)+e2.x*Math.sin(t))*r,cy+(e1.y*Math.cos(t)+e2.y*Math.sin(t))*r,cz+(e1.z*Math.cos(t)+e2.z*Math.sin(t))*r); } };
+    const tube=(n,k)=>{ const base=T.length/3-(n+1)*k; for(let i=0;i<n;i++) for(let q=0;q<k;q++){ const a=base+i*k+q, b=base+i*k+(q+1)%k, c=a+k, d=b+k; TI.push(a,c,b,b,c,d); } };
+    const L0={}, L1={}, NL=44; for(let i=0;i<=NL;i++){ const s=-KD.S+2*KD.S*i/NL; leAt(s,L0); leAt(Math.min(KD.S,s+.02),L1); const tx=L1.x-L0.x||1e-4, ty=L1.y-L0.y, tz=L1.z-L0.z; ring(L0.x,L0.y,L0.z-L0.r*.3,tx,ty,tz,L0.r,10); } tube(NL,10);
+    for(const st of KD.struts){ const NSt=8; for(let i=0;i<=NSt;i++){ const u=lerp(.04,.86,i/NSt), p0=canopyAt(st,u,new THREE.Vector3()), p1=canopyAt(st,Math.min(1,u+.02),new THREE.Vector3()), Ls=leAt(st,{}); const r=Ls.r*.55*(1-.6*i/NSt);
+        ring(p0.x-Ls.nx*r*.9,p0.y-Ls.ny*r*.9,p0.z,p1.x-p0.x,p1.y-p0.y,p1.z-p0.z||-1e-4,r,8); } tube(NSt,8); }
+    const tubes=new THREE.BufferGeometry(); tubes.setAttribute('position',new THREE.Float32BufferAttribute(T,3)); tubes.setIndex(TI); tubes.computeVertexNormals();
+    // the bridle: from each pigtail to four points along the front of the tube on its side; and the pigtails' own short lines
+    const BR=[]; for(const sg of [-1,1]){ const pg=[sg*KD.pig.x,KD.pig.y,leAt(0,{}).z-.35]; for(const s of KD.bridle){ const L=leAt(sg*s,{}); BR.push(...pg,L.x-L.nx*L.r,L.y-L.ny*L.r,L.z+L.r*.3); } }
+    const bridle=new THREE.BufferGeometry(); bridle.setAttribute('position',new THREE.Float32BufferAttribute(BR,3));
+    return {canopy,tubes,bridle}; }
+  const tubeMats={}, canopyMats={};
+  function kiteObj(sc,withBridle){ const G=kiteGeo(sc), g=new THREE.Group();
+    const cm=canopyMats[sc.name]||(canopyMats[sc.name]=new THREE.MeshStandardMaterial({map:kiteTexture(sc),roughness:.62,metalness:0,side:THREE.DoubleSide}));
+    const tm=tubeMats[sc.name]||(tubeMats[sc.name]=new THREE.MeshStandardMaterial({color:new THREE.Color(sc.c===0xffffff||sc.b===0x111111?0x16181d:sc.c).convertSRGBToLinear(),roughness:.5,metalness:0}));
+    const c=new THREE.Mesh(G.canopy,cm), t=new THREE.Mesh(G.tubes,tm); c.castShadow=t.castShadow=true; g.add(c); g.add(t);
+    if(withBridle){ const b=new THREE.LineSegments(G.bridle,new THREE.LineBasicMaterial({color:0x3a3a3a,transparent:true,opacity:.7})); b.frustumCulled=false; g.add(b); }
+    g.userData.kite=1; return g; }
+  K.kiteGeo=kiteGeo; K.kiteObj=kiteObj;
+  /* where the lines attach, in the kite's frame: the back lines at the wingtips (the trailing corner), the front lines at the
+     pigtails under the kite */
+  const KP=(()=>{ const T=canopyAt(KD.S,1,new THREE.Vector3()), z0=leAt(0,{}).z-.35; return {tipL:new THREE.Vector3(-T.x,T.y,T.z),tipR:T.clone(),frL:new THREE.Vector3(-KD.pig.x,KD.pig.y,z0),frR:new THREE.Vector3(KD.pig.x,KD.pig.y,z0)}; })();
   function makeKiteboard(){ const grp=new THREE.Group(), L=1.38, W=.42; const sh=new THREE.Shape(); const N=40; const hw=z=>{ const t=Math.abs(z)/(L/2); return W/2*Math.sqrt(Math.max(0,1-Math.pow(Math.max(0,t-.62)/.38,2.2))); };
     for(let i=0;i<=N;i++){ const z=-L/2+L*i/N; i?sh.lineTo(hw(z),-z):sh.moveTo(hw(z),-z); } for(let i=N;i>=0;i--){ const z=-L/2+L*i/N; sh.lineTo(-hw(z),-z); }
     const top=new THREE.ExtrudeGeometry(sh,{depth:.022,bevelEnabled:true,bevelThickness:.004,bevelSize:.006,bevelSegments:1,curveSegments:8}); top.rotateX(-PI/2);
@@ -224,19 +270,79 @@
   function placeBuoy(b,i){ for(let k=0;k<20;k++){ const x=-200+Math.random()*460, off=40+Math.random()*190, z=Cst.shoreZ(x)-off; if(Math.hypot(x-S.x,z-S.z)<35) continue; b.x=x; b.z=z; break; } b.g.visible=true; }
   K.buoys=buoys;
   /* ---------- the group in the scene ---------- */
-  const grp=new THREE.Group(); grp.name='kite'; K.group=grp; let kiteMesh=null, lines=null, bar=null; K.kiteMesh=null;
-  K.build=function(scheme){ if(kiteMesh){ kiteMesh.geometry.dispose(); kiteMesh.geometry=kiteGeo(scheme); return; }
-    kiteMesh=new THREE.Mesh(kiteGeo(scheme),kiteMat); kiteMesh.castShadow=true; grp.add(kiteMesh); K.kiteMesh=kiteMesh;
-    const lg=new THREE.BufferGeometry(); lg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(8*3),3)); lines=new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0x2a2a2a,transparent:true,opacity:.75})); lines.frustumCulled=false; grp.add(lines);
-    bar=new THREE.Mesh(new THREE.CylinderGeometry(.016,.016,.46,8),new THREE.MeshStandardMaterial({color:0x111111,roughness:.5})); grp.add(bar);
+  const grp=new THREE.Group(); grp.name='kite'; K.group=grp; let kiteMesh=null, lines=null, bar=null, loop=null; K.kiteMesh=null;
+  /* the control bar, 50 cm (its own frame: x along the bar toward the left hand, y toward the kite): a black bar with grips,
+     a float on each end where the back lines come through, the centre line through a hole in the middle with a stopper ball
+     and the trim strap above, and the V where it splits into the two front lines 1.15 m above the bar */
+  const KM=(c,r)=>new THREE.MeshStandardMaterial({color:new THREE.Color(c).convertSRGBToLinear(),roughness:r==null?.5:r,metalness:0});
+  function barAssembly(){ const g=new THREE.Group(), blk=KM(0x15161a,.55), grip=KM(0x3a3d44,.9), fl=KM(0xff6a1a,.6), red=KM(0xe0202a,.45);
+    const tube=new THREE.Mesh(new THREE.CylinderGeometry(.015,.015,.5,10),blk); tube.rotation.z=PI/2; g.add(tube);
+    for(const sg of [-1,1]){ const gp=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.16,10),grip); gp.rotation.z=PI/2; gp.position.x=sg*.15; g.add(gp);
+      const f=new THREE.Mesh(new THREE.CylinderGeometry(.026,.022,.11,10),fl); f.position.set(sg*.25,.045,0); g.add(f);
+      const cap=new THREE.Mesh(new THREE.SphereGeometry(.026,10,6,0,2*PI,0,PI/2),blk); cap.position.set(sg*.25,.1,0); g.add(cap); }
+    const hub=new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.06,10),blk); g.add(hub);
+    const stop=new THREE.Mesh(new THREE.SphereGeometry(.03,10,8),red); stop.position.y=.2; g.add(stop);   // the stopper ball above the bar
+    const trim=new THREE.Mesh(new THREE.BoxGeometry(.03,.14,.02),blk); trim.position.y=.38; g.add(trim);   // the trim strap
+    const v=new THREE.Mesh(new THREE.SphereGeometry(.012,6,4),blk); v.position.y=1.15; g.add(v);   // the V
+    g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); return g; }
+  /* the chicken loop on the harness hook (its frame: y along the centre line toward the bar): the loop, and the red quick release above it */
+  function loopAssembly(){ const g=new THREE.Group(), blk=KM(0x15161a,.6), red=KM(0xe0202a,.45);
+    const l=new THREE.Mesh(new THREE.TorusGeometry(.045,.008,6,14),blk); l.scale.set(1,1.4,1); l.position.y=.03; g.add(l);
+    const qr=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.07,10),red); qr.position.y=.12; g.add(qr);
+    g.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); return g; }
+  K.build=function(scheme){ if(kiteMesh){ grp.remove(kiteMesh); kiteMesh=kiteObj(scheme,true); grp.add(kiteMesh); K.kiteMesh=kiteMesh; return; }
+    kiteMesh=kiteObj(scheme,true); grp.add(kiteMesh); K.kiteMesh=kiteMesh;
+    // five lines: the back lines from the bar's ends to the wingtips, the front lines from the V to the pigtails, the centre line from the chicken loop up through the bar to the V
+    const lg=new THREE.BufferGeometry(); lg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(10*3),3)); lines=new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0x2a2a2a,transparent:true,opacity:.8})); lines.frustumCulled=false; grp.add(lines);
+    bar=barAssembly(); grp.add(bar); loop=loopAssembly(); grp.add(loop);
     grp.add(spPts); grp.add(wkMesh);
     for(let i=0;i<10;i++){ const g=new THREE.Group(); const m=new THREE.Mesh(buoyGeo,buoyMat); m.castShadow=true; g.add(m); const pole=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,1.6,5),new THREE.MeshStandardMaterial({color:0x333333})); pole.position.y=1.6; g.add(pole);
       const fl=new THREE.Mesh(new THREE.PlaneGeometry(.7,.45),flagMat); fl.position.set(.36,2.15,0); g.add(fl); const b={g,x:0,z:0,i}; buoys.push(b); grp.add(g); }
     scene.add(grp); grp.visible=false; };
-  K.show=function(on){ grp.visible=on; if(on){ wk.pts.length=0; buoys.forEach((b,i)=>placeBuoy(b,i)); } };
+  K.show=function(on){ grp.visible=on; for(const k in harnessCache) harnessCache[k].g.visible=on; if(on){ wk.pts.length=0; buoys.forEach((b,i)=>placeBuoy(b,i)); } };
   /* ---------- every frame: the rider's pose, the kite, lines, bar, spray, wake, buoys ---------- */
   const _v=new THREE.Vector3(), _v2=new THREE.Vector3(), _q=new THREE.Quaternion(), _m=new THREE.Matrix4(), _e=new THREE.Euler(), _bx=new THREE.Vector3(), _by=new THREE.Vector3(), _bz=new THREE.Vector3();
-  const harness=new THREE.Vector3(), kitePos=new THREE.Vector3(), hands={L:new THREE.Vector3(),R:new THREE.Vector3(),C:new THREE.Vector3()};
+  const harness=new THREE.Vector3(), kitePos=new THREE.Vector3(), hands={L:new THREE.Vector3(),R:new THREE.Vector3(),C:new THREE.Vector3()}, _eL=new THREE.Vector3(), _eR=new THREE.Vector3(), _vs=new THREE.Vector3(), _eC=new THREE.Vector3();
+  /* the harness: a waist harness, its hard back band round the rider's middle (sized to the model: the cross-section of the
+     trunk's own skin at the belly, the arms left out) and the spreader bar across the front with its hook, which the chicken
+     loop goes over. Built once per rider model, fixed to the belly's bone; shown on the water only. */
+  const harnessCache={};
+  function harnessFor(R){ const m=R.model, b=R.bones&&(R.bones.Abdomen||R.bones.Hips); if(!m||!b) return null; let H=harnessCache[m.uuid]; if(H){ H.g.visible=K.group.visible; return H; }
+    m.updateMatrixWorld(true); const trunk=new Set(['Hips','Abdomen','Torso','Chest'].map(k=>R.bones[k]).filter(Boolean));
+    const up=(R.bones.Chest||R.bones.Torso||b).getWorldPosition(new THREE.Vector3()).sub((R.bones.Hips||b).getWorldPosition(new THREE.Vector3())).normalize(), c0=b.getWorldPosition(new THREE.Vector3()).addScaledVector(up,.06);   // worn at the bottom of the ribs
+    // the figure faces its +Z (the toe edge): forward, square to the trunk
+    const fw=new THREE.Vector3(0,0,1).applyQuaternion(m.getWorldQuaternion(new THREE.Quaternion())); fw.addScaledVector(up,-fw.dot(up)).normalize(); const sd=new THREE.Vector3().crossVectors(up,fw);
+    let mnF=1e9,mxF=-1e9,mnS=1e9,mxS=-1e9,n=0; const v=new THREE.Vector3(), d=new THREE.Vector3(), bp=new THREE.Vector3(), t=new THREE.Vector3(), mm=new THREE.Matrix4();
+    // (a compressed model stores its numbers as normalized integers: read them as the shader does)
+    const NORM={Int8Array:127,Uint8Array:255,Int16Array:32767,Uint16Array:65535}, GET=['getX','getY','getZ','getW'];
+    const aget=(a,i,k)=>{ const x=a[GET[k]](i); if(!a.normalized) return x; const arr=a.isInterleavedBufferAttribute?a.data.array:a.array, q=NORM[arr.constructor.name]; return q?Math.max(x/q,-1):x; };
+    m.traverse(o=>{ if(!o.isSkinnedMesh||!o.geometry.attributes.skinIndex) return; const G=o.geometry, pa=G.attributes.position, si=G.attributes.skinIndex, sw=G.attributes.skinWeight, N=pa.count, bones=o.skeleton.bones, inv=o.skeleton.boneInverses;
+      for(let i=0;i<N;i+=2){ let best=0, bi=0, sum=0; for(let k=0;k<4;k++){ const w=aget(sw,i,k); sum+=w; if(w>best){ best=w; bi=si[GET[k]](i); } } if(!trunk.has(bones[bi])||sum<=0) continue;
+        bp.set(aget(pa,i,0),aget(pa,i,1),aget(pa,i,2)).applyMatrix4(o.bindMatrix); v.set(0,0,0);
+        for(let k=0;k<4;k++){ const w=aget(sw,i,k); if(w<=0) continue; const j=si[GET[k]](i); mm.multiplyMatrices(bones[j].matrixWorld,inv[j]); v.addScaledVector(t.copy(bp).applyMatrix4(mm),w/sum); }
+        v.applyMatrix4(o.bindMatrixInverse).applyMatrix4(o.matrixWorld); d.subVectors(v,c0); const h=d.dot(up); if(Math.abs(h)>.045) continue;
+        const f=d.dot(fw), s=d.dot(sd); mnF=Math.min(mnF,f); mxF=Math.max(mxF,f); mnS=Math.min(mnS,s); mxS=Math.max(mxS,s); n++; } });
+    if(n<8){ mnF=-.11; mxF=.11; mnS=-.15; mxS=.15; }
+    const cf=(mnF+mxF)/2, cs=(mnS+mxS)/2, rf=(mxF-mnF)/2+.014, rs=(mxS-mnS)/2+.014;
+    // the band: an ellipse round the trunk, taller at the back (20 cm) than at the front (7 cm), a shell of 1.2 cm
+    const g=new THREE.Group(), NB=36, P=[], I=[];
+    for(let i=0;i<=NB;i++){ const a=i/NB*2*PI, ca=Math.cos(a), sa=Math.sin(a), back=(1-ca)/2, h=.035+.065*back;   // a=0 the front
+      for(const [hh,rr] of [[-h,1],[h,1],[h,1.07],[-h,1.07]]) P.push(sa*rs*rr,hh,ca*rf*rr); }
+    for(let i=0;i<NB;i++) for(let k=0;k<4;k++){ const a=i*4+k, b2=i*4+(k+1)%4, c=a+4, e=b2+4; I.push(a,c,b2,b2,c,e); }
+    const bg=new THREE.BufferGeometry(); bg.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); bg.setIndex(I); bg.computeVertexNormals();
+    const shell=new THREE.Mesh(bg,KM(0x1b1d22,.45)); shell.castShadow=true; g.add(shell);
+    const acc=new THREE.Mesh(new THREE.TorusGeometry(1,.012,4,36,PI*.9),KM(0xff6a1a,.5)); acc.rotation.x=PI/2; acc.rotation.z=PI*.55; acc.scale.set(rs*1.075,rf*1.075,1); acc.position.y=.04; g.add(acc);   // a coloured trim round the back
+    // the spreader bar: a curved steel plate across the front, and the hook standing out of it toward the kite
+    const sp=new THREE.Mesh(new THREE.CylinderGeometry(rs*.95,rs*.95,.07,18,1,true,-PI*.28,PI*.56),KM(0xb9bec6,.3)); sp.material.metalness=.8; sp.scale.z=rf/rs*1.05+.08; sp.position.z=-.02; g.add(sp);
+    const hookG=new THREE.Group(), steel=KM(0xc9ced6,.25); steel.metalness=.85; const hk=new THREE.Mesh(new THREE.TorusGeometry(.035,.009,6,12,PI*1.2),steel); hk.rotation.y=PI/2; hk.rotation.z=-PI*.35; hookG.add(hk);
+    const stem=new THREE.Mesh(new THREE.BoxGeometry(.03,.05,.04),steel); stem.position.z=-.03; hookG.add(stem); hookG.position.set(0,-.005,rf*1.07+.035); g.add(hookG);
+    const hook=new THREE.Object3D(); hook.position.set(0,.01,rf*1.07+.05); g.add(hook);
+    // into the world at the belly, in the trunk's frame; then onto the bone (it keeps that place on it)
+    const M=new THREE.Matrix4().makeBasis(sd,up,fw); g.quaternion.setFromRotationMatrix(M); g.position.copy(c0).addScaledVector(fw,cf).addScaledVector(sd,cs);
+    scene.add(g); g.updateMatrixWorld(true); b.attach(g);
+    H={g,hook,fit:{n,rf:+rf.toFixed(3),rs:+rs.toFixed(3)}}; harnessCache[m.uuid]=H; K.harness=H; return H; }
+  K.harnessFor=harnessFor;
+  const KPOSE=K.POSE={lean:.95,upright:1,hipsIn:.1};   // the riding pose: how much of the balancing lean the body shows, no bend at the waist, hips toward the bar
   K.visuals=function(dt,R){ const F=S.fall, k=S.kite;
     // the rider's frame: toes toward the kite (downwind), the board along the travel line
     const vx=S.speed>.4?S.vx/S.speed:Math.sin(S.h), vz=S.speed>.4?S.vz/S.speed:Math.cos(S.h);
@@ -248,14 +354,14 @@
     const e=S.edge, hw=.2; R.tilt.quaternion.identity(); R.tilt.position.set(0,0,0); R.rollG.rotation.z=e; R.rollG.position.set(-hw*(1-Math.cos(e)),hw*Math.abs(Math.sin(e)),0);
     R.trick.rotation.order='YXZ'; R.trick.rotation.y=-(S.spin+S.yawRes); R.trick.rotation.x=0; R.trick.rotation.z=S.flip+S.rollRes;
     // the kite: 22 m out along its lines from the harness
-    R.root.updateMatrixWorld(true); harness.set(S.x,S.y+1.1,S.z); { const hb=R.bones&&(R.bones.Abdomen||R.bones.Hips); if(hb) hb.getWorldPosition(harness); }   // the harness hook, at the belly
+    R.root.updateMatrixWorld(true); harness.set(S.x,S.y+1.1,S.z); { const H=harnessFor(R); if(H) H.hook.getWorldPosition(harness); else { const hb=R.bones&&(R.bones.Abdomen||R.bones.Hips); if(hb) hb.getWorldPosition(harness); } }   // the harness hook, in front of the belly
     kiteDir(k.az,k.el,_v); kitePos.copy(harness).addScaledVector(_v,LINES);
     // the kite faces into the wind: its leading edge toward the upwind side of its lines; the span across
     _by.copy(_v); _bz.copy(D).multiplyScalar(-1); _bz.addScaledVector(_by,-_bz.dot(_by)).normalize(); _bx.crossVectors(_by,_bz).normalize();
     _m.makeBasis(_bx,_by,_bz); kiteMesh.quaternion.setFromRotationMatrix(_m); kiteMesh.position.copy(kitePos); kiteMesh.updateMatrixWorld(true);
     // the bar: in front of the harness toward the kite, across the lines; the lines from its ends to the kite's tips
     // (the bar slides on the line from the harness to the kite: it sits where the hands hold it, a bent arm's length from the shoulders)
-    let d=.45; if(R.bones&&R.bones.UpperArmL&&R.len){ const m=R.bones.UpperArmL.getWorldPosition(_bx).add(R.bones.UpperArmR.getWorldPosition(_by)).multiplyScalar(.5).sub(harness), along=m.dot(_v), perp2=Math.max(0,m.lengthSq()-along*along), reach=.9*(R.len.armL[0]+R.len.armL[1]);
+    let d=.45; if(R.bones&&R.bones.UpperArmL&&R.len){ const m=R.bones.UpperArmL.getWorldPosition(_bx).add(R.bones.UpperArmR.getWorldPosition(_by)).multiplyScalar(.5).sub(harness), along=m.dot(_v), perp2=Math.max(0,m.lengthSq()-along*along), reach=.96*(R.len.armL[0]+R.len.armL[1]);
       d=clamp(along+Math.sqrt(Math.max(0,reach*reach-perp2)),.18,.75); }
     // the bar lies across the lines, turned about them to lie along the shoulders (the left hand on the left)
     hands.C.copy(harness).addScaledVector(_v,d);
@@ -263,22 +369,38 @@
     if(!R.bones||!R.bones.UpperArmL||_v2.lengthSq()<1e-4){ _v2.crossVectors(_v,_by.set(0,1,0)); const nose=_bz.set(noseX,0,noseZ); if(_v2.dot(nose)*dir<0) _v2.multiplyScalar(-1); }
     _v2.normalize();
     hands.L.copy(hands.C).addScaledVector(_v2,.17); hands.R.copy(hands.C).addScaledVector(_v2,-.17);
-    bar.position.copy(hands.C); bar.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),_v2);
+    // a hand the arm can't reach is brought in to the end of the nearly straight arm (the bar then goes to the hands, below)
+    if(R.bones&&R.bones.UpperArmL&&R.len) for(const [h,b,L] of [[hands.L,'UpperArmL',R.len.armL],[hands.R,'UpperArmR',R.len.armR]]){ const sp=R.bones[b].getWorldPosition(_eC), d=h.distanceTo(sp), mx=.97*(L[0]+L[1]); if(d>mx) h.sub(sp).multiplyScalar(mx/d).add(sp); }
+    // the bar's frame: x along it (to the left hand), y up the lines; the chicken loop on the hook, along the centre line
+    _bz.crossVectors(_v2,_v).normalize(); _bx.crossVectors(_v,_bz); _m.makeBasis(_bx,_v,_bz); bar.quaternion.setFromRotationMatrix(_m); bar.position.copy(hands.C);
+    loop.quaternion.copy(bar.quaternion); loop.position.copy(harness);
     const la=lines.geometry.attributes.position.array, wp=p=>p.clone().applyMatrix4(kiteMesh.matrixWorld);
-    const tl2=wp(KP.tipL), tr2=wp(KP.tipR), ll=wp(KP.leL), lr=wp(KP.leR); const sideL=tl2.distanceTo(hands.L)<tr2.distanceTo(hands.L);
+    const tl2=wp(KP.tipL), tr2=wp(KP.tipR), fl=wp(KP.frL), fr=wp(KP.frR); const sideL=tl2.distanceTo(hands.L)<tr2.distanceTo(hands.L);
+    const eL=_eL.copy(hands.C).addScaledVector(_bx,.25).addScaledVector(_v,.1), eR=_eR.copy(hands.C).addScaledVector(_bx,-.25).addScaledVector(_v,.1), vs=_vs.copy(hands.C).addScaledVector(_v,1.15);
     const seg=(i,a,b)=>{ la.set([a.x,a.y,a.z,b.x,b.y,b.z],i*6); };
-    seg(0,hands.L,sideL?tl2:tr2); seg(1,hands.R,sideL?tr2:tl2); seg(2,hands.C,ll); seg(3,hands.C,lr); lines.geometry.attributes.position.needsUpdate=true;
+    seg(0,eL,sideL?tl2:tr2); seg(1,eR,sideL?tr2:tl2); seg(2,vs,sideL?fl:fr); seg(3,vs,sideL?fr:fl); seg(4,_eC.copy(harness).addScaledVector(_v,.15),vs); lines.geometry.attributes.position.needsUpdate=true;
     // the pose: planted on the board, leaning back against the pull, hands on the bar
-    const p=R.P, bell=(t,d)=>t<d?Math.sin(PI*t/d):0; p.t=S.t; p.menu=false; p.dir=dir;
+    // how far the body leans back: the kite pulls the hook sideways and up, so the lean that balances the pull over the edge is
+    // more than the sideways pull alone gives (riders lean 25-40 degrees back)
+    { const pv=S.pullV||_v, ph=Math.hypot(pv.x,pv.z); S.vlean=damp(S.vlean||0,clamp(Math.atan2(ph,Math.max(MASS*G*.35,MASS*G-Math.max(0,pv.y)*.85)),0,.8),4,dt); }
+    const p=R.P, bell=(t,d)=>t<d?Math.sin(PI*t/d):0; p.t=S.t; p.menu=false; p.dir=dir; p.surf=0; p.handTo=null; p.prone=0; p.push=0;   // (the surf session's pose inputs off)
     p.crouch=damp(p.crouch,F?.2:clamp(.28+S.charge*.5+(S.land>0?.3:0)+(S.air?.15:0),0,1),8,dt);
     p.charge=damp(p.charge,S.charge,14,dt); p.tuck=damp(p.tuck,S.air?(S.grabbed?.55:.3):0,9,dt);
     p.air=damp(p.air,S.air?1:0,12,dt); p.grab=damp(p.grab,S.grab,12,dt); if(S.grabbed) p.grabName=S.grabName;
-    p.spinW=S.air?S.wsp:0; p.flipW=S.air?S.wfl:0; p.body=-dir*S.lean*.9; p.edge=-dir*S.edge;   // leaning back on the heels (the pose's + is toward the toes) p.fa=0; p.om=0; p.slip=0; p.speed=S.speed; p.brake=0; p.skid=0;
+    p.spinW=S.air?S.wsp:0; p.flipW=S.air?S.wfl:0; p.body=-dir*(S.air||F?S.lean:S.vlean*KPOSE.lean); p.edge=-dir*S.edge; p.upright=S.air||F?0:KPOSE.upright; p.hipsIn=S.air||F?0:KPOSE.hipsIn*clamp(S.vlean/.6,0,1); p.fa=0; p.om=0; p.slip=0; p.speed=S.speed; p.brake=0; p.skid=0;   // leaning back on the heels (the pose's + is toward the toes)
     p.absorb=damp(p.absorb,S.land>0?clamp(S.landImp/7,0,1)*bell(.45-S.land,.45):0,16,dt); p.ext=damp(p.ext,S.air&&S.airT<.25?.5:0,16,dt); p.rough=damp(p.rough,!S.air&&!F?clamp(S.speed/14,0,1)*.6:0,4,dt);
-    p.press=0; p.jib=0; p.bal=0; p.windup=damp(p.windup||0,F?0:S.air?.6:1.4,6,dt);   // the trunk turned toward the kite (the bar square to the shoulders) p.spinA=S.air?S.spin:0; p.wobble=0; p.skate=0; p.popKind=''; p.popT=9; p.airT=S.airT;
+    p.press=0; p.jib=0; p.bal=0; p.windup=damp(p.windup||0,F?0:S.air?.6:1.4,6,dt); p.spinA=S.air?S.spin:0; p.wobble=0; p.skate=0; p.popKind=''; p.popT=9; p.airT=S.airT;   // windup: the trunk turned toward the kite (the bar square to the shoulders)
     let gnd=0, gu=0; if(F){ if(F.ph==='down') gnd=clamp(F.t/.5,0,1); else if(F.ph==='swim'||F.ph==='relaunch') gnd=1; else { gnd=1; gu=clamp(S.pull/520,0,1)*.9; } }
     p.ground=gnd; p.getup=gu; p.fallPh=F?F.ph:''; p.handsTo=F&&F.ph!=='start'?null:hands;
     R.pose({}); R.root.visible=true;
+    // the bar in the hands as they are now (a short-armed figure can't always reach the centre line: then the bar comes to its
+    // hands, and the centre line bends a few degrees through it); its ends, the V and the lines follow
+    if(p.handsTo&&R.bones&&R.bones.WristL&&R.bones.WristR){ const wl=R.bones.WristL.getWorldPosition(_eL), wr=R.bones.WristR.getWorldPosition(_eR);
+      _eC.addVectors(wl,wr).multiplyScalar(.5).addScaledVector(_v,.05); _bx.subVectors(wl,wr); _bx.addScaledVector(_v,-_bx.dot(_v));
+      if(_bx.lengthSq()>1e-4){ _bx.normalize(); _bz.crossVectors(_bx,_v).normalize(); _bx.crossVectors(_v,_bz); _m.makeBasis(_bx,_v,_bz); bar.quaternion.setFromRotationMatrix(_m); }
+      bar.position.copy(_eC); const la=lines.geometry.attributes.position.array, put=(i,q)=>{ la[i]=q.x; la[i+1]=q.y; la[i+2]=q.z; };
+      put(0,_eL.copy(_eC).addScaledVector(_bx,.25).addScaledVector(_v,.1)); put(6,_eR.copy(_eC).addScaledVector(_bx,-.25).addScaledVector(_v,.1));
+      _vs.copy(_eC).addScaledVector(_v,1.15); put(12,_vs); put(18,_vs); put(27,_vs); lines.geometry.attributes.position.needsUpdate=true; }
     // spray off the edge at speed, a burst on landing
     if(!S.air&&!F&&S.speed>3){ const n=Math.min(6,Math.floor(S.speed*.25+S.edge*4)); const ux=-tx, uz=-tz; for(let i=0;i<n;i++) emit(S.x+ux*.3+(Math.random()-.5)*.6,S.y+.05,S.z+uz*.3+(Math.random()-.5)*.6,ux*(1+Math.random()*2)-vx*S.speed*.15,1.2+Math.random()*2.2*S.edge,uz*(1+Math.random()*2)-vz*S.speed*.15,.12+Math.random()*.16,.35+Math.random()*.3); }
     updateSpray(dt); updateWake(dt);
@@ -316,7 +438,7 @@
   K.aiBuild=function(n){ if(AIS.length) return; const tops=[0xff3b30,0xffd166,0x2ec4b6,0xf72585,0xffffff,0x4361ee], boards=[0xffffff,0x111111,0xffb703,0x00b4d8,0xe63946,0x80ed99];
     for(let i=0;i<(n||5);i++){ const rnd=k=>{ const v=Math.sin((i+1)*(k+3)*78.233)*43758.5453; return v-Math.floor(v); };
       const g=figure(tops[i%tops.length],boards[(i+2)%boards.length]); aiGrp.add(g);
-      const km=new THREE.Mesh(kiteGeo(K.KITES[(i+1)%K.KITES.length]),kiteMat); aiGrp.add(km);
+      const km=kiteObj(K.KITES[(i+1)%K.KITES.length],false); aiGrp.add(km);
       const lg=new THREE.BufferGeometry(); lg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(12),3)); const ln=new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0x303030,transparent:true,opacity:.6})); ln.frustumCulled=false; aiGrp.add(ln);
       const x=-170+i*95+rnd(1)*40, L=110+rnd(2)*80, off=45+L/2+rnd(3)*40, c=new THREE.Vector3(x,0,Cst.shoreZ(x)-off);
       AIS.push({g,km,ln,c,L,r:7,v:7.8+rnd(4)*1.8,s:rnd(5)*(2*L+2*PI*7),face:0,jump:null,nextJump:4+rnd(6)*10,x:0,y:0,z:0}); }
