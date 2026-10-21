@@ -76,6 +76,37 @@
     Bb.box(w/2-2.2,H,-d/2+2,2.6,2.3,2.4,wall,['-y']);
     if(o.flowers) Bb.box(-w/2+1.2,0,d/2+.4,1.8,o.floors>2?3.4:2.2,.5,PAL.pink,['-y']);   // bougainvillea by the door
     return H; }
+  /* a hotel tower on the seafront (the Tel Aviv kind): a podium of shops and the lobby, then a slab of 12-26 floors with a
+     balcony on every bay facing the sea, windows on the sides and the back, a crown with the hotel's name. Kinds: 'slab'
+     (plain), 'stepped' (the balconies stepping back up the side, like a ship's decks), 'rainbow' (the facade in tall stripes
+     of colour, like the Dan), 'round' (a cylinder ringed by balconies). */
+  const RAINBOW=[0xe63946,0xf4a261,0xe9c46a,0x2a9d8f,0x457b9d,0x9b5de5,0xf15bb5,0x00bbf9].map(lin);
+  function tower(Bb,Bg,Bs,o){ const w=o.w, d=o.d, nF=o.floors, pH=6.6, fH=3.05, H=pH+nF*fH, seed=o.seed, wall=o.wall;
+    // the podium: two floors, glass at the street, a deep canopy
+    Bb.box(0,-.8,0,w+2,pH+.8,d+2,PAL.stone,['-y']); Bg.box(0,.2,d/2+1.02,w+1.4,3.2,.05,PAL.glass,['-z']); Bg.box(0,3.6,d/2+1.02,w+1.4,2.4,.05,PAL.glass,['-z']);
+    Bb.box(0,3.4,d/2+2.2,w*.5,.25,2.4,PAL.white); if(o.sign) sign(Bs,o.sign,0,3.7,d/2+3.42,Math.min(w*.45,8),0);
+    if(o.kind==='round'){ const R=Math.min(w,d)/2, N=20;
+      for(let f=0;f<nF;f++){ const y=pH+f*fH; Bb.cyl(0,y,0,R,R,fH,N,wall); for(let k=0;k<N;k++){ const a=(k+.5)/N*PI*2, ca=Math.cos(a), sa=Math.sin(a); Bg.box(ca*(R+.02),y+.5,sa*(R+.02),.06,2,.06,PAL.glass); }
+        Bb.cyl(0,y-.05,0,R+1.1,R+1.1,.16,N,PAL.white,true); Bg.cyl(0,y+.1,0,R+1.08,R+1.08,.95,N,PAL.glass); }   // balcony rings
+      Bb.cyl(0,H,0,R*.82,R*.7,2.4,N,PAL.white,true); Bb.cyl(0,H+2.4,0,R*.3,R*.3,3.5,8,PAL.white,true); return H+5.9; }
+    Bb.box(0,pH,0,w,nF*fH,d,wall,['-y']); Bb.box(0,H,0,w+.2,.5,d+.2,PAL.white,['-y']);
+    const bays=Math.max(3,Math.round(w/3.4)), bw=w/bays, sideBays=Math.max(2,Math.round(d/3.6)), sbw=d/sideBays;
+    for(let f=0;f<nF;f++){ const y=pH+f*fH, step=o.kind==='stepped'?Math.max(0,Math.floor((f-nF*.45)/2))*1.1:0;
+      for(let b=0;b<bays;b++){ const x=-w/2+bw*(b+.5), col=o.kind==='rainbow'?RAINBOW[(b+seed)%RAINBOW.length]:null;
+        // the sea side: a balcony per bay (glass doors, a slab, a glass rail)
+        Bg.box(x,y+.05,d/2+.02,bw*.78,2.4,.04,PAL.glass,['-z']);
+        if(col) Bb.box(x+bw*.47,y,d/2+.06,bw*.06,fH,.12,col);   // the stripes between the bays
+        if(o.kind==='rainbow') Bb.box(x,y-.06,d/2+.55,bw*.98,.16,1.1,col);
+        else { Bb.box(x,y-.06,d/2+.7,bw-.12,.16,1.4,PAL.white); Bg.box(x,y+.1,d/2+1.38,bw-.12,1,.05,PAL.glass,['-y']); }
+        // the back
+        Bg.box(x,y+.8,-d/2-.02,1.3,1.5,.04,PAL.glass,['+z']); }
+      for(const sd of [-1,1]) for(let k=0;k<sideBays;k++){ const z=-d/2+(k+.5)*sbw;
+        if(o.kind==='stepped'&&k>=sideBays-2){ Bb.box(sd*(w/2+.6+step*.2),y-.06,z,1.2,.16,sbw-.2,PAL.white); Bg.box(sd*(w/2+1.18+step*.2),y+.1,z,.05,1,sbw-.2,PAL.glass,['-y']); }
+        Bg.box(sd*(w/2+.02),y+.8,z,.04,1.5,1.2,PAL.glass,[sd>0?'-x':'+x']); } }
+    // the crown: a plant room, a frame with the name on the sea side
+    Bb.box(0,H+.5,-d*.15,w*.7,3,d*.5,PAL.white,['-y']); if(o.hsign) sign(Bs,o.hsign,0,H+.6,d/2+.14,Math.min(w*.75,13),0);
+    if(o.kind==='rainbow') Bb.box(0,H+.5,d/2-.2,w,1.2,.3,RAINBOW[seed%RAINBOW.length]);
+    return H+3.5; }
   /* a beach bar on its deck: counter, straw roof, stools, parasols with tables */
   function beachBar(Bb,Bs,o){ Bb.box(0,0,0,16,.42,10,PAL.wood); Bb.box(0,.42,-2.5,7,1.1,1.2,PAL.woodD); Bb.box(0,1.52,-2.5,7.4,.08,1.5,PAL.wood);
     for(const [x,z] of [[-3.6,-4.2],[3.6,-4.2],[-3.6,-.8],[3.6,-.8]]) Bb.cyl(x,.42,z,.09,.09,2.6,6,PAL.woodD);
@@ -85,12 +116,24 @@
     for(const [x,z] of [[-5.5,2.5],[0,3],[5.5,2.5]]){ Bb.cyl(x,.42,z,.05,.05,2.5,6,PAL.woodD); Bb.cyl(x,2.92,z,1.7,.06,.6,10,PAL.straw); Bb.cyl(x,.42,z,.45,.45,.75,10,PAL.wood,true);
       for(const [a,b] of [[1,0],[-1,0],[0,1]]) Bb.cyl(x+a*.9,.42,z+b*.9,.2,.2,.45,8,PAL.wood,true); } }
   /* the lifeguard tower: on stilts, glazed all round, a ramp, a flag */
-  function lifeguard(Bb,Bg,Bs){ for(const [x,z] of [[-1.5,-1.5],[1.5,-1.5],[-1.5,1.5],[1.5,1.5]]) Bb.cyl(x,0,z,.12,.12,3,6,PAL.white);
-    Bb.box(0,3,0,4,.2,4,PAL.white); Bb.box(0,3.2,0,3.4,2.4,3.4,PAL.red,['-y']); Bg.box(0,4.1,1.72,3,1,.04,PAL.glass,['-z']); Bg.box(1.72,4.1,0,.04,1,3,PAL.glass,['-x']); Bg.box(-1.72,4.1,0,.04,1,3,PAL.glass,['+x']);
-    Bb.tri4([-2.2,5.6,2.2],[2.2,5.6,2.2],[2.2,6.2,0],[-2.2,6.2,0],PAL.white); Bb.tri4([2.2,5.6,-2.2],[-2.2,5.6,-2.2],[-2.2,6.2,0],[2.2,6.2,0],PAL.white);
-    Bb.tri4([-.6,0,-6],[.6,0,-6],[.6,3,-2],[-.6,3,-2],PAL.wood); Bb.cyl(1.8,3.2,1.8,.04,.04,4.4,5,PAL.metal); Bb.box(2.4,6.6,1.8,1.2,.8,.03,PAL.red); sign(Bs,'guard',0,5.75,2.25,2.6,0); }
+  /* the lifeguard station (the Tel Aviv kind): a cream cabin on a concrete base and steel legs, a band of windows facing the
+     sea, a balcony round it, a stair up the side, the loudspeaker, and the flag (white: fine, red: careful, black: no swimming) */
+  function lifeguard(Bb,Bg,Bs,flag){ const cr=lin(0xefe6d2), blue=lin(0x2b6cb0);
+    for(const [x,z] of [[-1.8,-1.8],[1.8,-1.8],[-1.8,1.8],[1.8,1.8]]) Bb.cyl(x,0,z,.13,.13,3.2,6,PAL.metal);
+    Bb.box(0,3.2,0,5,.22,5,cr); Bb.box(0,3.42,0,4,2.7,3.6,cr,['-y']); Bb.box(0,4.9,0,4.06,.3,3.66,blue);
+    Bg.box(0,4.15,1.82,3.6,1.15,.04,PAL.glass,['-z']); Bg.box(2.02,4.15,0,.04,1.15,3,PAL.glass,['-x']); Bg.box(-2.02,4.15,0,.04,1.15,3,PAL.glass,['+x']);
+    Bb.box(0,6.12,0,4.6,.18,4.2,cr);   // the flat roof
+    for(const [x,z,w,dd] of [[0,2.45,5,.05],[2.45,0,.05,5],[-2.45,0,.05,5]]) Bb.box(x,3.42,z,w,.95,dd,PAL.white);   // the balcony rail
+    for(let k=0;k<7;k++) Bb.box(2.9,k*.46,-1.4+k*.42,.9,.08,.4,PAL.metal);   // the stair
+    Bb.tri4([2.45,0,-1.6],[3.35,0,-1.6],[3.35,3.2,1.4],[2.45,3.2,1.4],PAL.metal);
+    Bb.cyl(-1.9,6.3,1.9,.05,.05,4.5,6,PAL.metal); Bb.box(-1.35,9.9,1.9,1.1,.75,.03,flag||PAL.white); Bb.box(1.4,6.3,1.6,.5,.4,.4,PAL.dark);   // the flag, the loudspeaker
+    sign(Bs,'guard',0,5.15,2.22,2.4,0); }
   function kiosk(Bb,Bg,Bs,o){ Bb.box(0,0,0,3.2,2.6,2.6,o.col); Bg.box(0,.9,1.32,2.4,1.1,.04,PAL.glass,['-z']); Bb.box(0,2.6,.4,3.8,.12,3.6,o.awn); sign(Bs,o.sign,0,2.75,1.35,2.8,0); }
-  function lamp(Bb,Bu){ Bb.cyl(0,0,0,.08,.06,5,6,PAL.dark); Bb.box(0,4.9,.5,.12,.08,1.1,PAL.dark); Bb.box(0,4.72,1,.4,.18,.4,PAL.dark); }
+  function lamp(Bb,Bu){ Bb.cyl(0,0,0,.09,.07,4.1,8,PAL.white); Bb.box(0,3.95,0,1.25,.07,.07,PAL.white);
+    for(const sx of [-.62,.62]){ Bu.cyl(sx,4.02,0,.03,.03,.1,6,PAL.white); globe(Bu,sx,4.36,0,.27); } }
+  // a globe (a lamp): an octahedral-ish sphere of quads in the bulb batch
+  function globe(B,cx,cy,cz,r){ const N=8, M=6, b0=B.v; for(let j=0;j<=M;j++){ const v=j/M*PI, sy=Math.cos(v), sr=Math.sin(v); for(let i=0;i<=N;i++){ const u=i/N*PI*2, nx=Math.cos(u)*sr, nz=Math.sin(u)*sr; B.vert(cx+nx*r,cy+sy*r,cz+nz*r,nx,sy,nz,WHITE); } }
+    for(let j=0;j<M;j++) for(let i=0;i<N;i++){ const a=b0+j*(N+1)+i, b=a+N+1; B.i.push(a,b,a+1,a+1,b,b+1); } }
   function bench(Bb){ Bb.box(0,.42,0,1.9,.06,.5,PAL.wood); Bb.box(0,.75,-.24,1.9,.36,.06,PAL.wood); for(const sx of [-.8,.8]) Bb.box(sx,0,0,.06,.42,.45,PAL.dark); }
   function kiteSchool(Bb,Bg,Bs){ Bb.box(0,0,0,7,3,4.4,lin(0xfff3e0)); Bg.box(-1.5,.9,2.22,2.6,1.4,.04,PAL.glass,['-z']); Bb.box(2,0,2.22,1.2,2.2,.04,PAL.woodD,['-z']);
     Bb.tri4([-3.8,3,2.6],[3.8,3,2.6],[3.8,3.6,-2.6],[-3.8,3.6,-2.6],lin(0xff6b35)); Bb.box(0,3,0,7.2,.12,4.6,PAL.white,['-y']);
@@ -117,6 +160,70 @@
         if(prevC!==null){ I.push(prevC,C2,prevL,prevL,C2,Lv, prevC,prevR,C2,prevR,Rv,C2); } prevL=Lv; prevR=Rv; prevC=C2; } }
     // coconuts
     const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(Cc,3)); g.setIndex(I); g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
+  /* the fan palm of the Tel Aviv promenade (Washingtonia): a tall straight trunk, a brown skirt of old fronds under a round
+     crown of fans, each fan a half-disc of folded leaflets on its stalk */
+  function fanPalmGeo(){ const P=[], N=[], Cc=[], I=[]; let v=0; const vert=(x,y,z,nx,ny,nz,c)=>{ P.push(x,y,z); N.push(nx,ny,nz); Cc.push(c.r,c.g,c.b); return v++; };
+    const bark=lin(0x7a6650), bark2=lin(0x8e7a62), skirt=lin(0x6e5232), leaf=lin(0x6a9440), leaf2=lin(0x557f34), H=12.5;
+    const ring=[]; for(let k=0;k<=8;k++){ const t=k/8, y=t*H, lx=t*.25, r=.3-.12*t; const row=[]; for(let i=0;i<=6;i++){ const a=i/6*PI*2; row.push(vert(lx+Math.cos(a)*r,y,Math.sin(a)*r,Math.cos(a),0,Math.sin(a),k%2?bark:bark2)); } ring.push(row); }
+    for(let k=0;k<8;k++) for(let i=0;i<6;i++){ const a=ring[k][i], b=ring[k][i+1], c=ring[k+1][i], d=ring[k+1][i+1]; I.push(a,c,b,b,c,d); }
+    // the skirt: dead fronds hanging tight round the top of the trunk, ragged at the bottom
+    { const y1=H-.15, base=v; for(let i=0;i<=14;i++){ const a=i/14*PI*2, ca=Math.cos(a), sa=Math.sin(a), r0=.4+(i%2)*.06, y0=H-1.25-(i%3)*.25; vert(.25+ca*r0,y0,sa*r0,ca,-.2,sa,skirt); vert(.25+ca*.31,y1,sa*.31,ca,-.2,sa,skirt); }
+      for(let i=0;i<14;i++){ const a=base+i*2; I.push(a,a+1,a+2,a+2,a+1,a+3); } }
+    // the crown: a ball of round fans, each held out on its stalk facing away from the trunk (the old ones drooping, the new upright)
+    const tx=.25, ty=H+.1; for(let f=0;f<18;f++){ const a=f*2.39996, up=-.45+((f*5)%9)/8*1.75, L=.75+((f*3)%4)*.12, ca=Math.cos(a), sa=Math.sin(a), col=f%3?leaf:leaf2;
+      const dx=ca*Math.cos(up), dy=Math.sin(up), dz=sa*Math.cos(up), sx=tx+dx*L, sy=ty+dy*L, sz=dz*L;   // the end of the stalk
+      { const s0=vert(tx,ty,0,0,1,0,col), s1=vert(sx,sy,sz,0,1,0,col), s2=vert(tx-sa*.05,ty,ca*.05,0,1,0,col); I.push(s0,s1,s2); }
+      // the blade: three quarters of a disc square to the stalk, cupped forward, the leaflet tips hanging
+      const ex=-sa, ez=ca;   // across (horizontal)
+      let wx=dy*ca*-1, wy=Math.cos(up), wz2=dy*sa*-1; { const l=Math.hypot(wx,wy,wz2)||1; wx/=l; wy/=l; wz2/=l; }   // 'up' in the blade's plane
+      const R=.95, c0=vert(sx,sy,sz,dx,dy,dz,col); let prev=null;
+      for(let k=0;k<=14;k++){ const th=-PI*.78+k/14*PI*1.56, ct=Math.cos(th), st=Math.sin(th), cup=.28*R*(1-Math.abs(ct)*.4), fold=(k%2?.07:-.03)*R;
+        const px=sx+(ex*st+wx*ct)*R+dx*cup, py=sy+wy*ct*R+dy*cup-.18*R*(1-ct)+fold, pz=sz+(ez*st+wz2*ct)*R+dz*cup; const q=vert(px,py,pz,dx,dy,dz,col);
+        if(prev!==null) I.push(c0,prev,q); prev=q; } }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(Cc,3)); g.setIndex(I); g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
+  /* the beach's shades (sukkot): four posts, a frame, a pyramid roof of dark palm thatch */
+  function shadeGeo(){ const B2=new Batch(); place(0,0,0,0); const post=lin(0x6b4a2e), roof=lin(0x5a4026), frame=lin(0x7a5634);
+    for(const [x,z] of [[-1.9,-1.9],[1.9,-1.9],[-1.9,1.9],[1.9,1.9]]) B2.box(x,0,z,.14,2.6,.14,post);
+    for(const [x,z,w,d] of [[0,-1.9,4,.12],[0,1.9,4,.12],[-1.9,0,.12,4],[1.9,0,.12,4]]) B2.box(x,2.5,z,w,.14,d,frame);
+    const a=[-2.3,2.62,-2.3], b=[2.3,2.62,-2.3], c=[2.3,2.62,2.3], d=[-2.3,2.62,2.3], t=[0,3.75,0];
+    for(const [p,q] of [[d,c],[c,b],[b,a],[a,d]]){ B2.tri4(p,q,t,t,roof); B2.tri4(q,p,t,t,roof); }
+    const me=B2.mesh(null); return me.geometry; }
+  /* the city behind the town: towers and blocks on the plain, a window grid drawn by the shader (one instanced draw) */
+  function skylineMesh(){ const L=[]; const R=(i,k)=>hash2(i,k);
+    for(let i=0;i<190;i++){ const x=-520+R(i,1)*1040, d=210+Math.pow(R(i,2),.8)*520; let h=12+R(i,3)*30;
+      const cbd=Math.exp(-Math.pow((x-110)/170,2)-Math.pow((d-420)/150,2)); h+=cbd*(40+R(i,4)*120);   // the business district: the tall glass towers
+      const w=14+R(i,5)*18, dd=12+R(i,6)*16, glass=cbd>.35&&R(i,7)<.7; L.push({x,d,h,w,dd,glass,c:glass?[0x7fa3bf,0x9bb7cc,0x6d8fa8][i%3]:[0xf2eee6,0xe8dfcf,0xdcd6cc,0xf5f1ea,0xe3d9c6][i%5]}); }
+    const geo=new THREE.BoxGeometry(1,1,1); geo.translate(0,.5,0);
+    const m=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.75,metalness:0});
+    m.onBeforeCompile=sh=>{ sh.vertexShader='varying vec3 vWp2; varying vec3 vNw; varying vec3 vSc;\n'+sh.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\n vWp2=(modelMatrix*instanceMatrix*vec4(transformed,1.)).xyz; vNw=normalize(mat3(modelMatrix*instanceMatrix)*objectNormal); vSc=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));');
+      sh.fragmentShader='varying vec3 vWp2; varying vec3 vNw; varying vec3 vSc;\n'+sh.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+        { vec3 n=normalize(vNw); if(abs(n.y)<.5){ float u=abs(n.x)>.5?vWp2.z:vWp2.x; float fl=fract(vWp2.y/3.2), cl=fract(u/2.6);
+            float win=step(.32,fl)*step(fl,.88)*step(.18,cl)*step(cl,.84); vec3 glass=vec3(.16,.24,.3)+.12*fract(sin(floor(u/2.6)*12.9+floor(vWp2.y/3.2)*78.2)*437.5);
+            diffuseColor.rgb=mix(diffuseColor.rgb,glass,win*.85); } else diffuseColor.rgb*=.86; }`); };
+    m.customProgramCacheKey=()=>'st-skyline';
+    const im=new THREE.InstancedMesh(geo,m,L.length), o=new THREE.Object3D(), col=new THREE.Color();
+    L.forEach((b,i)=>{ const z=wz(b.x,b.d); o.position.set(b.x,Cst.groundY(b.x,z)-.5,z); o.rotation.set(0,(R(i,8)-.5)*.3,0); o.scale.set(b.w,b.h,b.dd); o.updateMatrix(); im.setMatrixAt(i,o.matrix); im.setColorAt(i,col.set(b.c).convertSRGBToLinear()); });
+    im.castShadow=false; im.receiveShadow=false; im.name='skyline'; return im; }
+  /* old Jaffa on its headland at the far end of the bay: a hill of sandstone over the sea, the old town's stone houses packed
+     up its sides, St Peter's church and its bell tower, the lighthouse, a minaret by the water. Seen from the beach in the
+     haze, as it is from Tel Aviv. */
+  function jaffaMesh(){ const X0=540, X1=780, D0=-170, D1=90, NX=60, ND=52, cx=655, cd=-45;
+    const hill=(x,d)=>34*Math.exp(-Math.pow((x-cx)/78,2)-Math.pow((d-cd)/62,2))+6*Math.exp(-Math.pow((x-cx-40)/60,2)-Math.pow((d-cd-40)/50,2))-3.2+3*Math.max(0,d)/90;
+    const P=[], Cc=[], I=[], c=new THREE.Color(), rock=lin(0xc9a97a), rock2=lin(0xb08a5a), green=lin(0x7a8a4a);
+    for(let i=0;i<=NX;i++) for(let j=0;j<=ND;j++){ const x=X0+(X1-X0)*i/NX, d=D0+(D1-D0)*j/ND, y=hill(x,d); P.push(x,y,wz(x,d)); c.copy(rock).lerp(rock2,.5+.5*Math.sin(x*.31+d*.17)); if(y>22&&hash2(i,j)<.4) c.lerp(green,.5); Cc.push(c.r,c.g,c.b);
+      if(i<NX&&j<ND){ const a=i*(ND+1)+j, b=a+ND+1; I.push(a,a+1,b,b,a+1,b+1); } }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); g.setAttribute('color',new THREE.Float32BufferAttribute(Cc,3)); g.setIndex(I); g.computeVertexNormals();
+    const grp=new THREE.Group(); grp.name='jaffa'; const hm=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.95})); hm.receiveShadow=true; grp.add(hm);
+    // the old town: stone houses up the hill (flat roofs, a few domes), the church, the lighthouse, the minaret
+    const B2=new Batch(), stone=[0xe8d6b0,0xdcc69c,0xf0e2c4,0xd2b98c,0xe4cfa6].map(lin);
+    for(let k=0;k<150;k++){ const x=cx+(hash2(k,1)-.5)*150, d=cd+(hash2(k,2)-.5)*120, y=hill(x,d); if(y<2.5) continue; const w=4+hash2(k,3)*6, dd=4+hash2(k,4)*6, h=3.5+Math.floor(hash2(k,5)*3)*3.2;
+      place(x,y-1.2,wz(x,d),hash2(k,6)*.6); B2.box(0,0,0,w,h+1.2,dd,stone[k%stone.length]); if(hash2(k,7)<.12) B2.cyl(0,h+1.2,0,1.6,.2,1.4,8,lin(0xd8d0c0),true); }
+    { const x=cx+6, d=cd-18, y=hill(x,d); place(x,y-1,wz(x,d),.2); const cr=lin(0xf0e4c8); B2.box(0,0,0,14,13,26,cr); B2.tri4([-7.2,13,13],[7.2,13,13],[7.2,16,-13],[-7.2,16,-13],lin(0xb5651d));
+      B2.box(0,0,-14,6,30,6,cr); B2.box(0,30,-14,5,6,5,cr); B2.cyl(0,36,-14,2.4,.2,5,8,lin(0x9a8a70),true); }   // St Peter's and its bell tower
+    { const x=cx-30, d=cd-60, y=hill(x,d); place(x,y-1,wz(x,d),0); B2.cyl(0,0,0,2.4,1.9,24,10,lin(0xf2ece0),true); B2.cyl(0,24,0,2.6,2.6,1,10,lin(0x30353b),true); B2.cyl(0,25,0,1.5,1.5,3,8,lin(0xd62828),true); }   // the lighthouse
+    { const x=cx-62, d=cd-20, y=Math.max(1,hill(x,d)); place(x,y-1,wz(x,d),0); B2.cyl(0,0,0,1.5,1.3,26,8,lin(0xe8dcc0),true); B2.cyl(0,20,0,2.2,2.2,.6,8,lin(0xe8dcc0),true); B2.cyl(0,26,0,1.3,.1,3.5,8,lin(0x6a7a5a),true); }   // the minaret of the sea mosque
+    const bm=B2.mesh(new THREE.MeshStandardMaterial({vertexColors:true,roughness:.92})); bm.castShadow=false; bm.receiveShadow=true; grp.add(bm);
+    return grp; }
   function umbrellaGeo(){ const g1=new THREE.ConeGeometry(1.35,.5,10,1,true); g1.translate(0,2.35,0); const g2=new THREE.CylinderGeometry(.035,.035,2.5,5); g2.translate(0,1.25,0);
     const col=(g,c)=>{ const n=g.attributes.position.count, a=new Float32Array(n*3); for(let i=0;i<n;i++){ const y=g.attributes.position.getY(i), k=c||(y>2.2&&((Math.round(Math.atan2(g.attributes.position.getZ(i),g.attributes.position.getX(i))/PI*5+5))%2)?.98:1); a[i*3]=a[i*3+1]=a[i*3+2]=typeof k==='number'?k:1; } g.setAttribute('color',new THREE.BufferAttribute(a,3)); return g; };
     return mergeG([col(g1),col(g2,.35)]); }
@@ -126,13 +233,15 @@
   function mergeG(list){ let n=0, ni=0; list.forEach(g=>{ n+=g.attributes.position.count; ni+=g.index?g.index.count:g.attributes.position.count; }); const P=new Float32Array(n*3), N=new Float32Array(n*3), Cc=new Float32Array(n*3), I=new Uint32Array(ni); let o=0, oi=0;
     list.forEach(g=>{ const c=g.attributes.position.count; P.set(g.attributes.position.array,o*3); N.set(g.attributes.normal.array,o*3); Cc.set(g.attributes.color.array,o*3); if(g.index){ for(let i=0;i<g.index.count;i++) I[oi+i]=g.index.array[i]+o; oi+=g.index.count; } else { for(let i=0;i<c;i++) I[oi+i]=o+i; oi+=c; } o+=c; });
     const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(P,3)); g.setAttribute('normal',new THREE.BufferAttribute(N,3)); g.setAttribute('color',new THREE.BufferAttribute(Cc,3)); g.setIndex(new THREE.BufferAttribute(I,1)); g.computeBoundingSphere(); return g; }
+  const LOUNGE=[0xffd23a,0xffd23a,0x2b6cb0,0xf4f1ea,0xe63946].map(lin);   // the beach's plastic loungers
   /* ---------- build ---------- */
   const MAT={body:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.86,metalness:0}),glass:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.15,metalness:.35}),sign:null,
+    bulb:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.25,metalness:0,emissive:0xfff3dc,emissiveIntensity:.35}),
     inst:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.8,metalness:0,side:THREE.DoubleSide})};
   T.build=async function(){ if(T.group) return T.group;
     try{ await Promise.race([document.fonts.load('900 64px Rubik'),document.fonts.load('72px Anton'),new Promise(r=>setTimeout(r,1500))]); }catch(e){}
     buildAtlas(); MAT.sign=new THREE.MeshStandardMaterial({map:atlas.tex,roughness:.6,metalness:0,emissive:0xffffff,emissiveMap:atlas.tex,emissiveIntensity:.25});
-    const Bb=new Batch(), Bg=new Batch(), Bs=new Batch(); T.blds=[]; T.solids=[]; const grp=new THREE.Group(); grp.name='beachtown';
+    const Bb=new Batch(), Bg=new Batch(), Bs=new Batch(), Bu=new Batch(); T.blds=[]; T.solids=[]; const grp=new THREE.Group(); grp.name='beachtown';
     const foot=(x,d,w,dd,ry)=>{ const z=wz(x,d); T.blds.push({x0:x-w/2,x1:x+w/2,z0:z-dd/2,z1:z+dd/2}); };
     // --- the seafront: hotels and flats, streets every 60 m ---
     const STREETS=[-180,-120,-60,0,60,120,180], HS=['h1','h2','h3','h4'], SH2=['cafe','gel','pizza','shop','sushi','fish','fal','juice'];
@@ -142,12 +251,21 @@
           const hotel=hotelEvery&&hash2(seed,5)<hotelEvery, fl=hotel?maxF+Math.floor(hash2(seed,7)*3):minF+Math.floor(hash2(seed,9)*(maxF-minF+1));
           place(cx,base,wz(cx,d),PI); building(Bb,Bg,Bs,{w,d:depth,floors:fl,wall:hotel?PAL.white:WALLS[seed%WALLS.length],seed,shop:shop&&!hotel,balc,hotel,hsign:hotel?HS[(hi++)%HS.length]:null,sign:shop&&!hotel?SH2[(si++)%SH2.length]:null,flowers:!shop&&hash2(seed,11)<.5});
           foot(cx,d,w,depth); x+=w+1.5+hash2(seed,13)*2; seed++; } } };
-    rowAt(62,14,4,7,true,true,.35);       // the seafront
+    // the seafront: in every block between two streets a hotel tower (12-26 floors), lower blocks with shops beside it
+    const KINDS=['slab','stepped','rainbow','round','slab','stepped','slab','round'], TS=['h1','h2','h3','h4']; T.towers=[];
+    for(let k=0;k<STREETS.length+1;k++){ const xa=k===0?-246:STREETS[k-1]+6, xb=k===STREETS.length?246:STREETS[k]-6, kind=KINDS[k%KINDS.length];
+      const tw=kind==='round'?20:20+hash2(k,41)*6, td=kind==='round'?20:15+hash2(k,42)*4, tx=xa+tw/2+1.5+hash2(k,43)*Math.max(0,xb-xa-tw-14), d0=64, floors=12+Math.floor(hash2(k,44)*15);
+      const base=Math.min(gy(tx-tw/2,d0),gy(tx+tw/2,d0),gy(tx,d0+td)); place(tx,base,wz(tx,d0+td/2+1),PI);
+      const h=tower(Bb,Bg,Bs,{w:tw,d:td,floors,kind,seed:k+3,wall:kind==='rainbow'?PAL.white:WALLS[(k*3)%WALLS.length],hsign:TS[k%TS.length],sign:SH2[(si++)%SH2.length]});
+      foot(tx,d0+td/2+1,tw+2,td+2); T.towers.push({x:tx,d:d0+td/2+1,h,kind});
+      // the lower blocks either side
+      for(const [a,b] of [[xa,tx-tw/2-2.5],[tx+tw/2+2.5,xb]]){ let x=a; while(x<b-8){ const w=Math.min(b-x,10+hash2(seed,3)*10); if(w<8) break; const cx=x+w/2, d=62+7, bse=Math.min(gy(cx-w/2,62),gy(cx+w/2,62),gy(cx,76));
+          place(cx,bse,wz(cx,d),PI); building(Bb,Bg,Bs,{w,d:14,floors:4+Math.floor(hash2(seed,9)*4),wall:WALLS[seed%WALLS.length],seed,shop:true,balc:true,hotel:false,sign:SH2[(si++)%SH2.length]}); foot(cx,d,w,14); x+=w+1.5+hash2(seed,13)*2; seed++; } } }
     rowAt(92,12,2,5,false,true,0); rowAt(120,12,2,4,false,false,0); rowAt(148,12,2,4,false,true,0); rowAt(176,11,1,3,false,false,0);
     // --- the promenade: palms, lamps, benches, kiosks ---
     const palms=[], benches=[];
     for(let x=-238;x<=238;x+=16){ const d=48.5; palms.push({x,d,s:.9+hash2(x|0,3)*.3,r:hash2(x|0,5)*6.28}); T.solids.push({x,z:wz(x,d),r:.45}); }
-    for(let x=-230;x<=230;x+=24){ place(x,gy(x,57.5),wz(x,57.5),PI); lamp(Bb); }
+    for(let x=-232;x<=232;x+=16){ place(x,gy(x,57.5),wz(x,57.5),PI); lamp(Bb,Bu); T.solids.push({x,z:wz(x,57.5),r:.25}); }
     for(let x=-230;x<=230;x+=16){ const bx=x+8, d=47; place(bx,gy(bx,d),wz(bx,d),PI); bench(Bb); benches.push({x:bx,z:wz(bx,d)-.06,y:gy(bx,d),ry:PI}); }
     [[-150,'gel',PAL.peach],[-30,'juice',lin(0xd8f3dc)],[90,'fal',lin(0xfff1c1)],[200,'gel',lin(0xffe0ec)]].forEach(([x,id,col],i)=>{ const d=53; place(x,gy(x,d),wz(x,d),PI); kiosk(Bb,Bg,Bs,{col,awn:AWN[i%AWN.length],sign:id}); foot(x,d,3.4,2.8); });
     // the big welcome sign over the promenade
@@ -155,7 +273,7 @@
     // steps down to the sand all along the promenade's edge
     for(let x=-246;x<246;x+=6){ for(let k=0;k<3;k++){ const d=42.6+k*.9; place(x+3,gy(x+3,d+.45)-.02,wz(x+3,d+.45),PI); Bb.box(0,-.3,0,6,.32,.9,PAL.stone,['-y']); } }
     // --- on the sand ---
-    { const x=-20, d=15; place(x,gy(x,d),wz(x,d),PI); lifeguard(Bb,Bg,Bs); T.solids.push({x,z:wz(x,d),r:2.4}); T.spots.guard={x,z:wz(x,d)}; }
+    [[-20,PAL.white],[-122,PAL.red],[82,PAL.white],[-232,lin(0x15161a)]].forEach(([x,flag],i)=>{ const d=15; place(x,gy(x,d),wz(x,d),PI); lifeguard(Bb,Bg,Bs,flag); T.solids.push({x,z:wz(x,d),r:2.8}); if(!i) T.spots.guard={x,z:wz(x,d)}; });
     const bars=[[-140,'bar1'],[-10,'bar2'],[105,'bar3']]; T.bars=[];
     bars.forEach(([x,id])=>{ const d=29; place(x,gy(x,d),wz(x,d),PI); beachBar(Bb,Bs,{sign:id}); foot(x,d+2.5,7.4,1.6); T.bars.push({x,d}); });
     // volleyball
@@ -165,20 +283,32 @@
     { const x=-196, d=31; place(x,gy(x,d),wz(x,d),PI); surfSchool(Bb,Bg,Bs); foot(x,d,6.4,4.4); T.spots.surfSchool={x,z:wz(x,d)-4,d:d-4}; }
     T.spots.launch={x:226,z:wz(226,3),d:3}; T.spots.surf={x:-200,z:wz(-200,3),d:3}; T.spots.start={x:60,z:wz(60,51),d:51};
     // --- the meshes ---
-    [[Bb,MAT.body,true],[Bg,MAT.glass,false],[Bs,MAT.sign,false]].forEach(([b,m,sh])=>{ const me=b.mesh(m); if(me){ me.castShadow=sh; me.receiveShadow=true; me.matrixAutoUpdate=false; grp.add(me); } });
+    [[Bb,MAT.body,true],[Bg,MAT.glass,false],[Bs,MAT.sign,false],[Bu,MAT.bulb,false]].forEach(([b,m,sh])=>{ const me=b.mesh(m); if(me){ me.castShadow=sh; me.receiveShadow=true; me.matrixAutoUpdate=false; grp.add(me); } });
     // palms: along the promenade, in the town, round the bars
     for(const s of STREETS) for(let d=78;d<175;d+=28) palms.push({x:s+(hash2(s,d)<.5?-4:4),d,s:.8+hash2(s,d+1)*.3,r:hash2(s,d+2)*6.28});
     T.bars.forEach(b=>{ for(const [dx,dd] of [[-9.5,-1],[9.5,-1],[-9,4.5],[9,4.5]]) palms.push({x:b.x+dx,d:b.d+dd,s:.85+hash2(b.x|0,dd)*.25,r:hash2(dx,b.x|0)*6.28}); });
     for(let i=0;i<14;i++){ const x=150+i*10+hash2(i,1)*5, d=36+hash2(i,2)*5; palms.push({x,d,s:.8+hash2(i,3)*.35,r:hash2(i,4)*6.28}); }
-    { const pg=palmGeo(), im=new THREE.InstancedMesh(pg,MAT.inst,palms.length), dm=new THREE.Object3D(), tint=new THREE.Color();
-      palms.forEach((p,i)=>{ dm.position.set(p.x,gy(p.x,p.d)-.1,wz(p.x,p.d)); dm.rotation.set(0,p.r,0); dm.scale.setScalar(p.s); dm.updateMatrix(); im.setMatrixAt(i,dm.matrix); im.setColorAt(i,tint.setRGB(.9+hash2(i,7)*.2,.92+hash2(i,8)*.16,.9)); });
-      im.castShadow=true; im.receiveShadow=true; grp.add(im); palms.forEach(p=>{ if(p.d>60) T.solids.push({x:p.x,z:wz(p.x,p.d),r:.4}); }); }
+    { const fan=palms.filter(p=>p.d<50), date=palms.filter(p=>p.d>=50);
+      for(const [list,geo] of [[fan,fanPalmGeo()],[date,palmGeo()]]){ const im=new THREE.InstancedMesh(geo,MAT.inst,list.length), dm=new THREE.Object3D(), tint=new THREE.Color();
+        list.forEach((p,i)=>{ dm.position.set(p.x,gy(p.x,p.d)-.1,wz(p.x,p.d)); dm.rotation.set(0,p.r,0); dm.scale.setScalar(p.s); dm.updateMatrix(); im.setMatrixAt(i,dm.matrix); im.setColorAt(i,tint.setRGB(.9+hash2(i,7)*.2,.92+hash2(i,8)*.16,.9)); });
+        im.castShadow=true; im.receiveShadow=true; grp.add(im); }
+      palms.forEach(p=>{ if(p.d>60) T.solids.push({x:p.x,z:wz(p.x,p.d),r:.4}); }); }
+    // the promenade's fan palms: a second row on the sand side, closer together
+    { const fp=[]; for(let x=-236;x<=236;x+=9){ if(Math.abs(x-40)<6) continue; fp.push({x:x+hash2(x|0,61)*2,d:45.4,s:.85+hash2(x|0,62)*.35,r:hash2(x|0,63)*6.28}); }
+      const im=new THREE.InstancedMesh(fanPalmGeo(),MAT.inst,fp.length), dm=new THREE.Object3D(), tint=new THREE.Color(); fp.forEach((p,i)=>{ dm.position.set(p.x,gy(p.x,p.d)-.1,wz(p.x,p.d)); dm.rotation.set(0,p.r,0); dm.scale.setScalar(p.s); dm.updateMatrix(); im.setMatrixAt(i,dm.matrix); im.setColorAt(i,tint.setRGB(.92+hash2(i,64)*.16,.94+hash2(i,65)*.12,.9)); T.solids.push({x:p.x,z:wz(p.x,p.d),r:.4}); });
+      im.castShadow=true; im.receiveShadow=true; grp.add(im); }
+    // the beach's shades (sukkot) in a row between the umbrellas and the water
+    { const sh=[]; for(let x=-228;x<130;x+=13){ if(Math.abs(x+20)<8||Math.abs(x+122)<8||Math.abs(x-82)<8||Math.abs(x+78)<10||bars.some(b=>Math.abs(x-b[0])<10)||hash2(x|0,71)<.25) continue; sh.push({x,d:9.5}); }
+      const im=new THREE.InstancedMesh(shadeGeo(),MAT.body,sh.length), dm=new THREE.Object3D(), tint=new THREE.Color(); sh.forEach((p,i)=>{ dm.position.set(p.x,gy(p.x,p.d)-.05,wz(p.x,p.d)); dm.rotation.set(0,hash2(i,72)*.2,0); dm.updateMatrix(); im.setMatrixAt(i,dm.matrix); im.setColorAt(i,tint.setScalar(.9+hash2(i,73)*.15)); for(const [ox,oz] of [[-1.9,-1.9],[1.9,-1.9],[-1.9,1.9],[1.9,1.9]]) T.solids.push({x:p.x+ox,z:wz(p.x,p.d)+oz,r:.15}); });
+      im.castShadow=true; im.receiveShadow=true; grp.add(im); T.shades=sh; }
+    // the city behind, and old Jaffa at the end of the bay
+    grp.add(skylineMesh()); grp.add(jaffaMesh());
     // umbrellas and loungers in rows on the sand (not on the kite beach)
     const ums=[], lgs=[]; T.loungers=[];
     for(let x=-235;x<135;x+=7.5){ if(Math.abs(x+20)<9||bars.some(b=>Math.abs(x-b[0])<11)||Math.abs(x+78)<9) continue; for(const d of [13,21]){ if(hash2(x|0,d)<.2) continue; const ux=x+hash2(x|0,d+1)*1.5;
         ums.push({x:ux,d,c:AWN[Math.floor(hash2(x|0,d+2)*AWN.length)]}); for(const sd of [-1,1]){ const lx=ux+sd*1.1, ld=d-.3; lgs.push({x:lx,d:ld}); T.loungers.push({x:lx,z:wz(lx,ld)+.15,y:gy(lx,ld)+.3,ry:PI}); } } }
     { const ug=umbrellaGeo(), im=new THREE.InstancedMesh(ug,MAT.inst,ums.length), dm=new THREE.Object3D(); ums.forEach((u,i)=>{ dm.position.set(u.x,gy(u.x,u.d)-.15,wz(u.x,u.d)); dm.rotation.set(.06,hash2(i,1)*6,0); dm.updateMatrix(); im.setMatrixAt(i,dm.matrix); im.setColorAt(i,u.c); }); im.castShadow=true; grp.add(im);
-      const lg=loungerGeo(), il=new THREE.InstancedMesh(lg,MAT.body,lgs.length); lgs.forEach((l,i)=>{ dm.position.set(l.x,gy(l.x,l.d),wz(l.x,l.d)); dm.rotation.set(0,PI,0); dm.updateMatrix(); il.setMatrixAt(i,dm.matrix); }); il.castShadow=true; il.receiveShadow=true; grp.add(il); }
+      const lg=loungerGeo(), il=new THREE.InstancedMesh(lg,MAT.body,lgs.length); lgs.forEach((l,i)=>{ dm.position.set(l.x,gy(l.x,l.d),wz(l.x,l.d)); dm.rotation.set(0,PI,0); dm.updateMatrix(); il.setMatrixAt(i,dm.matrix); il.setColorAt(i,LOUNGE[Math.floor(hash2(i,81)*LOUNGE.length)]); }); il.castShadow=true; il.receiveShadow=true; grp.add(il); }
     T.benches=benches; scene.add(grp); T.group=grp;
     if(ST.Games) T.games=ST.Games.build(T,grp,[{kind:'volleyball',x:T.spots.volley.x,d:T.spots.volley.d},{kind:'matkot',x:24,d:3.4},{kind:'matkot',x:-128,d:4.2}]);
     return grp; };

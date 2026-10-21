@@ -19,7 +19,7 @@
     if(d<PROM0) return lerp(.04*38,PROM_Y,smooth(38,PROM0,d));
     if(d<PROM1) return PROM_Y;
     if(d<190) return PROM_Y+(d-PROM1)*.025;
-    const e=d-190; return PROM_Y+130*.025+Math.pow(e,1.32)*.13*(1+.35*vnoise(x*.011,d*.011))+6*vnoise(x*.02,d*.02)*smooth(0,60,e); }
+    const e=d-190; return PROM_Y+130*.025+e*.012+3*vnoise(x*.008,d*.008)*smooth(0,80,e); }   // the city on its coastal plain, rising a little inland
   function groundY(x,z){ const d=z-shoreZ(x); return d<0?seabed(-d):land(x,d); }
   C.shoreZ=shoreZ; C.groundY=groundY; C.PROM={d0:PROM0,d1:PROM1,y:PROM_Y}; C.inland=(x,z)=>z-shoreZ(x);
   /* ---------- the sea: Gerstner waves (direction, wavelength, amplitude, steepness) ---------- */
@@ -158,14 +158,17 @@
         else if(d<PROM0-2) c.setRGB(.9,.8,.62).multiplyScalar(.95+.07*n);                    // dry sand
         else if(d<PROM1+1) c.setRGB(.84,.8,.74);                                            // the promenade
         else if(d<192) c.setRGB(.8,.77,.71).multiplyScalar(.96+.05*n);                       // the town
-        else { const g=smooth(192,260,d), r=vnoise(x*.03,d*.03); c.setRGB(.74,.68,.5).lerp(t.setRGB(.5+.08*r,.55+.06*r,.33),g); }   // dry grass and scrub on the hills
+        else { const r=vnoise(x*.03,d*.03); c.setRGB(.76,.73,.68).lerp(t.setRGB(.55+.06*r,.6+.05*r,.45),.35*smooth(.55,.8,vnoise(x*.012,d*.012))); }   // the city's streets and squares, parks here and there
         c.convertSRGBToLinear(); col[k]=c.r; col[k+1]=c.g; col[k+2]=c.b;   // the palette is sRGB; vertex colours are linear
         if(i<NX&&j<NZ-1){ const a=i*NZ+j, b=(i+1)*NZ+j; idx.push(a,a+1,b,b,a+1,b+1); } } }
     const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('color',new THREE.BufferAttribute(col,3)); g.setIndex(idx); g.computeVertexNormals();
     const m=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.96,metalness:0});
     m.onBeforeCompile=sh=>{ sh.vertexShader='varying vec3 vWp;\n'+sh.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\n vWp=(modelMatrix*vec4(transformed,1.)).xyz;');
       sh.fragmentShader='varying vec3 vWp;\nfloat h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y); }\n'
-        +sh.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n { float g=vn(vWp.xz*7.)*.5+vn(vWp.xz*1.3)*.5; float rip=sin(vWp.x*2.1+vWp.z*.9+vn(vWp.xz*.5)*4.)*.5+.5; diffuseColor.rgb*=.9+.12*g+.04*rip*step(vWp.y,2.); }'); };
+        +sh.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n { float g=vn(vWp.xz*7.)*.5+vn(vWp.xz*1.3)*.5; float rip=sin(vWp.x*2.1+vWp.z*.9+vn(vWp.xz*.5)*4.)*.5+.5; diffuseColor.rgb*=.9+.12*g+.04*rip*step(vWp.y,2.);'
+          +'  float dd=vWp.z-(10.*sin(vWp.x/170.)+4.*sin(vWp.x/53.+1.3)); float pr=smoothstep('+(PROM0-.6).toFixed(2)+','+(PROM0-.2).toFixed(2)+',dd)*(1.-smoothstep('+(PROM1-1.5).toFixed(2)+','+(PROM1-1.1).toFixed(2)+',dd));'
+          +'  if(pr>0.){ float w=dd+1.25*sin(vWp.x*.26)+.45*sin(vWp.x*.71+1.3); float band=step(.5,fract(w*.42));'
+          +'   vec3 a=vec3(.62,.6,.57), b=vec3(.8,.76,.69); diffuseColor.rgb=mix(diffuseColor.rgb,mix(a,b,band)*(.94+.1*g),pr); } }'); };
     m.customProgramCacheKey=()=>'st-coast-land';
     const mesh=new THREE.Mesh(g,m); mesh.receiveShadow=true; mesh.name='land'; return mesh; }
   // the sea: a grid that follows the camera, dense under it and sparse toward the horizon; the waves are made in its vertex shader.
