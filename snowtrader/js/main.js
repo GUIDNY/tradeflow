@@ -468,6 +468,7 @@
   town.bindTouch($('#tzone'),$('#tjoy'),$('#tjoy i'),()=>{ Audio.init(); if(town.sheet){ closeSheets(); return true; } return false; });
   function townUpdate(dt){ const V=ST.Village, L=track.len;
     town.step(dt,{u:input.k.u,d:input.k.d,l:input.k.l,r:input.k.r,run:input.grab}); P.x=town.x; P.z=town.z; P.s=-town.z; P.y=town.y;
+    if(ST.Crowd) ST.Crowd.setPlayer(town.x,town.z,Math.sin(town.hd)*town.vEff,Math.cos(town.hd)*town.vEff,true);   // the people see the player and give way
     // the lift: at its gates (or the queue's entry) the way up is offered
     let near=false; if(V&&V.queuePath&&V.queuePath.length){ const ends=[V.queuePath[0],V.queuePath[V.queuePath.length-1]]; for(const q of ends){ const s=L+q.d, x=World.cx(s)+q.u, z=-s; if(Math.hypot(x-town.x,z-town.z)<4.2) near=true; } }
     if(near!==town.near){ town.near=near; $('#tLift').hidden=!near; }
@@ -535,6 +536,7 @@
   function tick(dt){
     tAcc+=dt; frame++; updateFlare();
     if(mode==='pause') return;
+    if(ST.Crowd&&(mode!=='menu'||!ST.Rider.walking)) ST.Crowd.player.on=false;   // riding, or on the lift: the people don't wait for the player
     ST.People.update(dt,camera.position.x,camera.position.z);
     if(mode==='lift'){ updateLift(dt); ST.Resort.update(tAcc*12,P.s-60); ST.Village.update(dt); World.update(P.s-150); World.follow({x:camera.position.x,y:P.y,z:camera.position.z},tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); spMat.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; World.flakes.material.uniforms.px.value=ST.renderer.getPixelRatio()*innerHeight/900; return; }
     if(mode==='menu'||mode==='load'){ if(mode==='menu') townTick(dt); else { P.t+=dt; updateRider(dt,true); menuCamera(tAcc); } Audio.crowd(.75); Audio.liftHum(stationHum()); bellT-=dt; if(bellT<=0){ bellT=75+Math.random()*40; Audio.bell(3); } ST.Resort.update(tAcc,P.s,240,120); World.update(P.s,false,4,4); World.follow(P,tAcc); World.updateFlakes(tAcc,camera.position,{x:0,y:0,z:0}); ST.Village.update(dt); return; }

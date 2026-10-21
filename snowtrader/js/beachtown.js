@@ -179,7 +179,9 @@
         ums.push({x:ux,d,c:AWN[Math.floor(hash2(x|0,d+2)*AWN.length)]}); for(const sd of [-1,1]){ const lx=ux+sd*1.1, ld=d-.3; lgs.push({x:lx,d:ld}); T.loungers.push({x:lx,z:wz(lx,ld)+.15,y:gy(lx,ld)+.3,ry:PI}); } } }
     { const ug=umbrellaGeo(), im=new THREE.InstancedMesh(ug,MAT.inst,ums.length), dm=new THREE.Object3D(); ums.forEach((u,i)=>{ dm.position.set(u.x,gy(u.x,u.d)-.15,wz(u.x,u.d)); dm.rotation.set(.06,hash2(i,1)*6,0); dm.updateMatrix(); im.setMatrixAt(i,dm.matrix); im.setColorAt(i,u.c); }); im.castShadow=true; grp.add(im);
       const lg=loungerGeo(), il=new THREE.InstancedMesh(lg,MAT.body,lgs.length); lgs.forEach((l,i)=>{ dm.position.set(l.x,gy(l.x,l.d),wz(l.x,l.d)); dm.rotation.set(0,PI,0); dm.updateMatrix(); il.setMatrixAt(i,dm.matrix); }); il.castShadow=true; il.receiveShadow=true; grp.add(il); }
-    T.benches=benches; scene.add(grp); T.group=grp; return grp; };
+    T.benches=benches; scene.add(grp); T.group=grp;
+    if(ST.Games) T.games=ST.Games.build(T,grp,[{kind:'volleyball',x:T.spots.volley.x,d:T.spots.volley.d},{kind:'matkot',x:24,d:3.4},{kind:'matkot',x:-128,d:4.2}]);
+    return grp; };
   /* ---------- for the walker: what is solid, where the walls are, how far one may go ---------- */
   T.out=function(p,r){ let hit=false; for(const b of T.blds){ if(p.x<b.x0-r||p.x>b.x1+r||p.z<b.z0-r||p.z>b.z1+r) continue; hit=true;
       const dl=p.x-(b.x0-r), dr=(b.x1+r)-p.x, dn=p.z-(b.z0-r), df=(b.z1+r)-p.z, m=Math.min(dl,dr,dn,df); if(m===dl) p.x=b.x0-r; else if(m===dr) p.x=b.x1+r; else if(m===dn) p.z=b.z0-r; else p.z=b.z1+r; }
@@ -197,18 +199,25 @@
       if(!path.loop){ if(r.wt>path.len){ r.wt=path.len; r.wd=-1; r.pause=1+hash2(seed,5)*2; } else if(r.wt<0){ r.wt=0; r.wd=1; r.pause=1+hash2(seed,6)*2; } }
       path.at(r.wt,_o); r.x=_o.x; r.z=_o.z; r.y=ST.World.groundY(r.x,r.z); r.ry=Math.atan2(_o.dx*r.wd,_o.dz*r.wd); r.anim='Walk'; r.spd=speed; }; }
   const talker=seed=>(r,dt,t)=>{ const ph=(t*.09+hash2(seed,7))%1; r.anim=ph<.09?'Wave':'Idle'; };
-  T.populate=function(){ const PP=ST.People; if(!PP) return; PP.clear('beach'); let n=0; const add=(o,beh)=>{ o.beh=beh; PP.add('beach',o); n++; };
-    // along the promenade (both ways), up and down the streets, along the water's edge
-    for(let i=0;i<14;i++){ const lane=i%3, d=lane===0?50:lane===1?54:57; add({x:0,z:0,type:'Walk'},walker(pathOf([[-235,d],[235,d]],false),1.05+hash2(i,1)*.35,hash2(i,2),i+1)); }
-    [-180,-60,60,180].forEach((s,k)=>{ for(let j=0;j<2;j++) add({x:0,z:0,type:'Walk'},walker(pathOf([[s+(j?-2.5:2.5),60],[s+(j?-2.5:2.5),172]],false),1.1+hash2(k,j)*.3,hash2(k,j+3),40+k*2+j)); });
-    for(let i=0;i<6;i++) add({x:0,z:0,type:'Walk'},walker(pathOf([[-200,4],[140,4]],false),.95+hash2(i,9)*.3,hash2(i,10),60+i));
+  T.wz=wz;
+  T.populate=function(){ const PP=ST.People; if(!PP) return; PP.clear('beach'); if(ST.Crowd) ST.Crowd.clear(); let n=0; const add=(o,beh)=>{ o.beh=beh; PP.add('beach',o); n++; };
+    const CW=ST.Crowd, SEA=PI;   // facing the sea
+    // the promenade: people stroll both ways, each on its right; couples side by side; joggers. Up and down the streets. Along the water's edge.
+    const prom=pathOf([[-235,52],[235,52]],false), shore=pathOf([[-200,3.6],[140,3.6]],false);
+    for(let i=0;i<16;i++){ const lead={x:0,z:0,type:'Walk'}; add(lead,CW.walker({path:prom,speed:1.05+hash2(i,1)*.4,phase:hash2(i,2),seed:i+1,lane:.6+hash2(i,3)*2.6,look:SEA,place:T}));
+      if(i%5===2) add({x:0,z:0,type:'Walk'},CW.walker({path:prom,phase:hash2(i,2),seed:i+101,leader:lead,side:hash2(i,4)<.5?-1:1,place:T})); }   // a couple
+    for(let i=0;i<4;i++) add({x:0,z:0,type:'Walk'},CW.walker({path:prom,speed:2.55+hash2(i,7)*.6,phase:hash2(i,8),seed:200+i,lane:.4+hash2(i,9)*2.2,jog:true,place:T}));
+    [-180,-60,60,180].forEach((sx,k)=>{ for(let j=0;j<2;j++) add({x:0,z:0,type:'Walk'},CW.walker({path:pathOf([[sx,60],[sx,172]],false),speed:1.1+hash2(k,j)*.3,phase:hash2(k,j+3),seed:40+k*2+j,lane:1.2+hash2(k,j+5)*1.4,place:T})); });
+    for(let i=0;i<6;i++) add({x:0,z:0,type:'Walk'},CW.walker({path:shore,speed:.95+hash2(i,9)*.35,phase:hash2(i,10),seed:60+i,lane:.4+hash2(i,11)*1.6,look:SEA,pauseEvery:22}));
+    for(let i=0;i<2;i++) add({x:0,z:0,type:'Walk'},CW.walker({path:shore,speed:2.8+hash2(i,12)*.4,phase:hash2(i,13),seed:70+i,lane:.3+hash2(i,14),jog:true}));
+    // the ball games (js/beachgames.js): volleyball at the court, matkot at the water's edge
+    if(ST.Games&&T.games) ST.Games.register(PP,'beach');
     // the benches (every other one) and some loungers
     (T.benches||[]).forEach((b,i)=>{ if(i%2) return; add({x:b.x,z:b.z,yFix:b.y,type:'Sit',ry:b.ry},null); });
     (T.loungers||[]).forEach((l,i)=>{ if(hash2(i,31)<.72) return; add({x:l.x,z:l.z,yFix:l.y,type:'Sit',ry:l.ry},null); });
     // at the bars: standing and talking
     (T.bars||[]).forEach((b,k)=>{ for(let j=0;j<4;j++){ const x=b.x-3+j*2, d=b.d+1.4+(j%2)*1.2; add({x,z:wz(x,d),yFix:gy(b.x,b.d)+.42,type:'Idle',ry:PI*(j%2?1:0)+.3},talker(100+k*4+j)); } });
-    // volleyball and the kite school
-    if(T.spots.volley){ const v=T.spots.volley; for(let j=0;j<4;j++){ const x=v.x+(j<2?-1:1)*3.5, d=v.d+(j%2?-2:2); add({x,z:wz(x,d),type:'Idle',ry:j<2?PI*.5:-PI*.5},talker(200+j)); } }
+    // the kite school and the surf school
     if(T.spots.school){ const s=T.spots.school; for(let j=0;j<4;j++){ const x=s.x-3+j*2, z=s.z-1-(j%2); add({x,z,type:'Idle',ry:PI},talker(300+j)); } }
     if(T.spots.surfSchool){ const s=T.spots.surfSchool; for(let j=0;j<3;j++){ const x=s.x-2.5+j*2.4, z=s.z-1.5-(j%2); add({x,z,type:'Idle',ry:PI},talker(320+j)); } }
     return n; };

@@ -508,7 +508,10 @@
     // walkers
     const paths=[[[[98,G*7.6],[186,G*7.6]],[.1,.45,.8]],[[[100,F*7.6],[184,F*7.6]],[.25,.6,.92]],[[...Array(12)].map((_,i)=>[74+Math.cos(i/12*PI*2)*11.5,Math.sin(i/12*PI*2)*11.5]),[0,.33,.66],true],
       [[[52,G*31],[56,G*22],[64,G*11],[70,G*6]],[.3]],[[[18,G*14],[40,G*10],[58,G*8]],[.7]],[[[176,G*4],[185,0],[176,F*4]],[.5]],[[[80,G*31],[86,G*20],[92,G*14]],[.2]],[[[104,F*7.6],[96,F*16],[88,F*22]],[.55]]];
-    paths.forEach(([pts,ph,loop],pi)=>{ const path=pathOf(pts,loop); ph.forEach((f,i)=>{ path.at(f*path.len,_o); add({x:_o.x,z:_o.z},walker(path,1.12+hash2(pi,i)*.3,f,pi*10+i)); }); });
+    if(ST.Crowd) ST.Crowd.clear();
+    const place={out:V.walkOut};   // the village's footprints: people walk round them
+    paths.forEach(([pts,ph,loop],pi)=>{ const path=pathOf(pts,loop); ph.forEach((f,i)=>{ path.at(f*path.len,_o);
+      add({x:_o.x,z:_o.z},ST.Crowd?ST.Crowd.walker({path,speed:1.1+hash2(pi,i)*.35,phase:f,seed:pi*10+i,lane:.35+hash2(pi,i+3)*1.1,place}):walker(path,1.12+hash2(pi,i)*.3,f,pi*10+i)); }); });
     // groups: a ring of people facing its middle
     [[66,G*8.5,3],[50,F*10,2],[76,F*30.5,3],[140,F*9,2],[122,G*9,2],[186,G*5.5,2],[24,F*13,4]].forEach(([d,u,n],gi)=>{ const c=at(d,u); for(let i=0;i<n;i++){ const a=i/n*PI*2+gi, x=c.x+Math.cos(a)*.85, z=c.z+Math.sin(a)*.85; add({x,z,ry:Math.atan2(c.x-x,c.z-z)},talker(gi*7+i)); } });
     // customers at the market stalls, facing the counter

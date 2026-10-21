@@ -428,6 +428,22 @@ await test('kitegear',async()=>{ const p=await openBeach(); const r=await p.eval
   const ok=r.kite==='Mesh+Mesh+LineSegments'&&r.harness&&r.harness.n>50&&r.hookFromBelly<.35&&r.harnessShown&&r.handsOnBar<.3&&r.lines===5&&r.finite&&r.tipFromKite>2&&r.tipFromKite<4&&r.centreFromHook<.25
     &&r.legs>15&&r.trunk>12&&Math.abs(r.legs-r.trunk)<20&&!r.harnessAfter&&r.wetsuitOff;
   return {ok,detail:JSON.stringify(r)}; });
+// the people on the promenade (js/crowd.js): realistic speeds and turns, nobody inside anybody, everyone gives way to the
+// player standing in the stream; the feet don't slide (the walk is played at the figure's own pace); the ball games go on
+await test('crowd',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const D=ST.debug, C=ST.Crowd, P=ST.People, out={};
+    D.toBeach(); D.townPlace({x:0,z:ST.Coast.shoreZ(0)+52.5,hd:Math.PI/2});
+    const prev=new Map(); let maxTurn=0, maxAcc=0, overlap=0, tooClose=0, slide=0, slideN=0; const sp=[], r0=ST.Games.list.map(g=>g.S.rally||0); let touches=0, lastMode=ST.Games.list.map(g=>g.S.mode);
+    for(let i=0;i<1800;i++){ D.tick(1/60); if(i<90) continue; const A=C.agents.filter(a=>!a.hide);
+      for(const a of A){ const q=prev.get(a); if(q){ maxTurn=Math.max(maxTurn,Math.abs(Math.atan2(Math.sin(a.h-q.h),Math.cos(a.h-q.h)))*60); maxAcc=Math.max(maxAcc,Math.abs(a.v-q.v)*60); } prev.set(a,{h:a.h,v:a.v}); if(i%30===0) sp.push(a.v); }
+      if(i%6===0){ for(let j=0;j<A.length;j++) for(let k=j+1;k<A.length;k++) if(Math.hypot(A[j].x-A[k].x,A[j].z-A[k].z)<.45) overlap++; for(const a of A) if(Math.hypot(a.x-C.player.x,a.z-C.player.z)<.6) tooClose++; }
+      for(const a of P.active){ if(a.cur!=='Walk'||!a.r.spd) continue; const ts=a.acts.Walk.timeScale, pace=a.T.pace.Walk; if(ts>.51&&ts<1.74){ slide=Math.max(slide,Math.abs(a.r.spd/ts-pace)/pace); slideN++; } }
+      ST.Games.list.forEach((g,gi)=>{ if(g.S.mode!==lastMode[gi]){ touches++; lastMode[gi]=g.S.mode; } }); }
+    sp.sort((a,b)=>a-b); out.agents=C.agents.length; out.median=+sp[Math.floor(sp.length/2)].toFixed(2); out.fast=+sp[sp.length-1].toFixed(2);
+    out.maxTurnDeg=+(maxTurn*57.3).toFixed(0); out.maxAcc=+maxAcc.toFixed(2); out.overlap=overlap; out.intoPlayer=tooClose; out.playerOn=C.player.on;
+    out.footSlide=+slide.toFixed(3); out.walkFrames=slideN; out.games=ST.Games.list.map(g=>g.kind+':'+g.S.mode+':'+(g.S.rally||0)); out.rallies=ST.Games.list.filter(g=>g.kind==='matkot').map(g=>g.S.rally);
+    out.ballsMoving=ST.Games.list.every(g=>isFinite(g.B.p.x)&&g.B.p.y>-1&&g.B.p.y<12); return out; });
+  const ok=r.agents>=35&&r.median>.9&&r.median<1.6&&r.fast>2.3&&r.fast<3.6&&r.maxTurnDeg<=150&&r.maxAcc<=1.7&&r.overlap===0&&r.intoPlayer===0&&r.playerOn&&r.footSlide<.02&&r.walkFrames>100&&r.ballsMoving;
+  return {ok,detail:JSON.stringify(r)}; });
 if(beach) await beach.close();
 await browser.close(); server.close();
 const failed=results.filter(r=>!r.ok);

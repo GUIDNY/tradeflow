@@ -60,8 +60,17 @@
       const pairs=E.rig==='mixamo'?Object.keys(B).map(n=>[n,n,MKEY[n]]):A.MIX.map(j=>[A.RIGS.mixamo.map[j],map[j],j]);   // Mixamo: every bone (fingers too); others: the 20 joints
       const clips={}; let fixed=[]; ['Idle','Walk','Run','Wave'].forEach(n=>{ const c=an.animations.find(a=>a.name===n); if(c){ clips[n]=retarget(c,an.scene,m,pairs); fixed=retarget.fixed; } });
       if(E.outfit!=='baked') splitOutfit(m); mergeParts(m); if(E.tint==='pants') A.tintable(m,PANTS[0]);
-      return A.wearAll(m,E).then(()=>{ const T={name,E,map,scene:m,clips,k,y:-(fy-.09)*k,x0,z0,armFix:fixed}; P.tpl[name]=T; P.ready=true; return T; }); }));
+      return A.wearAll(m,E).then(()=>{ const T={name,E,map,scene:m,clips,k,y:-(fy-.09)*k,x0,z0,armFix:fixed}; T.pace=measurePace(T); P.tpl[name]=T; P.ready=true; return T; }); }));
   };
+  /* each in-place clip's pace: how fast the planted (lower) foot slides back under the hips, at the figure's size. Played at
+     (speed / pace) the foot stands still on the ground while the figure moves (Mixamo's walk is ~0.9 m/s, its run ~2.4) */
+  function measurePace(T){ const c=THREE.SkeletonUtils.clone(T.scene); c.scale.setScalar(T.k); c.updateMatrixWorld(true); const fl=bone(c,T,'FootL'), fr=bone(c,T,'FootR'), hp=bone(c,T,'Hips'), pace={};
+    if(!fl||!fr||!hp) return {Walk:.93,Run:2.4}; const mx=new THREE.AnimationMixer(c), l=new THREE.Vector3(), rr=new THREE.Vector3(), h=new THREE.Vector3();
+    ['Walk','Run'].forEach(n=>{ const cl=T.clips[n]; if(!cl) return; const a=mx.clipAction(cl); a.play(); const N=72, D=cl.duration; let sum=0, cnt=0, prev=null;
+      for(let i=0;i<=N;i++){ mx.setTime(D*i/N); c.updateMatrixWorld(true); fl.getWorldPosition(l); fr.getWorldPosition(rr); hp.getWorldPosition(h); const st=l.y<rr.y?'L':'R', f=st==='L'?l:rr, fx=f.x-h.x, fz=f.z-h.z;
+        if(prev&&prev.st===st&&Math.abs(l.y-rr.y)>.02){ sum+=Math.hypot(fx-prev.x,fz-prev.z)/(D/N); cnt++; } prev={st,x:fx,z:fz}; }
+      a.stop(); pace[n]=cnt?sum/cnt:(n==='Run'?2.4:.93); });
+    mx.uncacheRoot(c); return pace; }
   /* sitting: the Idle pose with each thigh turned forward and each shin back down (turns made in world space, so they suit
      every skeleton); the figure is lowered so its feet stay on the ground (T.sitY) */
   function sitClip(T){ if(T.sit) return T.sit; const m=THREE.SkeletonUtils.clone(T.scene), mx=new THREE.AnimationMixer(m); mx.clipAction(T.clips.Idle).play(); mx.update(0); m.updateMatrixWorld(true);
@@ -72,6 +81,19 @@
     T.sitY=-(footY()-f0)*T.k;   // metres to lower the figure
     const tracks=[]; m.traverse(o=>{ if(o.isBone){ const q=o.quaternion; tracks.push(new THREE.QuaternionKeyframeTrack(o.name+'.quaternion',[0,1],[q.x,q.y,q.z,q.w,q.x,q.y,q.z,q.w])); } });
     mx.stopAllAction(); return T.sit=new THREE.AnimationClip('Sit',1,tracks); }
+  /* quick poses for ball games, made the same way from the Idle pose (turns in world space, so they suit every skeleton; the
+     figure faces +Z): Bump = both arms straight out and down in front (a forearm pass), Spike = the right arm high in front (a
+     smash, a serve), Swing = the right arm out in front at the chest (a paddle stroke). Crossfaded in and out, they read as
+     the hit. */
+  const POSES={Bump:[['UpperArmL',-1.05],['UpperArmR',-1.05],['LowerArmL',.12],['LowerArmR',.12],['Torso',.22]],
+    Spike:[['UpperArmR',-2.75],['LowerArmR',-.25],['UpperArmL',-1.2],['Torso',-.12]],
+    Swing:[['UpperArmR',-1.35],['LowerArmR',-.55],['UpperArmL',-.45],['Torso',.1]]};
+  function poseClip(T,name){ T.poses=T.poses||{}; if(T.poses[name]) return T.poses[name]; const m=THREE.SkeletonUtils.clone(T.scene), mx=new THREE.AnimationMixer(m); mx.clipAction(T.clips.Idle).play(); mx.update(0); m.updateMatrixWorld(true);
+    const X=new THREE.Vector3(1,0,0), _a=new THREE.Quaternion(), _b=new THREE.Quaternion(), _c=new THREE.Quaternion();
+    for(const [k,ang] of POSES[name]){ const b=bone(m,T,k); if(!b) continue; _a.setFromAxisAngle(X,ang); b.getWorldQuaternion(_b); _a.multiply(_b); b.parent.getWorldQuaternion(_c); b.quaternion.copy(_c.invert().multiply(_a)); b.updateMatrixWorld(true); }
+    const tracks=[]; m.traverse(o=>{ if(o.isBone){ const q=o.quaternion; tracks.push(new THREE.QuaternionKeyframeTrack(o.name+'.quaternion',[0,1],[q.x,q.y,q.z,q.w,q.x,q.y,q.z,q.w])); } });
+    mx.stopAllAction(); return T.poses[name]=new THREE.AnimationClip(name,1,tracks); }
+  P.POSES=Object.keys(POSES);
   P.preload=async function(n){ for(const nm of NAMES.slice(0,n||5)){ try{ await P.template(nm); }catch(e){ console.warn('people',nm,e); } await new Promise(r=>setTimeout(r,60)); } };
 
 
@@ -164,8 +186,9 @@
     const want=r.anim||r.type; if(want==='Sit') acts.Sit=mixer.clipAction(sitClip(T)); const a=acts[want]||acts.Idle; a.play(); a.time=hash2(r.id,5)*a.getClip().duration; mixer.update(0);
     g.position.set(r.x,r.y+(want==='Sit'?T.sitY:0),r.z); g.rotation.y=r.ry||0; g.updateMatrixWorld(true); if(T.E.hat!==false&&!P.noHat) winterize(m,r.id,T);
     return {r,g,m,mixer,acts,T,cur:acts[want]?want:'Idle',t:Math.random()*10,dir:1}; }
-  function setAnim(a,name){ if(a.cur===name) return; if(name==='Sit'&&!a.acts.Sit) a.acts.Sit=a.mixer.clipAction(sitClip(a.T)); const act=a.acts[name]||a.acts.Idle, prev=a.acts[a.cur];
-    act.reset(); act.setLoop(THREE.LoopRepeat,Infinity); act.play(); if(prev&&prev!==act) prev.crossFadeTo(act,name==='Sit'||a.cur==='Sit'?.2:.35,false); a.cur=name; }
+  function setAnim(a,name){ if(a.cur===name) return; if(name==='Sit'&&!a.acts.Sit) a.acts.Sit=a.mixer.clipAction(sitClip(a.T)); if(POSES[name]&&!a.acts[name]) a.acts[name]=a.mixer.clipAction(poseClip(a.T,name));
+    const act=a.acts[name]||a.acts.Idle, prev=a.acts[a.cur], quick=POSES[name]||POSES[a.cur];
+    act.reset(); act.setLoop(THREE.LoopRepeat,Infinity); act.play(); if(prev&&prev!==act) prev.crossFadeTo(act,quick?.12:name==='Sit'||a.cur==='Sit'?.2:.35,false); a.cur=name; }
   function kill(a){ try{ a.mixer.stopAllAction(); a.mixer.uncacheRoot(a.m); }catch(e){} scene.remove(a.g);
     a.g.traverse(o=>{ if(!o.isMesh) return; if(o.geometry&&o.geometry.userData.hat){ o.geometry.dispose(); if(o.parent) o.parent.remove(o); } if(o.userData.own&&o.material) o.material.dispose(); }); }   // its own outfit material too (the shared geometry stays)
   let rid=1;
@@ -191,7 +214,8 @@
       r.act=spawn(r); if(r.act){ P.active.push(r.act); budget--; } }
     for(let i=0;i<P.active.length;i++){ const a=P.active[i], r=a.r, d=Math.sqrt(r.d2), every=d<45?1:d<90?2:3, an=r.anim||r.type;
       a.g.visible=!r.hide; if(r.hide) continue; setAnim(a,an); a.g.position.set(r.x,r.y+(a.cur==='Sit'?a.T.sitY||0:0),r.z); a.g.rotation.y=r.ry||0;
-      if(a.cur==='Walk') a.acts.Walk.timeScale=clamp((r.spd||1.15)/1.2,.6,1.5);
+      const pc=a.T.pace||{}; if(a.cur==='Walk') a.acts.Walk.timeScale=clamp((r.spd||1.15)/(pc.Walk||.93),.5,1.75);   // the planted foot still on the ground
+      else if(a.cur==='Run'&&a.acts.Run) a.acts.Run.timeScale=clamp((r.spd||3)/(pc.Run||2.4),.6,1.6);
       a.acc=(a.acc||0)+dt; if(P.frame%every===0){ a.mixer.update(a.acc); a.acc=0; }
       const sh=d<32; if(a.sh!==sh){ a.sh=sh; a.m.traverse(o=>{ if(o.isMesh) o.castShadow=sh; }); } }
     updateStandIns(dt);
@@ -238,7 +262,7 @@
     for(const r of P.regs){ if(r.act&&r.act.g.visible||r.hide||r.d2>R_IMP*R_IMP) continue; const sit=(r.anim||r.type)==='Sit'?1:0, S=SI[sit], i=cnt[sit]; if(i>=S.N) continue; cnt[sit]++;
       _q.setFromAxisAngle(_y,r.ry||0); _p.set(r.x,r.y,r.z); _m.compose(_p,_q,_s); S.im.setMatrixAt(i,_m);
       const g=S.geo.attributes, C=siCols(r); lin(C.j,g.iJ.array,i); lin(C.p,g.iP.array,i); lin(C.h,g.iH.array,i);
-      const walk=(r.anim||r.type)==='Walk'; r.wph=(r.wph||hash2(r.id,3)*6.28)+(walk?(r.spd||1.15)*dt*4.4:0); g.iW.array[i*2]=r.wph; g.iW.array[i*2+1]=walk?.42:0; }
+      const an=r.anim||r.type, walk=an==='Walk'||an==='Run'; r.wph=(r.wph||hash2(r.id,3)*6.28)+(walk?(r.spd||1.15)*dt*(an==='Run'?2.6:4.4):0); g.iW.array[i*2]=r.wph; g.iW.array[i*2+1]=walk?(an==='Run'?.7:.42):0; }
     SI.forEach((S,k)=>{ S.im.count=cnt[k]; S.im.instanceMatrix.needsUpdate=true; ['iJ','iP','iH','iW'].forEach(n=>S.geo.attributes[n].needsUpdate=true); }); }
   P.standIns=()=>SI.map(S=>S.im.count);
   /* a snowboarder in a riding stance: board along +Z, body side-on facing +X (a goofy rider; turn it round for a regular one) */

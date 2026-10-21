@@ -80,6 +80,10 @@
   A.water=function(speed,edge,air){ if(!ctx) return; seaInit(); const t=ctx.currentTime, k=Math.min(1,speed/12);
     waterG.gain.setTargetAtTime(air?0:k*(.07+.1*Math.min(1,edge||0))*(.8+Math.random()*.4),t,.05); waterF.frequency.setTargetAtTime(650+k*900+Math.random()*180,t,.06); };
   A.splash=function(k){ if(!ctx) return; const t=ctx.currentTime, v=Math.max(.15,Math.min(1.3,k||1)); noiseHit(t,.5*v+.15,.28*v,2400); noiseHit(t+.04,.7*v+.2,.22*v,700); };
+  /* matkot: the hard rubber ball off a wooden paddle, a dry 'tock' (v: 0..1, by how near) */
+  A.tock=function(v){ if(!ctx||!(v>.01)) return; const t=ctx.currentTime, k=Math.min(1,v); const s=ctx.createBufferSource(); s.buffer=noiseBuf; const f=ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1700+Math.random()*300; f.Q.value=6;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.55*k,t+.002); g.gain.exponentialRampToValueAtTime(.001,t+.05); s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+.06);
+    tone(980+Math.random()*80,t,.045,'sine',.12*k); };
   A.gull=function(){ if(!ctx) return; const t=ctx.currentTime, f=1500+Math.random()*500, n=1+Math.floor(Math.random()*3);
     for(let i=0;i<n;i++){ const t0=t+i*.32, o=ctx.createOscillator(), g=ctx.createGain(), bp=ctx.createBiquadFilter(), lfo=ctx.createOscillator(), lg=ctx.createGain(); o.type='sawtooth'; bp.type='bandpass'; bp.frequency.value=f*1.1; bp.Q.value=2.5;
       o.frequency.setValueAtTime(f,t0); o.frequency.linearRampToValueAtTime(f*1.18,t0+.06); o.frequency.exponentialRampToValueAtTime(f*.72,t0+.26); lfo.frequency.value=38; lg.gain.value=f*.025; lfo.connect(lg); lg.connect(o.frequency);

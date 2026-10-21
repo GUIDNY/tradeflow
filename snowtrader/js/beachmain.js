@@ -24,7 +24,7 @@
   town.setPlace({ground:(x,z)=>Math.max(Cst.groundY(x,z),-.3),out:(p,r)=>BT.out(p,r),inside:(x,z,pad)=>BT.inside(x,z,pad),bounds:p=>BT.bounds(p)});
   town.bindTouch($('#tzone'),$('#tjoy'),$('#tjoy i'),()=>{ Audio.init(); if(town.sheet){ closeSheets(); return true; } return false; });
   function townPlace(at){ town.put(at); town.near=false; $('#tLift').hidden=true; }
-  function townUpdate(dt){ town.step(dt,{u:input.k.u,d:input.k.d,l:input.k.l,r:input.k.r,run:input.grab});
+  function townUpdate(dt){ town.step(dt,{u:input.k.u,d:input.k.d,l:input.k.l,r:input.k.r,run:input.grab}); if(ST.Crowd) ST.Crowd.setPlayer(town.x,town.z,Math.sin(town.hd)*town.vEff,Math.cos(town.hd)*town.vEff,true);   // the people see the player and give way
     // at the water by the kite school or the surf school, the way out is offered
     const L=BT.spots.launch, U=BT.spots.surf, near=L&&Math.hypot(town.x-L.x,town.z-L.z)<9?'kite':U&&Math.hypot(town.x-U.x,town.z-U.z)<10?'surf':false;
     if(near!==town.near){ town.near=near; const b=$('#tLift'); b.hidden=!near; if(near) b.textContent=near==='surf'?'🏄 יוצאים לגלים':'🪁 יוצאים למים'; }
@@ -278,6 +278,7 @@
   /* ---------- loop ---------- */
   function tick(dt){ tAcc+=dt;
     if(mode==='pause') return;
+    if(ST.Crowd&&(mode!=='menu'||!Rider.walking)) ST.Crowd.player.on=false;   // off the sand: nobody to give way to
     if(mode==='menu'){ if(Rider.walking) townUpdate(dt); town.cam(camera,dt,{show:town.sheet==='char',sheet:!!town.sheet});
       // the beach's sound: the surf (louder toward the waterline), the promenade's murmur, a breeze, gulls now and then
       const d=Cst.inland(town.x,town.z); Audio.sea(clamp(1-(d-4)/90,.22,1),dt); Audio.crowd(clamp((d-20)/40,0,1)*.6); Audio.update(6,0,false,0); Audio.water(0,0,true);
