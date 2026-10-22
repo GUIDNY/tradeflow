@@ -312,6 +312,7 @@
     const want=Rider.choices[save.rider]; if(want&&want!=='hero'&&want!=='meshy_rider'){ try{ await Rider.preload(want); await Rider.swap(want); }catch(e){ console.warn('rider',e); } }
     applyLook(); try{ await Rider.walkPrep(); }catch(e){ console.warn('walk',e); }
     K.aiBuild(5); SF.build();
+    if(K.parkOnBeach) K.parkOnBeach(BT,[[236,15,.35],[247,19,.55],[258,14,.2]].map(([x,d,a])=>({x,z:BT.wz(x,d),ry:PI+a})));   // the kite beach past the umbrellas
     set(90,'מורחים קרם הגנה…'); ST.People.preload(5); setMute(!!save.muted); el.windTxt.textContent=K.WIND.knots+' קשר';
     const S=BT.spots.start; townPlace({x:S.x,z:S.z,hd:PI}); mode='menu'; el.menu.hidden=false; Rider.walkSet(true); Rider.root.visible=true; renderRiders(); renderKites(); $('#walletN').textContent=fmt(save.wallet);
     if(!save.walked) $('#tHint').hidden=false;

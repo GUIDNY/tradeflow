@@ -133,10 +133,10 @@
   function placeBoard(b){ const g=SF.stance.goofy, inner=b.userData.inner; inner.rotation.y=g?PI:0; inner.position.z=g?.3:-.3; }
   SF.placeBoard=placeBoard;
   /* ---------- spray: off the rail in a turn, from the lip where the wave pitches, bursts on a wipeout ---------- */
-  const SPN=520, sp={pos:new Float32Array(SPN*3),vel:new Float32Array(SPN*3),life:new Float32Array(SPN),max:new Float32Array(SPN),size:new Float32Array(SPN),i:0};
+  const SPN=900, sp={pos:new Float32Array(SPN*3),vel:new Float32Array(SPN*3),life:new Float32Array(SPN),max:new Float32Array(SPN),size:new Float32Array(SPN),i:0};
   const spGeo=new THREE.BufferGeometry(); spGeo.setAttribute('position',new THREE.BufferAttribute(sp.pos,3)); spGeo.setAttribute('aLife',new THREE.BufferAttribute(sp.life,1)); spGeo.setAttribute('aMax',new THREE.BufferAttribute(sp.max,1)); spGeo.setAttribute('aSize',new THREE.BufferAttribute(sp.size,1));
-  const spMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{px:{value:1}},vertexShader:'attribute float aLife; attribute float aMax; attribute float aSize; uniform float px; varying float vA; void main(){ vA=aMax>0.?clamp(aLife/aMax,0.,1.):0.; vec4 mv=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; gl_PointSize=aSize*px*(1.4-vA*.6)*300./max(1.,-mv.z); }',
-    fragmentShader:'varying float vA; void main(){ vec2 d=gl_PointCoord-.5; float r=length(d); if(r>.5) discard; gl_FragColor=vec4(vec3(.95,.98,1.),smoothstep(.5,.15,r)*vA*.85); }'});
+  const spMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{px:{value:1}},vertexShader:'attribute float aLife; attribute float aMax; attribute float aSize; uniform float px; varying float vA; varying float vS; void main(){ vA=aMax>0.?clamp(aLife/aMax,0.,1.):0.; vS=aSize; vec4 mv=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; gl_PointSize=aSize*px*(1.4-vA*.6)*300./max(1.,-mv.z); }',
+    fragmentShader:'varying float vA; varying float vS; void main(){ vec2 d=gl_PointCoord-.5; float r=length(d); if(r>.5) discard; gl_FragColor=vec4(vec3(.95,.98,1.),smoothstep(.5,.15,r)*vA*.85*mix(1.,.28,smoothstep(.45,1.1,vS))); }'});   // the big ones are mist: fainter
   const spPts=new THREE.Points(spGeo,spMat); spPts.frustumCulled=false;
   function emit(x,y,z,vx,vy,vz,size,life){ const i=sp.i; sp.i=(sp.i+1)%SPN; sp.pos[i*3]=x; sp.pos[i*3+1]=y; sp.pos[i*3+2]=z; sp.vel[i*3]=vx; sp.vel[i*3+1]=vy; sp.vel[i*3+2]=vz; sp.life[i]=life; sp.max[i]=life; sp.size[i]=size; }
   function updateSpray(dt){ for(let i=0;i<SPN;i++){ if(sp.life[i]<=0) continue; sp.life[i]-=dt; sp.vel[i*3+1]-=9*dt; for(let k=0;k<3;k++) sp.pos[i*3+k]+=sp.vel[i*3+k]*dt; }
@@ -183,8 +183,9 @@
     const wiped=S.ph==='wipe'; p.ground=wiped?1:0; p.getup=0; p.fallPh=wiped?'down':'';
     R.pose({}); R.root.visible=true; leashUpdate(R,true);
     // spray off the rail in a turn, and a sheet off the tail at speed
-    if(S.ph==='ride'&&S.speed>3.5){ const n=Math.min(7,Math.floor(Math.abs(S.edge)*14+S.speed*.25)); const sx=Math.sign(S.edge||1), ox=fz*sx, oz=-fx*sx;
-      for(let i=0;i<n;i++) emit(S.x-fx*.6+ox*.25,S.y+.05,S.z-fz*.6+oz*.25,ox*(1.2+Math.random()*2.4)-fx*1.5,1.4+Math.random()*2.6*Math.abs(S.edge)+S.speed*.08,oz*(1.2+Math.random()*2.4)-fz*1.5,.12+Math.random()*.18,.35+Math.random()*.35); }
+    if(S.ph==='ride'&&S.speed>3.5){ const ae=Math.abs(S.edge), n=Math.min(12,Math.floor(ae*18+S.speed*.28)); const sx=Math.sign(S.edge||1), ox=fz*sx, oz=-fx*sx;
+      for(let i=0;i<n;i++) emit(S.x-fx*.6+ox*.25,S.y+.05,S.z-fz*.6+oz*.25,ox*(1.2+Math.random()*2.8*(.5+ae))-fx*1.5,1.4+Math.random()*(1+3.2*ae)+S.speed*.08,oz*(1.2+Math.random()*2.8*(.5+ae))-fz*1.5,.13+Math.random()*.22,.45+Math.random()*.45);
+      if(ae>.3&&S.speed>5&&Math.random()<ae*.8) emit(S.x-fx*.7+ox*.4,S.y+.3,S.z-fz*.7+oz*.4,ox*(1+Math.random()*2*ae)-fx,1+Math.random()*2*ae,oz*(1+Math.random()*2*ae)-fz,.8+Math.random()*.7,.8+Math.random()*.5); }   // the spray wall off a hard turn hangs as mist
     updateSpray(dt); };
   /* ---------- the camera ----------
      Waiting and paddling: in front, a little to the side, looking back past the surfer at the waves coming in. Riding, two

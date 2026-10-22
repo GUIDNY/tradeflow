@@ -220,6 +220,13 @@
     if(withBridle){ const b=new THREE.LineSegments(G.bridle,new THREE.LineBasicMaterial({color:0x3a3a3a,transparent:true,opacity:.7})); b.frustumCulled=false; g.add(b); }
     g.userData.kite=1; return g; }
   K.kiteGeo=kiteGeo; K.kiteObj=kiteObj;
+  /* kites parked on the sand by the school, as on any kite beach: standing on their wingtips, leading edge into the wind,
+     tipped back; the walker goes round them (three circles along each span in the town's solids) */
+  K.parkOnBeach=function(T,list){ const g=new THREE.Group(); g.name='parkedKites';
+    list.forEach((p,i)=>{ const k=kiteObj(K.KITES[(i+2)%K.KITES.length],false), cg=k.children[0].geometry; cg.computeBoundingBox(); const tip=cg.boundingBox.min.y, tilt=.5;
+      k.rotation.set(-tilt,p.ry,0,'YXZ'); k.position.set(p.x,ST.World.groundY(p.x,p.z)-tip*Math.cos(tilt)-.15,p.z); k.traverse(o=>{ if(o.isMesh) o.castShadow=true; }); g.add(k);
+      for(const s of [-1,0,1]) T.solids.push({x:p.x+Math.cos(p.ry)*s*2.7,z:p.z-Math.sin(p.ry)*s*2.7,r:1.15}); });
+    scene.add(g); return g; };
   /* where the lines attach, in the kite's frame: the back lines at the wingtips (the trailing corner), the front lines at the
      pigtails under the kite */
   const KP=(()=>{ const T=canopyAt(KD.S,1,new THREE.Vector3()), z0=leAt(0,{}).z-.35; return {tipL:new THREE.Vector3(-T.x,T.y,T.z),tipR:T.clone(),frL:new THREE.Vector3(-KD.pig.x,KD.pig.y,z0),frR:new THREE.Vector3(KD.pig.x,KD.pig.y,z0)}; })();
@@ -239,10 +246,10 @@
     grp.userData.kiteboard=1; return grp; }
   K.makeKiteboard=makeKiteboard;
   /* ---------- spray, the wake, the buoys ---------- */
-  const SPN=420, sp={pos:new Float32Array(SPN*3),vel:new Float32Array(SPN*3),life:new Float32Array(SPN),max:new Float32Array(SPN),size:new Float32Array(SPN),i:0};
+  const SPN=900, sp={pos:new Float32Array(SPN*3),vel:new Float32Array(SPN*3),life:new Float32Array(SPN),max:new Float32Array(SPN),size:new Float32Array(SPN),i:0};
   const spGeo=new THREE.BufferGeometry(); spGeo.setAttribute('position',new THREE.BufferAttribute(sp.pos,3)); spGeo.setAttribute('aLife',new THREE.BufferAttribute(sp.life,1)); spGeo.setAttribute('aMax',new THREE.BufferAttribute(sp.max,1)); spGeo.setAttribute('aSize',new THREE.BufferAttribute(sp.size,1));
-  const spMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{px:{value:1}},vertexShader:'attribute float aLife; attribute float aMax; attribute float aSize; uniform float px; varying float vA; void main(){ vA=aMax>0.?clamp(aLife/aMax,0.,1.):0.; vec4 mv=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; gl_PointSize=aSize*px*(1.4-vA*.6)*300./max(1.,-mv.z); }',
-    fragmentShader:'varying float vA; void main(){ vec2 d=gl_PointCoord-.5; float r=length(d); if(r>.5) discard; gl_FragColor=vec4(vec3(.95,.98,1.),smoothstep(.5,.15,r)*vA*.85); }'});
+  const spMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{px:{value:1}},vertexShader:'attribute float aLife; attribute float aMax; attribute float aSize; uniform float px; varying float vA; varying float vS; void main(){ vA=aMax>0.?clamp(aLife/aMax,0.,1.):0.; vS=aSize; vec4 mv=modelViewMatrix*vec4(position,1.); gl_Position=projectionMatrix*mv; gl_PointSize=aSize*px*(1.4-vA*.6)*300./max(1.,-mv.z); }',
+    fragmentShader:'varying float vA; varying float vS; void main(){ vec2 d=gl_PointCoord-.5; float r=length(d); if(r>.5) discard; gl_FragColor=vec4(vec3(.95,.98,1.),smoothstep(.5,.15,r)*vA*.85*mix(1.,.28,smoothstep(.45,1.1,vS))); }'});   // the big ones are mist: fainter
   const spPts=new THREE.Points(spGeo,spMat); spPts.frustumCulled=false;
   function emit(x,y,z,vx,vy,vz,size,life){ const i=sp.i; sp.i=(sp.i+1)%SPN; sp.pos[i*3]=x; sp.pos[i*3+1]=y; sp.pos[i*3+2]=z; sp.vel[i*3]=vx; sp.vel[i*3+1]=vy; sp.vel[i*3+2]=vz; sp.life[i]=life; sp.max[i]=life; sp.size[i]=size; }
   function updateSpray(dt){ for(let i=0;i<SPN;i++){ if(sp.life[i]<=0) continue; sp.life[i]-=dt; sp.vel[i*3+1]-=9*dt; for(let k=0;k<3;k++) sp.pos[i*3+k]+=sp.vel[i*3+k]*dt; }
@@ -402,7 +409,10 @@
       put(0,_eL.copy(_eC).addScaledVector(_bx,.25).addScaledVector(_v,.1)); put(6,_eR.copy(_eC).addScaledVector(_bx,-.25).addScaledVector(_v,.1));
       _vs.copy(_eC).addScaledVector(_v,1.15); put(12,_vs); put(18,_vs); put(27,_vs); lines.geometry.attributes.position.needsUpdate=true; }
     // spray off the edge at speed, a burst on landing
-    if(!S.air&&!F&&S.speed>3){ const n=Math.min(6,Math.floor(S.speed*.25+S.edge*4)); const ux=-tx, uz=-tz; for(let i=0;i<n;i++) emit(S.x+ux*.3+(Math.random()-.5)*.6,S.y+.05,S.z+uz*.3+(Math.random()-.5)*.6,ux*(1+Math.random()*2)-vx*S.speed*.15,1.2+Math.random()*2.2*S.edge,uz*(1+Math.random()*2)-vz*S.speed*.15,.12+Math.random()*.16,.35+Math.random()*.3); }
+    // the rail throws a fan of water up and back: droplets, and over them a mist that hangs a moment (the white plume in photos)
+    if(!S.air&&!F&&S.speed>3){ const n=Math.min(11,Math.floor(S.speed*.32+S.edge*6)); const ux=-tx, uz=-tz;
+      for(let i=0;i<n;i++){ const k=Math.random(); emit(S.x+ux*.3+(Math.random()-.5)*.7-vx*.25,S.y+.05,S.z+uz*.3+(Math.random()-.5)*.7-vz*.25,ux*(1.2+k*2.6)-vx*S.speed*.22,1.4+Math.random()*(1.4+3*S.edge)+S.speed*.05,uz*(1.2+k*2.6)-vz*S.speed*.22,.14+Math.random()*.24,.5+Math.random()*.45); }
+      if(S.speed>6&&Math.random()<.3+S.edge*.5) emit(S.x+ux*.5-vx*.4,S.y+.25,S.z+uz*.5-vz*.4,ux*(1+Math.random()*1.5)-vx*S.speed*.18,1+Math.random()*1.6*S.edge+.4,uz*(1+Math.random()*1.5)-vz*S.speed*.18,.8+Math.random()*.8,.8+Math.random()*.5); }
     updateSpray(dt); updateWake(dt);
     // buoys bob; ride past one to take it
     buoys.forEach(b=>{ if(!b.g.visible) return; Cst.water(b.x,b.z,null,_w); b.g.position.set(b.x,_w.y-.2,b.z); b.g.rotation.set(_w.nz*.3,S.t*.2+b.i,-_w.nx*.3);
