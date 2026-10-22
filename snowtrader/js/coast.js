@@ -201,14 +201,16 @@
           float surfF=vSurf*(.62+.38*smoothstep(.25,.75,n1*.6+n2*.6));   // the surf's whitewater and its curling lip
           float foam=clamp(max(max(shore,max(bar,caps))*(.6+.4*n2),surfF),0.,1.)*(1.-vFar)*uDbg.x;
           // a wave's face: darker at its foot, lines of foam drawn down it from the lip
-          float fc=clamp(vFace,0.,1.); wc*=mix(1.,.72,smoothstep(.0,.25,fc)*smoothstep(.55,.15,fc));
-          float strk=smoothstep(.7,.95,vn(vec2(vWp.x*2.9+vWp.z*.4,fc*3.2-uT*.3))*.7+vn(vec2(vWp.x*7.,fc*5.))*.3)*smoothstep(.35,.95,fc)*(1.-vFar);
+          float fc=clamp(vFace,0.,1.); wc*=mix(1.,.6,smoothstep(.0,.2,fc)*smoothstep(.6,.15,fc));   // deep blue-green at its foot, as in the photos
+          // fine lines along the wave over the face (the ripples stretched as the water climbs it), and thin streaks drawn down from the lip
+          wc*=1.+(vn(vec2(vWp.x*.22+uT*.04,fc*26.+vWp.x*.05))-.5)*.14*smoothstep(.08,.8,fc)*(1.-vFar);
+          float strk=smoothstep(.78,.97,vn(vec2(vWp.x*5.5+vWp.z*.4,fc*3.2-uT*.3))*.7+vn(vec2(vWp.x*13.,fc*5.))*.3)*smoothstep(.45,.95,fc)*(1.-vFar);
           // whitewater isn't flat white: bubbles and holes in it, thinner foam showing the water; behind the bore it thins to lace
           float cell=vn(vWp.xz*3.7+vec2(uT*.5,uT*.9))*.55+vn(vWp.xz*9.3-vec2(uT*.7,0.))*.45; foam*=mix(1.,smoothstep(.18,.62,cell),.45*smoothstep(.3,1.,vSurf));
           if(vSurf>.01&&vSurf<.9){ float nn=vn(vWp.xz*.8+vec2(7.,uT*.05)), n3=vn(vWp.xz*4.3);   // lace: uneven strands that break up into patches, and blobs where they meet
             float e=vedge(vWp.xz*1.1+vec2(nn*1.7,n3*.6)+vec2(uT*.05,0.)), web=(1.-smoothstep(.02+.06*n3,.09+.16*nn,e))*smoothstep(.3,.62,nn+n3*.35);
             float lace=smoothstep(.85,.35,vSurf); foam=clamp(max(foam*(1.-lace),surfF*mix(1.,web*1.7,lace)),0.,1.); }
-          diffuseColor.rgb=mix(wc,vec3(.95,.97,.98),max(foam,strk*.2)); fFoam=foam;`)
+          diffuseColor.rgb=mix(wc,vec3(.95,.97,.98),max(foam,strk*.15)); fFoam=foam;`)
         .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
           { float e=.35; vec2 q=vWp.xz*.55+vec2(uT*.11,uT*.07); float a=vn(q), b=vn(q+vec2(e,0.)), c=vn(q+vec2(0.,e)); vec2 q2=vWp.xz*1.9-vec2(uT*.23,uT*.17); float a2=vn(q2), b2=vn(q2+vec2(e,0.)), c2=vn(q2+vec2(0.,e));
             vec2 q3=vWp.xz*5.7+vec2(uT*.4,-uT*.33); float a3=vn(q3), b3=vn(q3+vec2(e,0.)), c3=vn(q3+vec2(0.,e)); float near=1.-smoothstep(12.,40.,length(vWp-cameraPosition));   // fine ripples close by
