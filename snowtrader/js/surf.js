@@ -194,7 +194,8 @@
      the face with the curl behind; 'follow': behind the surfer down the line (and in front of the wave, never inside it).
      In the barrel the channel view moves in to the mouth of the tube and looks back in at the surfer under the lip. */
   const cam={p:new THREE.Vector3(),l:new THREE.Vector3(),first:true,k:0,tk:0,mode:'channel',sx:0,sy:0,sz:0,hu:2}, _a=new THREE.Vector3(), _b=new THREE.Vector3(), _c=new THREE.Vector3(), _d=new THREE.Vector3(), _e=new THREE.Vector3(), _f=new THREE.Vector3(), _cw={}, _tl={};
-  const CAM={ahead:9,front:12.5,y0:.35,yH:.5,fov:-16,tube:{ahead:6.2,lens:-6}};   // channel view: metres along the line ahead of the surfer, in front of the crest, height (+ per metre of wave), fov change; the tube view
+  const CAM={ahead:9,front:12.5,y0:.22,yH:.4,fov:-16,tube:{ahead:6.2,lens:-6},   // channel view: metres along the line ahead of the surfer, in front of the crest, height (+ per metre of wave), fov change; the tube view
+    port:{ahead:13,front:6,y0:.2,yH:.3,fov:-5,curl:.42},land:{curl:.22}};   // an upright phone: further down the line, just off the foot of the face, lower, a wider lens; how far the view turns to the curl
   SF.camModes=['channel','follow'];
   SF.camMode=function(m){ if(m&&SF.camModes.includes(m)) cam.mode=m; return cam.mode; };
   SF.CAM=CAM;
@@ -210,10 +211,16 @@
     // the ride view
     const ra=S.ph==='ride'||S.ph==='air'?1:0, offC=S.waveI>=0?SU.off0-SU.c*(Cst.time-S.waveI*SU.period):null, chan=cam.mode==='channel'&&offC!==null&&offC>4;
     cam.tk=damp(cam.tk,chan&&S.ph==='ride'&&S.tube>.5?1:0,S.tube>.5?2.5:1.6,dt);
-    if(chan){ // in front of the crest of the surfer's wave, ahead along the line, at the height of the face: the face, the surfer and the curl
-      const xa=cam.sx+SU.dir*CAM.ahead, zc=Cst.shoreZ(xa)-offC;
-      _c.set(xa,CAM.y0+CAM.yH*cam.hu+air*1.6,zc+CAM.front);
-      _d.set(cam.sx-SU.dir*1.4,cam.sy+.85+air*.6,cam.sz);
+    const port=innerWidth<innerHeight;
+    if(chan){ // in front of the crest of the surfer's wave, ahead along the line and low, as surf is shot from the channel (the wave stands
+      // above the horizon): the face, the surfer and the curl behind. On an upright phone (a narrow frame) further down the line, just off
+      // the foot of the face, looking back up the line so the curl is in the frame with the surfer; the view turns toward the curl while it's near
+      const P=port?CAM.port:CAM, w=S.face&&S.face.w, qa=S.face?S.face.qa:99, curl=qa>0?clamp(1-(qa-5)/20,0,1):0;
+      const xa=cam.sx+SU.dir*P.ahead, zc=Cst.shoreZ(xa)-offC;
+      let front=P.front; if(port){ let lf=2.6*cam.hu; if(w){ const qx=(xa-w.px)*SU.dir-SU.peel*Math.max(w.dtb,0); lf=Cst.lipAt(w,qx,_tl).Lf; } front=Math.max(P.front,lf+2.5); }
+      cam.curl=damp(cam.curl||0,qa*curl*(port?CAM.port.curl:CAM.land.curl),2,dt);
+      _c.set(xa,P.y0+P.yH*cam.hu+air*1.6,zc+front);
+      _d.set(cam.sx-SU.dir*(1.4+cam.curl),cam.sy+.85+air*.6,cam.sz);
       if(cam.tk>.001){ // in the barrel: further along the tube toward its mouth, inside it (under the thrown lip), back in at the surfer
         const w=S.face&&S.face.w; if(w){ const xt=S.x+SU.dir*CAM.tube.ahead, qa=(xt-w.px)*SU.dir-SU.peel*Math.max(w.dtb,0), L=Cst.lipAt(w,qa,_tl), zt=Cst.shoreZ(xt)-offC;
           const hs=-(Cst.shoreZ(S.x)-offC-S.z), lam=L.lam, l2=lam*lam;   // hs: the surfer's place in front of the crest
@@ -228,7 +235,7 @@
     if(cam.first){ cam.p.copy(_a); cam.l.copy(_b); cam.first=false; } else { const tf=1+cam.tk*2; cam.p.lerp(_a,1-Math.exp(-dt*(chan?6*tf:3.4))); cam.l.lerp(_b,1-Math.exp(-dt*(chan?7*tf:5))); }
     { const md=4.2-cam.tk*.6, dx=cam.p.x-S.x, dz=cam.p.z-S.z, d=Math.hypot(dx,dz); if(d<md&&d>1e-3){ cam.p.x=S.x+dx/d*md; cam.p.z=S.z+dz/d*md; } }   // never closer than 4 m (3 in the tube)
     const Wc=Cst.water(cam.p.x,cam.p.z,null,_cw); if(cam.p.y<Wc.y+.7) cam.p.y=Wc.y+.7;
-    camera.position.copy(cam.p); camera.lookAt(cam.l); const fov=(ST.baseFov||62)+(chan?(CAM.fov+(CAM.tube.lens-CAM.fov)*cam.tk)*cam.k:0)+(ra&&!chan?clamp(S.speed-5,0,6)*.8:0)+air*4; if(Math.abs(camera.fov-fov)>.05){ camera.fov=damp(camera.fov,fov,3,dt); camera.updateProjectionMatrix(); }
+    camera.position.copy(cam.p); camera.lookAt(cam.l); const lens=port?CAM.port.fov:CAM.fov, fov=(ST.baseFov||62)+(chan?(lens+(CAM.tube.lens-lens)*cam.tk)*cam.k:0)+(ra&&!chan?clamp(S.speed-5,0,6)*.8:0)+air*4; if(Math.abs(camera.fov-fov)>.05){ camera.fov=damp(camera.fov,fov,3,dt); camera.updateProjectionMatrix(); }
     if(camera.view&&camera.view.enabled) camera.clearViewOffset(); };
   SF.camReset=()=>{ cam.first=true; cam.k=0; cam.tk=0; };
   SF.camState=()=>({mode:cam.mode,k:cam.k,tk:cam.tk});
