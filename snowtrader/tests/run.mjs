@@ -444,6 +444,19 @@ await test('crowd',async()=>{ const p=await openBeach(); const r=await p.evaluat
     out.ballsMoving=ST.Games.list.every(g=>isFinite(g.B.p.x)&&g.B.p.y>-1&&g.B.p.y<12); return out; });
   const ok=r.agents>=35&&r.median>.9&&r.median<1.6&&r.fast>2.3&&r.fast<3.6&&r.maxTurnDeg<=150&&r.maxAcc<=1.7&&r.overlap===0&&r.intoPlayer===0&&r.playerOn&&r.footSlide<.02&&r.walkFrames>100&&r.ballsMoving;
   return {ok,detail:JSON.stringify(r)}; });
+// the other surfers (js/lineup.js): over a minute of waves they sit in the lineup, paddle for waves, ride and paddle back;
+// one to a wave, never the player's; always on the water drawn (a rider on its wave's face), nobody jumps about
+await test('lineup',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const D=ST.debug, L=ST.Lineup, C=ST.Coast, out={n:L.list.length,rides:0,states:{},jumps:0,nan:0,offWater:0,shared:0,onFace:0,rideFrames:0};
+    D.toBeach(); const last=L.list.map(a=>({x:a.x,z:a.z,st:a.st})), w={};
+    for(let i=0;i<60*75;i++){ D.tick(1/60); const riding=new Map();
+      L.list.forEach((a,k)=>{ out.states[a.st]=(out.states[a.st]||0)+1; if(!isFinite(a.x+a.y+a.z+a.h)) out.nan++; const q=last[k];
+        if(q.st===a.st&&Math.hypot(a.x-q.x,a.z-q.z)>.6) out.jumps++; if(a.st==='ride'&&q.st!=='ride') out.rides++;
+        C.water(a.x,a.z,null,w); if(Math.abs(a.y-w.y)>.15) out.offWater++;
+        if(a.st==='ride'){ out.rideFrames++; if(riding.has(a.w)) out.shared++; riding.set(a.w,1); if(w.sw&&w.sw.u<.3) out.onFace++; }
+        q.x=a.x; q.z=a.z; q.st=a.st; }); }
+    out.onFace=+(out.onFace/Math.max(1,out.rideFrames)).toFixed(2); return out; });
+  const ok=r.n===6&&r.rides>=2&&r.nan===0&&r.jumps===0&&r.offWater===0&&r.shared===0&&r.onFace>.8&&r.states.sit>0&&r.states.paddle>0&&r.states.back>0&&!beachErrors.length;
+  return {ok,detail:JSON.stringify(r)}; });
 // the surf shop (beachmain.js): a white board comes free; the others are paid for from the shared purse, refused without the
 // coins, and the one chosen is the one ridden
 await test('surfshop',async()=>{ const p=await openBeach(); const r=await p.evaluate(async()=>{ const D=ST.debug, W=RushWallet, out={}, q=s=>document.querySelector(s);

@@ -314,7 +314,8 @@
       const riding=SS.ph==='ride'; Audio.update(riding?SS.speed*2:4,0,SS.air,0); Audio.water(riding?SS.speed*1.4:SS.ph==='paddle'?3:0,Math.abs(SS.edge)*1.5,SS.air); Audio.sea(.85,dt); Audio.crowd(0); Audio.spin(SS.air?SS.wsp:0,SS.spin||0);
       if(mode==='surf'&&sess.t>=sess.len&&SS.ph!=='ride'&&SS.ph!=='air'&&SS.ph!=='pop') endSession(); }
     ST.People.update(dt,camera.position.x,camera.position.z); K.aiUpdate(dt);
-    const A=sport==='surf'?SS:KS; Cst.update(mode==='kite'||mode==='surf'||mode==='end'?0:dt,mode==='menu'?{x:town.x,y:town.y,z:town.z}:{x:A.x,y:A.y,z:A.z}); }
+    const A=sport==='surf'?SS:KS; Cst.update(mode==='kite'||mode==='surf'||mode==='end'?0:dt,mode==='menu'?{x:town.x,y:town.y,z:town.z}:{x:A.x,y:A.y,z:A.z});
+    if(ST.Lineup) ST.Lineup.update(dt,mode==='surf'?{focus:Cst.surfFocus,x:SS.x,z:SS.z}:{focus:Cst.surfFocus}); }   // after the waves' clock moves: on the water as drawn this frame
   function loop(now){ requestAnimationFrame(loop); const raw=(now-last)/1000, dt=Math.min(.1,raw); last=now; ST.qTick(raw,now); tick(dt); ST.render(); }
   /* ---------- boot ---------- */
   async function boot(){ const bar=$('#loadbar'), txt=$('#loadtxt'); const set=(p,t)=>{ bar.style.width=p+'%'; if(t) txt.textContent=t; };
@@ -323,7 +324,7 @@
     set(55,'מתלבשים לים…'); Rider.noGear=true; try{ await Rider.load(false); }catch(e){ console.error('rider',e); txt.textContent='שגיאה בטעינת הרוכב'; return; }
     const want=Rider.choices[save.rider]; if(want&&want!=='hero'&&want!=='meshy_rider'){ try{ await Rider.preload(want); await Rider.swap(want); }catch(e){ console.warn('rider',e); } }
     applyLook(); try{ await Rider.walkPrep(); }catch(e){ console.warn('walk',e); }
-    K.aiBuild(5); SF.build();
+    K.aiBuild(5); SF.build(); if(ST.Lineup) ST.Lineup.build(6);   // the other surfers at the surf spot
     if(K.parkOnBeach) K.parkOnBeach(BT,[[236,15,.35],[247,19,.55],[258,14,.2]].map(([x,d,a])=>({x,z:BT.wz(x,d),ry:PI+a})));   // the kite beach past the umbrellas
     set(90,'מורחים קרם הגנה…'); ST.People.preload(5); setMute(!!save.muted); el.windTxt.textContent=K.WIND.knots+' קשר';
     const S=BT.spots.start; townPlace({x:S.x,z:S.z,hd:PI}); mode='menu'; el.menu.hidden=false; Rider.walkSet(true); Rider.root.visible=true; renderRiders(); renderKites(); renderBoards(); $('#walletN').textContent=fmt(save.wallet);
