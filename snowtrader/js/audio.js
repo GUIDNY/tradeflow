@@ -79,6 +79,11 @@
   /* the board on the water: speed (m/s), edge (0..1), in the air */
   A.water=function(speed,edge,air){ if(!ctx) return; seaInit(); const t=ctx.currentTime, k=Math.min(1,speed/12);
     waterG.gain.setTargetAtTime(air?0:k*(.07+.1*Math.min(1,edge||0))*(.8+Math.random()*.4),t,.05); waterF.frequency.setTargetAtTime(650+k*900+Math.random()*180,t,.06); };
+  /* inside the barrel: the hollow roar of the lip falling all round (level 0..1: how deep in the tube) */
+  let tubeG=null, tubeF=null;
+  A.tube=function(level){ if(!ctx) return; const t=ctx.currentTime, k=Math.max(0,Math.min(1,level||0));
+    if(!tubeG){ if(k<=0) return; const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true; tubeF=ctx.createBiquadFilter(); tubeF.type='bandpass'; tubeF.frequency.value=170; tubeF.Q.value=1.4; tubeG=ctx.createGain(); tubeG.gain.value=0; s.connect(tubeF); tubeF.connect(tubeG); tubeG.connect(master); s.start(0,.3); }
+    tubeG.gain.setTargetAtTime(k*.34,t,.18); tubeF.frequency.setTargetAtTime(140+k*110+Math.random()*25,t,.12); };
   A.splash=function(k){ if(!ctx) return; const t=ctx.currentTime, v=Math.max(.15,Math.min(1.3,k||1)); noiseHit(t,.5*v+.15,.28*v,2400); noiseHit(t+.04,.7*v+.2,.22*v,700); };
   /* matkot: the hard rubber ball off a wooden paddle, a dry 'tock' (v: 0..1, by how near) */
   A.tock=function(v){ if(!ctx||!(v>.01)) return; const t=ctx.currentTime, k=Math.min(1,v); const s=ctx.createBufferSource(); s.buffer=noiseBuf; const f=ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1700+Math.random()*300; f.Q.value=6;

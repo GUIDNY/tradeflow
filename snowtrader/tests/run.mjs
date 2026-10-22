@@ -457,6 +457,15 @@ await test('lineup',async()=>{ const p=await openBeach(); const r=await p.evalua
     out.onFace=+(out.onFace/Math.max(1,out.rideFrames)).toFixed(2); return out; });
   const ok=r.n===6&&r.rides>=2&&r.nan===0&&r.jumps===0&&r.offWater===0&&r.shared===0&&r.onFace>.8&&r.states.sit>0&&r.states.paddle>0&&r.states.back>0&&!beachErrors.length;
   return {ok,detail:JSON.stringify(r)}; });
+// the barrel in the session: the cues (slow for it, the clock in it), its score when the surfer comes out, and when the wave
+// ends with the surfer still in it (it used to go unscored); a wipeout inside scores nothing
+await test('barrelscore',async()=>{ const p=await openBeach(); const r=await p.evaluate(()=>{ const D=ST.debug, SF=ST.Surf, out={};
+    D.save.sctlSeen=1; D.startSurf(); const s0=D.sess.score; D.surf.tubeT=2.4; SF.events.push({type:'end',why:'kick'}); D.tick(1/60);
+    out.end={best:D.sess.best&&D.sess.best.name,gain:Math.round(D.sess.score-s0),big:document.getElementById('big').textContent};
+    D.startSurf(); const s1=D.sess.score; D.surf.tubeT=2.4; SF.events.push({type:'wipe',why:'whitewater'}); D.tick(1/60); out.wipe={gain:Math.round(D.sess.score-s1),tubeT:D.surf.tubeT};
+    D.toBeach(); return out; });
+  const ok=/^BARREL · 2\.4S$/.test(r.end.best||'')&&r.end.gain>=220+2.4*260&&r.end.big==='BARREL!'&&r.wipe.gain===0&&r.wipe.tubeT===0&&!beachErrors.length;
+  return {ok,detail:JSON.stringify(r)}; });
 // the surf shop (beachmain.js): a white board comes free; the others are paid for from the shared purse, refused without the
 // coins, and the one chosen is the one ridden
 await test('surfshop',async()=>{ const p=await openBeach(); const r=await p.evaluate(async()=>{ const D=ST.debug, W=RushWallet, out={}, q=s=>document.querySelector(s);

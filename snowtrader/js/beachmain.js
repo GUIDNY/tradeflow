@@ -170,7 +170,7 @@
   function toBeach(){ mode='menu'; el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; $('#controls').hidden=true; el.menu.hidden=false; $('#cue').className=''; document.body.classList.remove('surfing');
     K.show(false); SF.show(false); Rider.walkSet(true); applyLook('town'); Rider.root.visible=true; const L=sport==='surf'?BT.spots.surf:BT.spots.launch; townPlace({x:L.x,z:L.z+2,hd:0}); }
   let pausedFrom=null;
-  function togglePause(){ if(mode==='kite'||mode==='surf'){ pausedFrom=mode; mode='pause'; el.pause.hidden=false; Audio.water(0,0,true); Audio.update(0,0,false,0); Audio.spin(0,0); }
+  function togglePause(){ if(mode==='kite'||mode==='surf'){ pausedFrom=mode; mode='pause'; el.pause.hidden=false; Audio.water(0,0,true); Audio.update(0,0,false,0); Audio.spin(0,0); Audio.tube(0); }
     else if(mode==='pause'){ mode=pausedFrom||'kite'; el.pause.hidden=true; last=performance.now(); } }
   const again=()=>sport==='surf'?startSurf():startSession();
   $('#playBtn').onclick=()=>{ if(!save.ctlSeen) showControls(startSession,'kite'); else startSession(); };
@@ -217,7 +217,10 @@
     else if(C2.st==='line'){ if(c<-.3&&v>3){ C2.t+=dt; if(C2.t>.35){ C2.st='back'; C2.t=0; } } else C2.t=0; }
     else if(C2.st==='back'){ C2.t+=dt; if(c>.3){ score('CUTBACK',260+v*10,false); C2.st='line'; C2.t=0; } else if(C2.t>3){ C2.st=''; C2.t=0; } }
     // the barrel
-    if(SS.tube>.9) surf.tubeT+=dt; else if(surf.tubeT>.5){ score('BARREL · '+surf.tubeT.toFixed(1)+'S',220+surf.tubeT*260,false); surf.tubeT=0; } else surf.tubeT=0; }
+    if(SS.tube>.9) surf.tubeT+=dt; else barrelOut(); }
+  // out of the barrel (or the wave ends with the surfer still in it): its time scored; a long one is spat out to cheers from the beach
+  function barrelOut(){ const bt=surf.tubeT; surf.tubeT=0; if(bt<=.5) return; score('BARREL · '+bt.toFixed(1)+'S',220+bt*260,false);
+    if(bt>1.2){ bigText('BARREL!','gold'); flash('#e8fbff',.25); Audio.cheer&&Audio.cheer(); SF.splash(SS.x,SS.y,SS.z,30,.9); } }
   function rideOver(clean){ const R=surf.ride; if(!R) return; surf.ride=null; surf.longest=Math.max(surf.longest,R.t);
     if(clean&&R.t>1.5) score('RIDE · '+R.t.toFixed(1)+'S',R.t*45+Math.max(0,R.along)*2,false);
     const gained=sess.score-R.s0; surf.bestRide=Math.max(surf.bestRide,Math.round(gained)); }
@@ -228,8 +231,8 @@
     else if(e.type==='air'){ sess.jumps++; Audio.jump(); Audio.splash(.6); SF.splash(SS.x,SS.y,SS.z,18,.7); }
     else if(e.type==='land'){ Audio.land(clamp(e.imp/8,.1,.7)); Audio.splash(clamp(e.imp/5,.3,1.1)); SF.splash(SS.x,SS.y,SS.z,Math.round(12+e.imp*4),clamp(e.imp/5,.3,1.1)); sess.lastH=e.h; sess.showH=1.4; sess.maxH=Math.max(sess.maxH,e.h);
       if(e.clean&&e.air>.3){ const parts=['AIR']; let pts=150+e.h*e.h*40+e.air*90; if(e.turns){ parts.push(e.turns*360+''); pts+=e.turns*320; } if(e.grabs.length){ parts.push(e.grabs.join(' + ')+' GRAB'); pts+=e.grabs.length*120; } score(parts.join(' ')+' · '+e.h.toFixed(1)+'M',pts,false); } }
-    else if(e.type==='wipe'){ sess.crashes++; sess.combo=0; sess.comboT=0; if(surf.ride){ surf.ride.along=(SS.x-surf.ride.x0)*Cst.SURF.dir; rideOver(false); } Audio.wipe(); Audio.splash(1.3); bigText('WIPEOUT','wasted'); flash('#ffffff',.35); SF.splash(SS.x,SS.y,SS.z,50,1.4); subtitle(SWHY[e.why]||'',2400); surf.back=2.6; }
-    else if(e.type==='end'){ if(surf.ride){ surf.ride.along=(SS.x-surf.ride.x0)*Cst.SURF.dir; rideOver(true); } subtitle(e.why==='kick'?'יציאה נקייה מהגל':e.why==='over'?'הגל עבר מתחתיכם':'הגל נגמר',2000); surf.back=1.8; }
+    else if(e.type==='wipe'){ surf.tubeT=0; sess.crashes++; sess.combo=0; sess.comboT=0; if(surf.ride){ surf.ride.along=(SS.x-surf.ride.x0)*Cst.SURF.dir; rideOver(false); } Audio.wipe(); Audio.splash(1.3); bigText('WIPEOUT','wasted'); flash('#ffffff',.35); SF.splash(SS.x,SS.y,SS.z,50,1.4); subtitle(SWHY[e.why]||'',2400); surf.back=2.6; }
+    else if(e.type==='end'){ barrelOut(); if(surf.ride){ surf.ride.along=(SS.x-surf.ride.x0)*Cst.SURF.dir; rideOver(true); } subtitle(e.why==='kick'?'יציאה נקייה מהגל':e.why==='over'?'הגל עבר מתחתיכם':'הגל נגמר',2000); surf.back=1.8; }
   }
   function runSurf(dt){ Cst.surfFocus=SS.ph==='ride'||SS.ph==='air'||SS.ph==='pop'||SS.ph==='wipe'?SS.waveI:-1; acc+=dt; let n=0; while(acc>=FIXED&&n<12){ acc-=FIXED; n++; Cst.time+=FIXED; SF.step(FIXED,surfControls()); for(const e of SF.events) onSurf(e); SF.events.length=0; surfTurns(FIXED); } if(n>=12) acc=0;
     // a wave missed (it went under the board while lying down): the next one; after a ride, back out to the lineup
@@ -239,7 +242,10 @@
   function surfHud(dt){ const prone=SS.ph==='wait'||SS.ph==='paddle', soon=surf.nextT-Cst.time, sw=SS.face;
     el.windTxt.textContent=surf.waveH.toFixed(1)+' מ׳'; el.wind.textContent='🌊'; el.wind.style.transform='';
     const cue=$('#cue'); let txt='', go=false;
-    if(prone&&sw&&SS.speed>SF.C.popMin&&sw.u>-sw.Lf){ txt='קום!'; go=true; }
+    if(SS.ph==='ride'&&sw){ const qa=sw.qa, T=Cst.SURF.tube, brk=sw.w&&sw.w.dtb>0;   // the barrel: slow for it, time in it, out before it closes
+      if(SS.tube>.5){ txt=(qa<-T+2.6?'פמפום · החוצה! ':'🌀 בצינור ')+surf.tubeT.toFixed(1); go=true; }
+      else if(brk&&qa>.3&&qa<6.5&&SS.f<.75) txt=touch()?'⏬ שתיהן · תנו לצינור לתפוס':'⏬ ↓ האטה · תנו לצינור לתפוס'; }
+    else if(prone&&sw&&SS.speed>SF.C.popMin&&sw.u>-sw.Lf){ txt='קום!'; go=true; }
     else if(prone&&soon<2.2&&soon>-3&&SS.ph!=='paddle'){ txt='חתירה!'; go=true; }
     else if(prone&&soon>2.2&&soon<12){ txt='הגל הבא · '+Math.ceil(soon); }
     cue.textContent=txt; cue.className=(txt?'on':'')+(go?' go':'');
@@ -313,6 +319,7 @@
       runSurf(dt); sess.maxV=Math.max(sess.maxV,SS.ph==='ride'?SS.speed:0); SF.visuals(dt,Rider); SF.camera(dt); hud(dt);
       const riding=SS.ph==='ride'; Audio.update(riding?SS.speed*2:4,0,SS.air,0); Audio.water(riding?SS.speed*1.4:SS.ph==='paddle'?3:0,Math.abs(SS.edge)*1.5,SS.air); Audio.sea(.85,dt); Audio.crowd(0); Audio.spin(SS.air?SS.wsp:0,SS.spin||0);
       if(mode==='surf'&&sess.t>=sess.len&&SS.ph!=='ride'&&SS.ph!=='air'&&SS.ph!=='pop') endSession(); }
+    Audio.tube(mode==='surf'&&SS.ph==='ride'?SS.tube:0);   // the barrel's roar (silent the moment the ride, the session or the pause stops it)
     ST.People.update(dt,camera.position.x,camera.position.z); K.aiUpdate(dt);
     const A=sport==='surf'?SS:KS; Cst.update(mode==='kite'||mode==='surf'||mode==='end'?0:dt,mode==='menu'?{x:town.x,y:town.y,z:town.z}:{x:A.x,y:A.y,z:A.z});
     if(ST.Lineup) ST.Lineup.update(dt,mode==='surf'?{focus:Cst.surfFocus,x:SS.x,z:SS.z}:{focus:Cst.surfFocus}); }   // after the waves' clock moves: on the water as drawn this frame

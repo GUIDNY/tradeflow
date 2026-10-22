@@ -323,7 +323,7 @@
     const pts=new THREE.Points(g,m); pts.frustumCulled=false; pts.name='foam'; pts.renderOrder=2; return pts; }
   // kind: 0 a puff of foam (rises a little, slows), 1 spray (falls)
   function foamEmit(x,y,z,vx,vy,vz,size,life,kind){ const i=FP.i; FP.i=(FP.i+1)%FP.N; FP.kind[i]=kind; FP.pos[i*3]=x; FP.pos[i*3+1]=y; FP.pos[i*3+2]=z; FP.vel[i*4]=vx; FP.vel[i*4+1]=vy; FP.vel[i*4+2]=vz; FP.vel[i*4+3]=kind; FP.life[i]=life; FP.max[i]=life; FP.size[i]=size; }
-  const _fw={}, _fl={}; let foamAcc=0;
+  const _fw={}, _fl={}, _fs={dx:0,dz:0,y:0,vy:0,sx:0,sz:0}; let foamAcc=0;
   function foamUpdate(dt,pts,w){ const R=Math.random, S=SURF, cp=camera.position;
     // emit for the wave the patch is on (about 60 emissions a second, spread over what is near the camera)
     if(w&&w.dtb>0&&dt>0){ foamAcc+=dt; const db=w.dtb, c=S.c, sz=shoreZ(cp.x);
@@ -344,6 +344,14 @@
         for(let k=0;k<(R()<.5?1:2);k++){ const qa=-S.tube+R()*(S.tube+12), L=lipAt(w,qa,_fl); if(L.Hu>.9&&Math.abs(L.x-cp.x)<70){ const P=C.surfPoint(L.x+(R()-.5),shoreZ(L.x)-w.off,_fw);
           foamEmit(P.x,P.y+.15,P.z,(R()-.5)*.8,1.6+R()*1.6,c-3-R()*3,.5+R()*.9,1+R()*.8,2);
           foamEmit(P.x,P.y+.05,P.z,(R()-.5)*.6,1+R()*1.6,c-1.5-R()*2.5,.04+R()*.07,.5+R()*.5,1); } }
+        // the spit: as the tube closes it squeezes the air in it, and a blast of spray and mist shoots out along the hollow and out of
+        // its mouth (now and then, a second or so apart); and inside it the curtain: drops falling off the edge of the thrown lip
+        FP.spitT=(FP.spitT||0)-iv; if(FP.spitT<=0){ FP.spitT=.8+R()*1.1; const L=lipAt(w,-S.tube+1.2,_fl);
+          if(L.lam>.6&&L.Hu>.9&&Math.abs(L.x-cp.x)<60){ const h=.5*(L.h0+L.X*L.lam), P=C.surfPoint(L.x,shoreZ(L.x)-w.off+h,_fw), y=P.y+.42*L.Hu, sp=S.dir*(S.peel+7+R()*5);
+            for(let k=0;k<14;k++) foamEmit(P.x+(R()-.5)*.8,y+(R()-.5)*.6*L.Hu,P.z+(R()-.5)*1.2,sp*(.7+R()*.5),(R()-.3)*1.2,(R()-.5)*1.6,.35+R()*.6,.6+R()*.5,0);
+            for(let k=0;k<6;k++) foamEmit(P.x,y+(R()-.5)*.4,P.z,sp*(.6+R()*.4),R()*.6,(R()-.5),1.4+R()*1.6,1.2+R()*.8,2); } }
+        if(R()<.7){ const qa=-R()*(S.tube-1), L=lipAt(w,qa,_fl); if(L.lam>.5&&Math.abs(L.x-cp.x)<50){ const sc=L.lam*(.8+R()*.2), zt=shoreZ(L.x)-w.off+L.h0+L.X*sc; surf(L.x,zt,C.time,_fs);   // the lip's tip, on the swell under it (as the lip is drawn)
+          foamEmit(L.x+_fs.dx+(R()-.5)*.6,L.y0+L.A*sc-L.B*sc*sc-L.tau*.4+_fs.y,zt+_fs.dz,(R()-.5)*.3,-.5-R(),(R()-.5)*.3,.05+R()*.06,.5+R()*.3,1); } }
         // mist over the foam ball
         if(R()<.6){ const qa=-S.tube-R()*3, L=lipAt(w,qa,_fl); if(L.Hu>.5&&Math.abs(L.x-cp.x)<70){ const P=C.surfPoint(L.x+(R()-.5)*3,shoreZ(L.x)-w.off+L.Lf*(.3+R()*.9),_fw);
           foamEmit(P.x,P.y+L.Hu*(.4+R()*.6),P.z,S.dir*S.peel*.4,.6+R()*1.2,c*.8,1.6+R()*1.6,1.2+R()*.8,2); } } } }
