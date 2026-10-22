@@ -444,6 +444,20 @@ await test('crowd',async()=>{ const p=await openBeach(); const r=await p.evaluat
     out.ballsMoving=ST.Games.list.every(g=>isFinite(g.B.p.x)&&g.B.p.y>-1&&g.B.p.y<12); return out; });
   const ok=r.agents>=35&&r.median>.9&&r.median<1.6&&r.fast>2.3&&r.fast<3.6&&r.maxTurnDeg<=150&&r.maxAcc<=1.7&&r.overlap===0&&r.intoPlayer===0&&r.playerOn&&r.footSlide<.02&&r.walkFrames>100&&r.ballsMoving;
   return {ok,detail:JSON.stringify(r)}; });
+// the surf shop (beachmain.js): a white board comes free; the others are paid for from the shared purse, refused without the
+// coins, and the one chosen is the one ridden
+await test('surfshop',async()=>{ const p=await openBeach(); const r=await p.evaluate(async()=>{ const D=ST.debug, W=RushWallet, out={}, q=s=>document.querySelector(s);
+    D.toBeach(); D.save.sowned=[0]; D.save.sboard=0; W.set(500); q('#tChar').click(); await new Promise(r=>setTimeout(r,50));
+    const btns=()=>[...document.querySelectorAll('#sboardRow button')];
+    out.shop=btns().map(b=>b.className.trim()+':'+b.querySelector('b').textContent);
+    btns()[1].click(); out.broke={coins:W.coins,owned:D.save.sowned.join(),note:(q('#mnote')||{}).textContent||''};
+    W.set(3000); btns()[1].click(); out.bought={coins:W.coins,owned:D.save.sowned.join(),sel:D.save.sboard,cls:btns()[1].className.trim()};
+    D.startSurf(); out.riding=ST.Rider.boardObj&&ST.Rider.boardObj.userData.bi; D.toBeach();
+    q('#tChar').click(); await new Promise(r=>setTimeout(r,50)); btns()[0].click(); out.back={coins:W.coins,sel:D.save.sboard};
+    D.startSurf(); out.ridingAfter=ST.Rider.boardObj&&ST.Rider.boardObj.userData.bi; D.toBeach(); document.querySelectorAll('.sheet .sx')[0].click(); return out; });
+  const ok=r.shop.length===4&&/^sel:✓$/.test(r.shop[0])&&/lock:🪙 900/.test(r.shop[1])&&r.broke.coins===500&&r.broke.owned==='0'&&/חסרים לכם 400/.test(r.broke.note)
+    &&r.bought.coins===2100&&r.bought.owned==='0,1'&&r.bought.sel===1&&r.riding===1&&r.back.coins===2100&&r.back.sel===0&&r.ridingAfter===0&&!beachErrors.length;
+  return {ok,detail:JSON.stringify(r)}; });
 // money and flights (js/wallet.js, flight.html): one purse for both worlds, made once from what each world's own save kept;
 // a game's save.wallet reads and writes it (and is no longer saved with the game); a ticket costs 750 and is refused without
 // the coins; the flight goes roll, cruise, through the cloud and down to the other world, which says the player has landed

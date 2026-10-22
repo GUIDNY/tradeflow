@@ -7,6 +7,8 @@
   const KEY='surfrush.v1';
   let save={rider:-1,muted:false,ctl:'buttons',runs:0,best:0,sbest:0,wallet:0,kite:0,ctlSeen:0,sctlSeen:0,walked:0};
   try{ Object.assign(save,JSON.parse(localStorage.getItem(KEY)||'{}')); }catch(e){}
+  // the surfboards owned and ridden: a plain white board like most real ones comes free; whoever surfed before the shop opened keeps the Sunburst they rode
+  if(!Array.isArray(save.sowned)){ save.sowned=save.sbest>0?[0,1]:[0]; save.sboard=save.sbest>0?1:0; }
   const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} };
   if(window.RushWallet) RushWallet.bind(save);   // one wallet for both worlds (js/wallet.js): save.wallet reads and writes it
   const SUMMER={jackets:[0xffffff,0xff6b6b,0x4cc9f0,0xffd166,0x80ed99,0xf4acb7,0x1d3557,0xf77f00,0x9d4edd],pants:[0xd4b483,0xf1f1f1,0x3d5a80,0x1d3557,0x6b705c,0xe9c46a],
@@ -32,7 +34,7 @@
     if(town.moved>6&&!save.walked){ save.walked=1; persist(); $('#tHint').hidden=true; }
     Rider.walkFrame(dt,{x:town.x,y:town.y,z:town.z,hd:town.hd,speed:town.vEff,wave:town.wave>0&&town.v<.2}); }
   function townNote(t){ let n=document.getElementById('mnote'); if(!n){ n=document.createElement('div'); n.id='mnote'; document.body.appendChild(n); } n.textContent=t; n.className='show'; clearTimeout(townNote.h); townNote.h=setTimeout(()=>n.className='',4200); }
-  function openSheet(id){ closeSheets(); town.sheet=id; $('#sheet-'+id).hidden=false; document.body.classList.add('sheet-open'); if(id==='char') town.wave=0; }
+  function openSheet(id){ closeSheets(); town.sheet=id; $('#sheet-'+id).hidden=false; document.body.classList.add('sheet-open'); if(id==='char'){ town.wave=0; renderBoards(); } }
   function closeSheets(){ town.sheet=null; document.querySelectorAll('.sheet').forEach(x=>x.hidden=true); document.body.classList.remove('sheet-open'); }
   $('#tChar').onclick=()=>town.sheet==='char'?closeSheets():openSheet('char');
   $('#tSet').onclick=()=>town.sheet==='set'?closeSheets():openSheet('set');
@@ -66,6 +68,15 @@
   function renderKites(){ const row=$('#kiteRow'); row.innerHTML=K.KITES.map((k,i)=>{ const c=n=>'#'+n.toString(16).padStart(6,'0');
       return '<button data-k="'+i+'" class="kite'+(i===save.kite?' sel':'')+'" style="--a:'+c(k.a)+';--b:'+c(k.b)+';--c:'+c(k.c)+'"><i></i><span>'+k.name+'</span></button>'; }).join('');
     row.querySelectorAll('button').forEach(b=>b.onclick=()=>{ save.kite=+b.dataset.k; persist(); if(K.kiteMesh) K.build(K.KITES[save.kite]); renderKites(); }); }
+  /* the surf shop: four boards, paid for from the purse both worlds share (js/wallet.js) */
+  const SB_PRICE=[0,900,2600,6500];
+  function renderBoards(){ const row=$('#sboardRow'); if(!row) return;
+    row.innerHTML=SF.BOARDS.map((d,i)=>{ const own=save.sowned.includes(i);
+      return '<button data-b="'+i+'" class="'+(i===save.sboard?'sel':'')+(own?'':' lock')+'" style="--a:'+d.col[0]+';--b:'+d.col[1]+';--c:'+(d.col[2]||d.col[1])+'"><i></i><span>'+d.name+'</span><b class="'+(own?'own':'')+'">'+(own?'✓':'🪙 '+fmt(SB_PRICE[i]))+'</b></button>'; }).join('');
+    row.querySelectorAll('button').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b;
+      if(!save.sowned.includes(i)){ if(save.wallet<SB_PRICE[i]){ b.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'none'}],{duration:220}); townNote('חסרים לכם '+fmt(SB_PRICE[i]-save.wallet)+' 🪙 לגלשן '+SF.BOARDS[i].name); return; }
+        save.wallet-=SB_PRICE[i]; save.sowned.push(i); Audio.coin&&Audio.coin(3); townNote('🏄 גלשן '+SF.BOARDS[i].name+' חדש! מחכה לכם בבית הספר לגלישה'); $('#walletN').textContent=fmt(save.wallet); }
+      save.sboard=i; persist(); renderBoards(); }); }
 
   /* ---------- on the water: the controls ----------
      Left thumb: ◀ ▶ steer the board (carve across the wind, up into it or down toward the kite); both together (or a thumb in the
@@ -183,7 +194,8 @@
     const sd=10/170*Math.cos(x/170)+4/53*Math.cos(x/53+1.3), nl=Math.hypot(sd,1);
     SF.reset({x,z:Cst.shoreZ(x)-off,h:Math.atan2(-sd/nl+.25/nl,1/nl)}); surf.nextT=i*S.period+lead; surf.waveH=S.H[((i%8)+8)%8]; surf.ride=null; surf.turn=null; surf.cutS=null; surf.tubeT=0; }
   function startSurf(){ closeSheets(); Audio.init(); $('#controls').hidden=true; sport='surf'; document.body.classList.add('surfing'); $('#steer .hint').textContent='שתיהן = האטה';
-    if(!surfBoard){ surfBoard=SF.makeBoard(SF.BOARDS[1].col); } SF.placeBoard(surfBoard);
+    const bi=save.sowned.includes(save.sboard)?save.sboard:0;   // the board chosen in the shop (made again when it changes)
+    if(!surfBoard||surfBoard.userData.bi!==bi){ if(surfBoard) surfBoard.traverse(o=>{ if(o.isMesh){ o.geometry.dispose(); if(o.material.map) o.material.map.dispose(); o.material.dispose(); } }); surfBoard=SF.makeBoard(SF.BOARDS[bi].col); surfBoard.userData.bi=bi; } SF.placeBoard(surfBoard);
     Rider.walkSet(false); Rider.setBoardObj(surfBoard); Rider.setStance(.64); applyLook('surf'); Rider.root.visible=true; SF.build(); SF.show(true); K.show(false);
     Object.assign(sess,{t:0,score:0,shown:0,combo:0,comboT:0,tricks:0,best:null,maxH:0,maxV:0,buoys:0,crashes:0,jumps:0,ups:0,showH:0,lastH:0}); Object.assign(surf,{rides:0,bestRide:0,longest:0,back:0}); acc=0;
     lineup(); SF.camReset(); SF.events.length=0;
@@ -314,7 +326,7 @@
     K.aiBuild(5); SF.build();
     if(K.parkOnBeach) K.parkOnBeach(BT,[[236,15,.35],[247,19,.55],[258,14,.2]].map(([x,d,a])=>({x,z:BT.wz(x,d),ry:PI+a})));   // the kite beach past the umbrellas
     set(90,'מורחים קרם הגנה…'); ST.People.preload(5); setMute(!!save.muted); el.windTxt.textContent=K.WIND.knots+' קשר';
-    const S=BT.spots.start; townPlace({x:S.x,z:S.z,hd:PI}); mode='menu'; el.menu.hidden=false; Rider.walkSet(true); Rider.root.visible=true; renderRiders(); renderKites(); $('#walletN').textContent=fmt(save.wallet);
+    const S=BT.spots.start; townPlace({x:S.x,z:S.z,hd:PI}); mode='menu'; el.menu.hidden=false; Rider.walkSet(true); Rider.root.visible=true; renderRiders(); renderKites(); renderBoards(); $('#walletN').textContent=fmt(save.wallet);
     if(!save.walked) $('#tHint').hidden=false;
     set(100); await new Promise(r=>setTimeout(r,200)); $('#loading').remove();
     if(new URLSearchParams(location.search).get('arrive')){ townNote('✈️ נחתתם! ברוכים הבאים לחוף תל אביב ☀️'); history.replaceState(null,'',location.pathname); }

@@ -241,6 +241,13 @@ body.beach #pause{left:96px}body.beach #mute{left:148px}
 #kiteRow button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 10px 6px;border-radius:14px;background:var(--glass);border:2px solid rgba(255,255,255,.25);color:#fff;font:700 12px Rubik,sans-serif;backdrop-filter:blur(8px)}
 #kiteRow button i{display:block;width:54px;height:22px;border-radius:30px 30px 6px 6px;background:linear-gradient(90deg,var(--c) 0 12%,var(--a) 12% 42%,var(--b) 42% 58%,var(--a) 58% 88%,var(--c) 88%);border-top:4px solid var(--c)}
 #kiteRow button.sel{border-color:var(--g);box-shadow:0 0 0 3px rgba(22,224,138,.25)}
+/* the surf shop: a board drawn in CSS (its deck's colours, the stringer), its name and price or a tick */
+#sboardRow{display:flex;gap:8px;flex-wrap:wrap}
+#sboardRow button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 10px 6px;min-width:66px;border-radius:14px;background:var(--glass);border:2px solid rgba(255,255,255,.25);color:#fff;font:700 12px Rubik,sans-serif;backdrop-filter:blur(8px)}
+#sboardRow button i{display:block;width:16px;height:52px;border-radius:50% 50% 38% 38%/34% 34% 14% 14%;background:linear-gradient(90deg,transparent 46%,rgba(60,40,20,.5) 46% 54%,transparent 54%),linear-gradient(180deg,var(--a),var(--b) 55%,var(--c));box-shadow:0 2px 6px rgba(0,0,0,.35);transform:rotate(18deg);margin:2px 0 4px}
+#sboardRow button b{font-weight:900;color:var(--gold);direction:ltr}#sboardRow button b.own{color:var(--g)}
+#sboardRow button.sel{border-color:var(--g);box-shadow:0 0 0 3px rgba(22,224,138,.25)}#sboardRow button.lock{opacity:.78}
+.sh3 small{font-weight:700;opacity:.7}
 @media (max-width:700px){ #wind{top:8px;left:10px;width:60px;height:60px} #wind i{font-size:22px} body.beach #pause{left:80px;top:10px} body.beach #mute{left:130px;top:10px} }
 /* the beach: two ways out on the water; the surf's cue and its buttons */
 .tgo2{display:flex;gap:8px}.tgo2 .tgo{flex:1 1 0;font-size:21px;padding:11px 4px 9px;white-space:nowrap}
