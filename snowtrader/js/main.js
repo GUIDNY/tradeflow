@@ -432,7 +432,7 @@
       const walking=mode==='menu'; if(walking) Rider.root.visible=false;   // no glimpse of the new rider in its riding stance
       try{ await Rider.swap(Rider.choices[i]); save.rider=i; persist(); applyLook(); if(walking){ await Rider.walkPrep(); if(mode==='menu'){ Rider.walkSet(true); town.wave=2.4; } } }catch(e){ console.warn(e); st.textContent='שגיאה'; setTimeout(()=>st.textContent='',1500); }
       Rider.root.visible=true; st.textContent=''; renderRiders(); }); }
-  function menuNote(t){ let n=document.getElementById('mnote'); if(!n){ n=document.createElement('div'); n.id='mnote'; document.body.appendChild(n); } n.textContent=t; n.className='show'; clearTimeout(menuNote.h); menuNote.h=setTimeout(()=>n.className='',2400); }
+  function menuNote(t,ms){ let n=document.getElementById('mnote'); if(!n){ n=document.createElement('div'); n.id='mnote'; document.body.appendChild(n); } n.textContent=t; n.className='show'; clearTimeout(menuNote.h); menuNote.h=setTimeout(()=>n.className='',ms||2400); }
   function stars(n){ return '★'.repeat(n)+'☆'.repeat(3-n); }
   function unlocked(i){ if(i===0) return true; const prev=ST.TRACKS[i-1], b=save.best[prev.id]; return !!b&&b.stars>=2; }
   function renderMenuCards(){
@@ -594,7 +594,7 @@
     try{ await Rider.walkPrep(); }catch(e){ console.warn('walk',e); }
     set(100); await new Promise(r=>setTimeout(r,250));
     $('#loading').remove(); mode='menu'; toMenu(); P.t=0; ST.People.preload(5); if(!save.walked) $('#tHint').hidden=false;
-    if(new URLSearchParams(location.search).get('arrive')){ menuNote('✈️ נחתתם! ברוכים הבאים לכפר הסקי ❄️'); history.replaceState(null,'',location.pathname); }
+    if(new URLSearchParams(location.search).get('arrive')){ menuNote('✈️ נחתתם! ברוכים הבאים לכפר הסקי ❄️',4200); history.replaceState(null,'',location.pathname); }
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ startRun(); }
     window.READY=true; requestAnimationFrame(loop);
   }
