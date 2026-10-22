@@ -189,12 +189,12 @@
         .replace('#include <worldpos_vertex>','#include <worldpos_vertex>\n vWp=(modelMatrix*vec4(transformed,1.)).xyz;');
       sh.fragmentShader='uniform float uT; uniform vec3 uSun,uZen,uHor,uSunC; uniform vec4 uDbg, uPatch;\nvarying vec3 vWp; varying vec2 vP0; varying float vDepth; varying float vCrest; varying float vFar; varying float vSurf; varying float vFace;\nfloat h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y); }\n'+VEDGE+sh.fragmentShader
         .replace('#include <color_fragment>',`#include <color_fragment>
-          float dep=max(vDepth,0.);
+          float dep=max(vDepth,0.); vec3 wq=vec3(vP0.x,0.,vP0.y+vWp.y*.8);   // the water's own coordinates for its patterns (a steep face would stretch x-z ones into stripes)
           vec3 deep=vec3(.004,.045,.095), mid=vec3(.012,.13,.19), shal=vec3(.05,.26,.27), sand=vec3(.4,.36,.24);
           vec3 wc=mix(shal,mid,smoothstep(.4,3.5,dep)); wc=mix(wc,deep,smoothstep(3.,14.,dep)); wc=mix(sand,wc,smoothstep(0.,.55,dep));
           wc=mix(wc,vec3(.06,.42,.42),pow(clamp(vFace,0.,1.),1.6)*.75*(1.-vFar));   // a wave's face lights up turquoise toward the lip
           // foam: the waterline's lace, the bar's broken water, whitecaps on steep crests
-          float n1=vn(vWp.xz*.9+vec2(uT*.35,uT*.12)), n2=vn(vWp.xz*3.1-vec2(uT*.2,uT*.5));
+          float n1=vn(wq.xz*.9+vec2(uT*.35,uT*.12)), n2=vn(wq.xz*3.1-vec2(uT*.2,uT*.5));
           float shore=smoothstep(.55,.0,dep)*(.55+.45*sin(dep*9.-uT*1.6+n1*3.));
           float bar=smoothstep(2.6,2.1,dep)*smoothstep(1.2,2.0,dep)*smoothstep(.25,.6,vCrest+n1*.3);
           float caps=smoothstep(.42,.62,vCrest+n2*.25)*.65;
@@ -203,18 +203,20 @@
           // a wave's face: darker at its foot, lines of foam drawn down it from the lip
           float fc=clamp(vFace,0.,1.); wc*=mix(1.,.6,smoothstep(.0,.2,fc)*smoothstep(.6,.15,fc));   // deep blue-green at its foot, as in the photos
           // fine lines along the wave over the face (the ripples stretched as the water climbs it), and thin streaks drawn down from the lip
-          wc*=1.+(vn(vec2(vWp.x*.22+uT*.04,fc*26.+vWp.x*.05))-.5)*.14*smoothstep(.08,.8,fc)*(1.-vFar);
-          float strk=smoothstep(.78,.97,vn(vec2(vWp.x*5.5+vWp.z*.4,fc*3.2-uT*.3))*.7+vn(vec2(vWp.x*13.,fc*5.))*.3)*smoothstep(.45,.95,fc)*(1.-vFar);
+          wc*=1.+(vn(vec2(wq.x*.22+uT*.04,fc*26.+wq.x*.05))-.5)*.14*smoothstep(.08,.8,fc)*(1.-vFar);
+          float strk=smoothstep(.78,.97,vn(vec2(wq.x*5.5+wq.z*.4,fc*3.2-uT*.3))*.7+vn(vec2(wq.x*13.,fc*5.))*.3)*smoothstep(.45,.95,fc)*(1.-vFar);
           // whitewater isn't flat white: bubbles and holes in it, thinner foam showing the water; behind the bore it thins to lace
-          float cell=vn(vWp.xz*3.7+vec2(uT*.5,uT*.9))*.55+vn(vWp.xz*9.3-vec2(uT*.7,0.))*.45; foam*=mix(1.,smoothstep(.18,.62,cell),.45*smoothstep(.3,1.,vSurf));
-          if(vSurf>.01&&vSurf<.9){ float nn=vn(vWp.xz*.8+vec2(7.,uT*.05)), n3=vn(vWp.xz*4.3);   // lace: uneven strands that break up into patches, and blobs where they meet
-            float e=vedge(vWp.xz*1.1+vec2(nn*1.7,n3*.6)+vec2(uT*.05,0.)), web=(1.-smoothstep(.02+.06*n3,.09+.16*nn,e))*smoothstep(.3,.62,nn+n3*.35);
+          float cell=vn(wq.xz*3.7+vec2(uT*.5,uT*.9))*.55+vn(wq.xz*9.3-vec2(uT*.7,0.))*.45; foam*=mix(1.,smoothstep(.18,.62,cell),.45*smoothstep(.3,1.,vSurf));
+          if(vSurf>.01&&vSurf<.9){ float nn=vn(wq.xz*.8+vec2(7.,uT*.05)), n3=vn(wq.xz*4.3);   // lace: uneven strands that break up into patches, and blobs where they meet
+            float e=vedge(wq.xz*1.1+vec2(nn*1.7,n3*.6)+vec2(uT*.05,0.)), web=(1.-smoothstep(.02+.06*n3,.09+.16*nn,e))*smoothstep(.3,.62,nn+n3*.35);
             float lace=smoothstep(.85,.35,vSurf); foam=clamp(max(foam*(1.-lace),surfF*mix(1.,web*1.7,lace)),0.,1.); }
           diffuseColor.rgb=mix(wc,vec3(.95,.97,.98),max(foam,strk*.15)); fFoam=foam;`)
         .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
-          { float e=.35; vec2 q=vWp.xz*.55+vec2(uT*.11,uT*.07); float a=vn(q), b=vn(q+vec2(e,0.)), c=vn(q+vec2(0.,e)); vec2 q2=vWp.xz*1.9-vec2(uT*.23,uT*.17); float a2=vn(q2), b2=vn(q2+vec2(e,0.)), c2=vn(q2+vec2(0.,e));
-            vec2 q3=vWp.xz*5.7+vec2(uT*.4,-uT*.33); float a3=vn(q3), b3=vn(q3+vec2(e,0.)), c3=vn(q3+vec2(0.,e)); float near=1.-smoothstep(12.,40.,length(vWp-cameraPosition));   // fine ripples close by
-            vec3 pn=vec3((a-b)*.32+(a2-b2)*.2+(a3-b3)*.13*near,0.,(a-c)*.32+(a2-c2)*.2+(a3-c3)*.13*near)*(1.-vFar*.8); normal=normalize(normal+(viewMatrix*vec4(pn,0.)).xyz); }`)
+          { // ripples in the water's own coordinates (where it was before the wave lifted it): on a steep face the ground's x-z barely change
+            // up the face, and noise taken there stretches into stripes running down it
+            float e=.35; vec2 rp=vP0+vec2(0.,vWp.y*.8); vec2 q=rp*.55+vec2(uT*.11,uT*.07); float a=vn(q), b=vn(q+vec2(e,0.)), c=vn(q+vec2(0.,e)); vec2 q2=rp*1.9-vec2(uT*.23,uT*.17); float a2=vn(q2), b2=vn(q2+vec2(e,0.)), c2=vn(q2+vec2(0.,e));
+            vec2 q3=rp*5.7+vec2(uT*.4,-uT*.33); float a3=vn(q3), b3=vn(q3+vec2(e,0.)), c3=vn(q3+vec2(0.,e)); float near=1.-smoothstep(12.,40.,length(vWp-cameraPosition));   // fine ripples close by
+            vec3 pn=vec3((a-b)*.32+(a2-b2)*.2+(a3-b3)*.13*near,0.,(a-c)*.32+(a2-c2)*.2+(a3-c3)*.13*near)*(1.-vFar*.8)*(1.-.75*smoothstep(.05,.4,vFace)); normal=normalize(normal+(viewMatrix*vec4(pn,0.)).xyz); }`)   // a wave's face is glassy (as on a good day in the photos): a quarter of the ripples
         .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n roughnessFactor=mix(roughnessFactor,.65,fFoam);')
         .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
           { // foam scatters the whole sky's light (bright even in the wave's shade); the thin top of a wave's face glows with the light through it
@@ -261,10 +263,11 @@
         .replace('#include <color_fragment>',`#include <color_fragment>
           // the face's turquoise (the top of the face), lighter where the lip is thin; foam at its edge and where it collapses
           vec3 wc=mix(vec3(.05,.35,.365),vec3(.07,.48,.44),vL.y*.7)*mix(1.,.78,vL.z); wc=mix(vec3(.018,.15,.2),wc,max(vL.z,smoothstep(0.,.3,vL.y)));
-          float n=vn(vWp.xz*2.3+vec2(uT*.6,0.))*.6+vn(vWp.xz*7.+vec2(0.,uT*1.3))*.4;
+          vec2 lp=vec2(vWp.x,vL.y*4.+vL.z*.7);   // along the crest and round the curl (x-z would stretch where the sheet hangs steep)
+          float n=vn(lp*2.3+vec2(uT*.6,0.))*.6+vn(lp*7.+vec2(0.,uT*1.3))*.4;
           float foam=smoothstep(.3,.7,vL.x+(n-.5)*.55);
           // its rim is torn: holes and tongues of white where it feathers (as in the photos of a pitching lip), more as it collapses
-          float rim=smoothstep(.42,.95,vL.x), tear=vn(vWp.xz*4.1+vec2(vWp.y*2.7,uT*2.3))*.65+vn(vWp.xz*11.+vec2(-uT*3.1,vWp.y*6.))*.35; if(rim>.01&&tear<rim*.62) discard;
+          float rim=smoothstep(.42,.95,vL.x), tear=vn(lp*4.1+vec2(0.,uT*2.3))*.65+vn(lp*11.+vec2(-uT*3.1,0.))*.35; if(rim>.01&&tear<rim*.62) discard;
           diffuseColor.rgb=mix(wc,vec3(.95,.97,.98),foam); fFoam=foam;`)
         .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n roughnessFactor=mix(roughnessFactor,.65,fFoam);')
         .replace('#include <aomap_fragment>','#include <aomap_fragment>\n reflectedLight.directSpecular*=.3;')   // the sun's glint on it: a thin sheet, not a polished band
