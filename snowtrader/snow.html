@@ -26,7 +26,7 @@
   <div id="tjoy" hidden><i></i></div>
   <div class="ttop">
     <div class="logo sm">SNOW<b>RUSH</b></div>
-    <div class="tright"><div class="wallet sm"><span>ניקוד</span><b id="walletN">0</b></div><button id="tWorld" class="tico" aria-label="עולמות">🌍</button><button id="tMute" class="tico" aria-label="צליל">🔊</button><button id="tSet" class="tico" aria-label="הגדרות">⚙️</button></div>
+    <div class="tright"><div class="wallet sm"><span>🪙</span><b id="walletN">0</b></div><button id="tFly" class="tico fly" aria-label="טיסות">✈️</button><button id="tWorld" class="tico" aria-label="עולמות">🌍</button><button id="tMute" class="tico" aria-label="צליל">🔊</button><button id="tSet" class="tico" aria-label="הגדרות">⚙️</button></div>
   </div>
   <div id="tHint" hidden><span class="tl">גררו כאן כדי ללכת<small>עד הקצה = ריצה</small></span><span class="tr">גררו כאן כדי להסתובב</span><span class="tk">חיצים / WASD: הליכה · Shift: ריצה · גרירה בעכבר: מצלמה · Enter: רכבל</span></div>
   <button id="tLift" class="tlift" hidden>🚡 עולים לרכבל</button>
@@ -35,6 +35,12 @@
     <button id="tMap" class="tbtn"><b>🗺️</b><span id="tMapName">BUNNY HILL</span></button>
     <button id="playBtn" class="tgo">🚡 לרכבל</button>
   </div>
+  <div id="sheet-fly" class="sheet" hidden><div class="shead"><h3>✈️ טיסות <small>RUSH AIR</small></h3><button class="sx" aria-label="סגירה">✕</button></div>
+    <div class="ticket"><div class="tk-top"><span class="tk-air">RUSH AIR</span><span class="tk-no">RX 117</span></div>
+      <div class="tk-route"><div><b>ALP</b><span>🏔️ כפר הסקי</span></div><i>✈</i><div><b>TLV</b><span>🏖️ חוף תל אביב</span></div></div>
+      <div class="tk-meta"><span>שער <b>3</b></span><span>מושב <b>14A</b></span><span>משך <b>2:40</b></span></div></div>
+    <div class="tk-buy"><span>מחיר <b id="tkPrice">750</b> 🪙</span><span>בארנק <b id="tkBal">0</b> 🪙</span></div>
+    <button id="flyBtn" class="cta">לקנות כרטיס ולטוס</button><div id="tkNote" class="tk-note"></div></div>
   <div id="sheet-char" class="sheet" hidden><div class="shead"><h3>הרוכב שלכם <small id="riderState"></small></h3><button class="sx" aria-label="סגירה">✕</button></div>
     <div id="riderRow"></div><h3 class="sh3">הלוח</h3><div id="boardCards"></div></div>
   <div id="sheet-map" class="sheet" hidden><div class="shead"><h3>לאן גולשים?</h3><button class="sx" aria-label="סגירה">✕</button></div>
@@ -76,7 +82,7 @@
   <div class="stars" id="stars"></div>
   <canvas id="profile" width="640" height="170"></canvas>
   <div class="rows" id="endRows"></div>
-  <div class="total"><span>ניקוד ריצה</span><b id="endTotal">0</b></div>
+  <div class="total"><span>ניקוד ריצה</span><b id="endTotal">0</b><small id="endPurse"></small></div>
   <div class="endbtns"><button id="againBtn" class="cta">עוד ריצה</button><button id="menuBtn" class="ghost">לטייל בכפר</button></div>
 </div></div>
 
@@ -86,6 +92,7 @@
 <script src="lib/gltf-loader.js"></script>
 <script src="lib/meshopt_decoder.js"></script>
 <script src="lib/post.js"></script>
+<script src="js/wallet.js"></script>
 <script src="js/util.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/resort.js"></script>

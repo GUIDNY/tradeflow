@@ -138,6 +138,7 @@ body.ctl-joy #btnFlip{display:none}
 .rows b{direction:ltr;font-family:var(--display);font-weight:400;font-size:19px;letter-spacing:.04em;color:var(--g)}.rows b.neg{color:var(--r)}
 .total{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;margin:8px 0 6px;border-radius:12px;background:linear-gradient(90deg,rgba(22,224,138,.25),rgba(255,200,58,.2));font-weight:900}
 .total b{font-family:var(--display);font-size:38px;font-weight:400;color:var(--gold);direction:ltr;letter-spacing:.04em}
+.total{flex-wrap:wrap}.total small{flex-basis:100%;font-size:12px;font-weight:700;opacity:.92;margin-top:2px}.total small:empty{display:none}   /* the purse, and how far off a plane ticket is */
 .endbtns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}.endbtns .cta,.endbtns .ghost{margin:6px 0 0}
 .endbtns .cta{font-size:24px;padding:10px 30px 8px}
 #rotate{position:fixed;inset:0;z-index:60;background:#0b0d1a;display:flex;align-items:center;justify-content:center;text-align:center;font-size:20px;line-height:2;flex-direction:column}
@@ -255,3 +256,22 @@ body.beach #combo{top:128px}
 /* the surf camera button: only while surfing */
 #camBtn{display:none}body.surfing #camBtn{display:flex;left:200px}
 @media (max-width:700px){ body.surfing #camBtn{left:180px;top:10px} }
+/* flights: the ✈️ button and the ticket sheet (both towns) */
+.tico.fly{background:linear-gradient(180deg,#5ee7ff,#13b6e0);border-color:rgba(255,255,255,.5)}
+#sheet-fly .ticket{position:relative;margin:4px 0 12px;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#0b2545 0%,#13315c 55%,#134074 100%);color:#fff;padding:14px 16px 12px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#sheet-fly .ticket::after{content:'';position:absolute;left:0;right:0;bottom:44px;border-top:2px dashed rgba(255,255,255,.25)}
+#sheet-fly .tk-top{display:flex;justify-content:space-between;align-items:center;direction:ltr;font:400 15px/1 'Anton',Impact,sans-serif;letter-spacing:.12em;opacity:.85}
+#sheet-fly .tk-air{color:#5ee7ff}
+#sheet-fly .tk-route{display:flex;align-items:center;justify-content:space-between;direction:ltr;margin:12px 0 18px}
+#sheet-fly .tk-route div{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:96px}
+#sheet-fly .tk-route b{font:400 40px/1 'Anton',Impact,sans-serif;letter-spacing:.06em}
+#sheet-fly .tk-route span{font-size:12px;font-weight:700;opacity:.85;direction:rtl}
+#sheet-fly .tk-route i{font-style:normal;font-size:26px;color:#ffc83a;flex:1;text-align:center;position:relative}
+#sheet-fly .tk-route i::before{content:'';position:absolute;left:8%;right:8%;top:50%;border-top:2px dotted rgba(255,255,255,.35);z-index:-1}
+#sheet-fly .tk-meta{display:flex;justify-content:space-around;font-size:12px;opacity:.9}
+#sheet-fly .tk-meta b{font-size:15px;margin-inline-start:4px}
+#sheet-fly .tk-buy{display:flex;justify-content:space-between;font-weight:700;margin:0 2px 10px}
+#sheet-fly .tk-buy b{font-size:18px;color:#ffc83a}
+#sheet-fly #flyBtn{width:100%}
+#sheet-fly #flyBtn:disabled{filter:grayscale(.8);opacity:.6;cursor:not-allowed}
+#sheet-fly .tk-note{font-size:12px;opacity:.75;margin-top:8px;text-align:center}

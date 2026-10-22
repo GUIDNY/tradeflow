@@ -8,6 +8,7 @@
   let save={rider:-1,muted:false,ctl:'buttons',runs:0,best:0,sbest:0,wallet:0,kite:0,ctlSeen:0,sctlSeen:0,walked:0};
   try{ Object.assign(save,JSON.parse(localStorage.getItem(KEY)||'{}')); }catch(e){}
   const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} };
+  if(window.RushWallet) RushWallet.bind(save);   // one wallet for both worlds (js/wallet.js): save.wallet reads and writes it
   const SUMMER={jackets:[0xffffff,0xff6b6b,0x4cc9f0,0xffd166,0x80ed99,0xf4acb7,0x1d3557,0xf77f00,0x9d4edd],pants:[0xd4b483,0xf1f1f1,0x3d5a80,0x1d3557,0x6b705c,0xe9c46a],
     hats:[0x2b1b10,0x111111,0xc9a26b,0x6b3a1f,0x3a2a1a,0xe0c080,0x1a1a1a,0x5a3820,0x8a5a30],noHat:true,hands:0xd9a07a,feet:0x6b4a2f};
   let mode='load', tAcc=0, last=performance.now(), gullT=4;
@@ -30,10 +31,17 @@
     if(near!==town.near){ town.near=near; const b=$('#tLift'); b.hidden=!near; if(near) b.textContent=near==='surf'?'🏄 יוצאים לגלים':'🪁 יוצאים למים'; }
     if(town.moved>6&&!save.walked){ save.walked=1; persist(); $('#tHint').hidden=true; }
     Rider.walkFrame(dt,{x:town.x,y:town.y,z:town.z,hd:town.hd,speed:town.vEff,wave:town.wave>0&&town.v<.2}); }
+  function townNote(t){ let n=document.getElementById('mnote'); if(!n){ n=document.createElement('div'); n.id='mnote'; document.body.appendChild(n); } n.textContent=t; n.className='show'; clearTimeout(townNote.h); townNote.h=setTimeout(()=>n.className='',4200); }
   function openSheet(id){ closeSheets(); town.sheet=id; $('#sheet-'+id).hidden=false; document.body.classList.add('sheet-open'); if(id==='char') town.wave=0; }
   function closeSheets(){ town.sheet=null; document.querySelectorAll('.sheet').forEach(x=>x.hidden=true); document.body.classList.remove('sheet-open'); }
   $('#tChar').onclick=()=>town.sheet==='char'?closeSheets():openSheet('char');
   $('#tSet').onclick=()=>town.sheet==='set'?closeSheets():openSheet('set');
+  /* flights: a ticket to the ski village (js/wallet.js, flight.html) */
+  function renderFly(){ const W=window.RushWallet; if(!W) return; $('#tkPrice').textContent=fmt(W.TICKET); $('#tkBal').textContent=fmt(W.coins); const ok=W.coins>=W.TICKET;
+    $('#flyBtn').disabled=!ok; $('#flyBtn').textContent=ok?'לקנות כרטיס ולטוס ✈️':'אין מספיק מטבעות';
+    $('#tkNote').textContent=ok?'הכרטיס יורד מהארנק, והטיסה יוצאת מיד':'חסרים לכם '+fmt(W.TICKET-W.coins)+' 🪙 · סשן אחד בגלים או בקייט מספיק בדרך כלל'; }
+  $('#tFly').onclick=()=>{ if(town.sheet==='fly') closeSheets(); else { openSheet('fly'); renderFly(); } };
+  $('#flyBtn').onclick=()=>{ const W=window.RushWallet; if(W&&W.fly('beach','snow')){ Audio.coin&&Audio.coin(4); } else renderFly(); };
   document.querySelectorAll('.sheet .sx').forEach(b=>b.onclick=closeSheets);
   $('#tWorld').onclick=()=>{ location.href='./'; };   // the opening menu: the snow or the beach
   const setMute=m=>{ save.muted=m; Audio.setMuted(m); $('#tMute').textContent=$('#mute').textContent=m?'🔇':'🔊'; persist(); };
@@ -146,7 +154,7 @@
     const rows=surfing?[['גלים שנתפסו',surf.rides],['הגלישה הטובה',surf.bestRide?fmt(surf.bestRide):'—'],['הגלישה הארוכה',surf.longest.toFixed(1)+' שנ׳'],['תמרונים',sess.tricks],['מהירות שיא',Math.round(sess.maxV*3.6)+' קמ״ש'],['נפילות',sess.crashes]]
       :[['טריקים',sess.tricks],['הטריק הטוב',sess.best?sess.best.name+' · '+fmt(sess.best.gain):'—'],['הקפיצה הגבוהה',sess.maxH.toFixed(1)+' מ׳'],['מהירות שיא',Math.round(sess.maxV*3.6)+' קמ״ש'],['מצופים',sess.buoys],['נפילות',sess.crashes]];
     $('#endRows').innerHTML=rows.map(r=>'<div><span>'+r[0]+'</span><span>'+r[1]+'</span></div>').join('');
-    $('#endTotal').textContent=fmt(total)+(record&&total>0?' ★':''); el.end.hidden=false; }
+    $('#endTotal').textContent=fmt(total)+(record&&total>0?' ★':''); if(window.RushWallet) $('#endPurse').textContent=RushWallet.note(total,'beach'); el.end.hidden=false; }
   /* back on the sand: walk out of the water at the school of the sport */
   function toBeach(){ mode='menu'; el.hud.hidden=true; el.end.hidden=true; el.pause.hidden=true; $('#controls').hidden=true; el.menu.hidden=false; $('#cue').className=''; document.body.classList.remove('surfing');
     K.show(false); SF.show(false); Rider.walkSet(true); applyLook('town'); Rider.root.visible=true; const L=sport==='surf'?BT.spots.surf:BT.spots.launch; townPlace({x:L.x,z:L.z+2,hd:0}); }
@@ -308,6 +316,7 @@
     const S=BT.spots.start; townPlace({x:S.x,z:S.z,hd:PI}); mode='menu'; el.menu.hidden=false; Rider.walkSet(true); Rider.root.visible=true; renderRiders(); renderKites(); $('#walletN').textContent=fmt(save.wallet);
     if(!save.walked) $('#tHint').hidden=false;
     set(100); await new Promise(r=>setTimeout(r,200)); $('#loading').remove();
+    if(new URLSearchParams(location.search).get('arrive')){ townNote('✈️ נחתתם! ברוכים הבאים לחוף תל אביב ☀️'); history.replaceState(null,'',location.pathname); }
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ save.ctlSeen=1; startSession(); } else if(q.get('auto')==='surf'){ save.sctlSeen=1; startSurf(); }
     window.READY=true; requestAnimationFrame(loop); }
   ST.debug={town,townPlace,get mode(){ return mode; },setMode:m=>mode=m,tick,input,save,sess,startSession,endSession,toBeach,togglePause,ctl,readControls,tb,runPhysics,startSurf,surf,lineup,sctl,surfControls,get sport(){ return sport; }};

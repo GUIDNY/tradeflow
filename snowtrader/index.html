@@ -16,7 +16,7 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;overflow:hidden;background:#0b0d1a;color:#fff;font-family:var(--font);overscroll-behavior:none}
   main{position:fixed;inset:0;display:flex;flex-direction:column;padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));gap:12px}
-  header{display:flex;align-items:baseline;justify-content:center;gap:14px;flex:0 0 auto}
+  header{display:flex;align-items:baseline;justify-content:center;gap:6px 14px;flex:0 0 auto;flex-wrap:wrap}
   header h1{margin:0;font:400 clamp(30px,5.4vw,52px)/1 var(--display);letter-spacing:.08em;direction:ltr;text-shadow:0 3px 0 #000}
   header h1 b{font-weight:400;color:var(--gold)}
   header p{margin:0;font-weight:700;font-size:clamp(13px,1.8vw,17px);opacity:.75}
@@ -61,6 +61,9 @@
   .beach .go{background:linear-gradient(180deg,#5ee7ff,#13b6e0);box-shadow:0 6px 0 #0a6f8a;color:#03222c}
   .best{position:absolute;top:14px;right:14px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:12px;background:rgba(6,10,24,.55);backdrop-filter:blur(6px)}
   .best:empty{display:none}
+  .purse{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:30px;background:rgba(255,200,58,.14);border:1px solid rgba(255,200,58,.45);font-weight:900;font-size:clamp(13px,1.8vw,16px)}
+  .purse b{font-family:var(--display);font-weight:400;letter-spacing:.05em;color:var(--gold);direction:ltr}.purse i{font-style:normal;opacity:.8;font-weight:700;font-size:.85em}
+  .purse[hidden]{display:none}
   @media (orientation:portrait){ .worlds{flex-direction:column} .txt h2{font-size:clamp(30px,9vw,46px)} .chips{margin:7px 0 10px} }
   @media (max-height:430px){ header p{display:none} .chips{display:none} .txt h2{font-size:34px} }
   @media (prefers-reduced-motion:reduce){ .flakes,.swell,.kite{animation:none} }
@@ -68,7 +71,7 @@
 </head>
 <body>
 <main>
-  <header><h1>SNOW<b>·</b>SURF <b>RUSH</b></h1><p>בחרו לאן יוצאים היום</p></header>
+  <header><h1>SNOW<b>·</b>SURF <b>RUSH</b></h1><p>בחרו לאן יוצאים היום</p><span class="purse" id="purse" hidden title="ארנק אחד לשני העולמות">🪙 <b id="purseN">0</b><i id="purseF"></i></span></header>
   <div class="worlds">
     <a class="world snow" href="snow.html" id="goSnow">
       <div class="art"><div class="pines"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="flakes"></div></div>
@@ -86,12 +89,15 @@
     </a>
   </div>
 </main>
+<script src="js/wallet.js"></script>
 <script>
   // what each world remembers: its best score, shown on its card
   (function(){ const fmt=n=>Math.round(n).toLocaleString('en-US'), read=k=>{ try{ return JSON.parse(localStorage.getItem(k)||'{}'); }catch(e){ return {}; } };
     const s=read('snowtrader.v1'), b=read('surfrush.v1');
     const sBest=s.best?Math.max(0,...Object.values(s.best).map(v=>v&&v.profit||0)):0; if(sBest>0) document.getElementById('bestSnow').textContent='שיא: '+fmt(sBest);
-    const bb=Math.max(b.best||0,b.sbest||0); if(bb>0) document.getElementById('bestBeach').textContent='שיא סשן: '+fmt(bb); })();
+    const bb=Math.max(b.best||0,b.sbest||0); if(bb>0) document.getElementById('bestBeach').textContent='שיא סשן: '+fmt(bb);
+    // the purse both worlds share (js/wallet.js): coins earned in either, spent on boards and plane tickets
+    const W=window.RushWallet; if(W&&(W.coins>0||W.earned>0)){ document.getElementById('purseN').textContent=W.fmt(W.coins); if(W.flights) document.getElementById('purseF').textContent=' · ✈️ '+W.flights; document.getElementById('purse').hidden=false; } })();
 </script>
 </body>
 </html>

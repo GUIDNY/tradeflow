@@ -444,6 +444,31 @@ await test('crowd',async()=>{ const p=await openBeach(); const r=await p.evaluat
     out.ballsMoving=ST.Games.list.every(g=>isFinite(g.B.p.x)&&g.B.p.y>-1&&g.B.p.y<12); return out; });
   const ok=r.agents>=35&&r.median>.9&&r.median<1.6&&r.fast>2.3&&r.fast<3.6&&r.maxTurnDeg<=150&&r.maxAcc<=1.7&&r.overlap===0&&r.intoPlayer===0&&r.playerOn&&r.footSlide<.02&&r.walkFrames>100&&r.ballsMoving;
   return {ok,detail:JSON.stringify(r)}; });
+// money and flights (js/wallet.js, flight.html): one purse for both worlds, made once from what each world's own save kept;
+// a game's save.wallet reads and writes it (and is no longer saved with the game); a ticket costs 750 and is refused without
+// the coins; the flight goes roll, cruise, through the cloud and down to the other world, which says the player has landed
+await test('flight',async()=>{ const ctx=await browser.newContext({viewport:{width:640,height:400}}); const p=await ctx.newPage(), errs=[]; p.on('pageerror',e=>errs.push(e.message)); p.setDefaultTimeout(180000);
+  await ctx.addInitScript(()=>{ localStorage.setItem('snowtrader.v1',JSON.stringify({wallet:500,best:{}})); localStorage.setItem('surfrush.v1',JSON.stringify({wallet:400})); });
+  const out={};
+  await p.goto(`http://localhost:${PORT}/index.html`); await p.waitForTimeout(300);
+  out.menu=await p.evaluate(()=>({coins:RushWallet.coins,chip:!document.getElementById('purse').hidden&&document.getElementById('purseN').textContent}));
+  await p.reload(); await p.waitForTimeout(300); out.again=await p.evaluate(()=>RushWallet.coins);   // made once: not added up again
+  out.bind=await p.evaluate(()=>{ const W=RushWallet, o={wallet:3,x:1}; W.bind(o); o.wallet+=100; const r={coins:W.coins,saved:JSON.stringify(o)}; W.set(900); return r; });
+  out.note=await p.evaluate(()=>RushWallet.note(200,'snow'));
+  out.broke=await p.evaluate(()=>{ const W=RushWallet; W.set(100); const r=W.fly('beach','snow'); const c=W.coins; W.set(900); return {flew:r,coins:c,url:location.pathname}; });
+  await p.route('**/snow.html*',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>landed</title>'}));   // where it lands: not loaded here
+  await Promise.all([p.waitForURL(/flight\.html/),p.evaluate(()=>RushWallet.fly('beach','snow'))]); await p.waitForFunction('window.FLIGHT');
+  out.ticket=await p.evaluate(()=>({coins:RushWallet.coins,flights:RushWallet.flights,from:document.getElementById('pFrom').textContent,to:document.getElementById('pTo').textContent,q:location.search}));
+  out.fly=await p.evaluate(()=>{ const F=window.FLIGHT; F.start(); const seen=[]; let mist=0, steps=0; while(F.t<F.T.desc+1&&steps<4000){ window.__step(1/30); steps++; if(seen[seen.length-1]!==F.phase) seen.push(F.phase); mist=Math.max(mist,F.mist); } return {phases:seen.join('>'),mist:+mist.toFixed(2),t:+F.t.toFixed(1),stats:F.stats()}; });
+  await p.waitForURL(/snow\.html\?arrive=1/,{timeout:20000}).catch(()=>{}); out.landed=p.url().replace(/^.*\//,'');
+  // the beach, reached by plane, says so (and drops ?arrive from its address)
+  await p.unroute('**/snow.html*'); await p.goto(`http://localhost:${PORT}/beach.html?arrive=1&q=0&fx=0`); await p.waitForFunction('window.READY',null,{timeout:180000}); await p.waitForTimeout(500);
+  out.arrive=await p.evaluate(()=>({note:(document.getElementById('mnote')||{}).textContent||'',q:location.search,coins:RushWallet.coins}));
+  out.errors=errs.slice(0,3); await ctx.close();
+  const ok=out.menu.coins===900&&out.menu.chip==='900'&&out.again===900&&out.bind.coins===1000&&out.bind.saved==='{"x":1}'&&/\+200/.test(out.note)&&/✈️/.test(out.note)
+    &&out.broke.flew===false&&out.broke.coins===100&&!/flight/.test(out.broke.url)&&out.ticket.coins===150&&out.ticket.flights===1&&out.ticket.from==='TLV'&&out.ticket.to==='ALP'
+    &&out.fly.phases==='roll>cruise>desc'&&out.fly.mist>.8&&out.fly.stats.inst>5000&&out.landed==='snow.html?arrive=1'&&/נחתתם/.test(out.arrive.note)&&out.arrive.q===''&&out.arrive.coins===150&&!out.errors.length;
+  return {ok,detail:JSON.stringify(out)}; });
 if(beach) await beach.close();
 await browser.close(); server.close();
 const failed=results.filter(r=>!r.ok);

@@ -11,6 +11,7 @@
   // v3: the Meshy rider (textured ski kit, own helmet and gloves) is the default; the old riders stay selectable in the menu
   if(save.ver!==3){ save.ver=3; const mi=ST.Rider.choices.indexOf('meshy_rider'); save.rider=mi>=0?mi:3; }
   const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(save)); }catch(e){} };
+  if(window.RushWallet) RushWallet.bind(save);   // one wallet for both worlds (js/wallet.js): save.wallet reads and writes it
 
   /* ---------- state ---------- */
   const P={x:0,y:0,z:0,vx:0,vz:0,vy:0,vyg:0,hd:0,vh:0,s:0,grounded:true,speed:0,speed3:0,gc:null,fall:null,sw:false,edge:0,body:0,fa:0,skid:0,slip:0,brakeK:0,skateK:0,charge:0,charging:false,airPitch:0,landOut:'',stumble:0,
@@ -395,7 +396,7 @@
     $('#stars').innerHTML=[1,2,3].map(i=>'<span class="'+(i<=stars?'':'off')+'">★</span>').join('');
     const rows=[['זמן',runT.toFixed(1)+' שנ׳ (יעד '+T.par+')'],['מטבעות',P.coins+' × 10+'],['גבישים / קוצי קרח',P.greens+' / '+P.reds],['תרגילים',P.tricks+(P.best?' · <bdi dir="ltr">'+P.best.name+'</bdi>':'')],['נפילות',String(P.wipes)],['ניקוד תרגילים ואיסוף','<b class="'+(P.money<0?'neg':'')+'">'+fmt(P.money)+'</b>'],['בונוס זמן','<b>'+fmt(tb)+'</b>']];
     $('#endRows').innerHTML=rows.map(r=>'<div><span>'+r[0]+'</span><span>'+r[1]+'</span></div>').join('');
-    $('#endTotal').textContent=fmt(total)+(record?' ★':''); drawProfile(); renderMenuCards();
+    $('#endTotal').textContent=fmt(total)+(record?' ★':''); if(window.RushWallet) $('#endPurse').textContent=RushWallet.note(Math.max(0,total),'snow'); drawProfile(); renderMenuCards();
   }
   function drawProfile(){   // speed along the run
     const c=$('#profile'), g=c.getContext('2d'), W=c.width, H=c.height; g.clearRect(0,0,W,H);
@@ -483,6 +484,12 @@
   $('#tChar').onclick=()=>town.sheet==='char'?closeSheets():openSheet('char');
   $('#tMap').onclick=()=>town.sheet==='map'?closeSheets():openSheet('map');
   $('#tSet').onclick=()=>town.sheet==='set'?closeSheets():openSheet('set');
+  /* flights: a ticket to the beach (js/wallet.js, flight.html) */
+  function renderFly(){ const W=window.RushWallet; if(!W) return; $('#tkPrice').textContent=fmt(W.TICKET); $('#tkBal').textContent=fmt(W.coins); const ok=W.coins>=W.TICKET;
+    $('#flyBtn').disabled=!ok; $('#flyBtn').textContent=ok?'לקנות כרטיס ולטוס ✈️':'אין מספיק מטבעות';
+    $('#tkNote').textContent=ok?'הכרטיס יורד מהארנק, והטיסה יוצאת מיד':'חסרים לכם '+fmt(W.TICKET-W.coins)+' 🪙 · ירידה אחת במסלול מספיקה בדרך כלל'; }
+  $('#tFly').onclick=()=>{ if(town.sheet==='fly') closeSheets(); else { openSheet('fly'); renderFly(); } };
+  $('#flyBtn').onclick=()=>{ const W=window.RushWallet; if(W&&W.fly('snow','beach')){ Audio.coin&&Audio.coin(4); } else renderFly(); };
   document.querySelectorAll('.sheet .sx').forEach(b=>b.onclick=closeSheets);
   document.querySelectorAll('.sgo').forEach(b=>b.onclick=()=>$('#playBtn').onclick());
   $('#tLift').onclick=()=>$('#playBtn').onclick();
@@ -587,6 +594,7 @@
     try{ await Rider.walkPrep(); }catch(e){ console.warn('walk',e); }
     set(100); await new Promise(r=>setTimeout(r,250));
     $('#loading').remove(); mode='menu'; toMenu(); P.t=0; ST.People.preload(5); if(!save.walked) $('#tHint').hidden=false;
+    if(new URLSearchParams(location.search).get('arrive')){ menuNote('✈️ נחתתם! ברוכים הבאים לכפר הסקי ❄️'); history.replaceState(null,'',location.pathname); }
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ startRun(); }
     window.READY=true; requestAnimationFrame(loop);
   }
