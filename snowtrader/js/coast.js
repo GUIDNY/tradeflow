@@ -251,7 +251,7 @@
      whitewater). Across, a thick curl: from the crest out and down along the outside to the tip and back along the inside.
      The lip falls on a ballistic arc in the wave's frame; the further behind the break point, the further it has fallen. */
   const LIP={NA:64,NS:14,ahead:3.5};
-  function lipMaterial(){ const m=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.14,metalness:0,side:THREE.DoubleSide});
+  function lipMaterial(){ const m=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.2,metalness:0,side:THREE.DoubleSide});
     m.onBeforeCompile=sh=>{ sh.uniforms.uT=SEA_U.uT; sh.uniforms.uSun={value:SKY.sun}; sh.uniforms.uZen={value:SKY.zen}; sh.uniforms.uHor={value:SKY.hor}; sh.uniforms.uSunC={value:SKY.sunC};
       sh.vertexShader='attribute vec3 aL; varying vec3 vL; varying vec3 vWp;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vL=aL;')
         .replace('#include <worldpos_vertex>','#include <worldpos_vertex>\n vWp=(modelMatrix*vec4(transformed,1.)).xyz;');
@@ -260,11 +260,15 @@
           // the face's turquoise (the top of the face), lighter where the lip is thin; foam at its edge and where it collapses
           vec3 wc=mix(vec3(.05,.35,.365),vec3(.07,.48,.44),vL.y*.7)*mix(1.,.78,vL.z); wc=mix(vec3(.018,.15,.2),wc,max(vL.z,smoothstep(0.,.3,vL.y)));
           float n=vn(vWp.xz*2.3+vec2(uT*.6,0.))*.6+vn(vWp.xz*7.+vec2(0.,uT*1.3))*.4;
-          float foam=smoothstep(.3,.7,vL.x+(n-.5)*.55); diffuseColor.rgb=mix(wc,vec3(.95,.97,.98),foam); fFoam=foam;`)
+          float foam=smoothstep(.3,.7,vL.x+(n-.5)*.55);
+          // its rim is torn: holes and tongues of white where it feathers (as in the photos of a pitching lip), more as it collapses
+          float rim=smoothstep(.42,.95,vL.x), tear=vn(vWp.xz*4.1+vec2(vWp.y*2.7,uT*2.3))*.65+vn(vWp.xz*11.+vec2(-uT*3.1,vWp.y*6.))*.35; if(rim>.01&&tear<rim*.62) discard;
+          diffuseColor.rgb=mix(wc,vec3(.95,.97,.98),foam); fFoam=foam;`)
         .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\n roughnessFactor=mix(roughnessFactor,.65,fFoam);')
+        .replace('#include <aomap_fragment>','#include <aomap_fragment>\n reflectedLight.directSpecular*=.3;')   // the sun's glint on it: a thin sheet, not a polished band
         .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
-          { vec3 vw=normalize(vWp-cameraPosition); float bl=pow(max(dot(vw,uSun),0.),3.); totalEmissiveRadiance+=vec3(.04,.36,.3)*uSunC*(.12+.9*bl)*(.4+.6*vL.y)*(1.-fFoam)+fFoam*vec3(.2,.22,.24); }`)
-        .replace('#include <dithering_fragment>','#include <dithering_fragment>\n'+SKYREFL.replace('clamp(fr,0.,1.)','clamp(fr*.7,0.,1.)'))
+          { vec3 vw=normalize(vWp-cameraPosition); float bl=pow(max(dot(vw,uSun),0.),3.); totalEmissiveRadiance+=vec3(.04,.36,.3)*uSunC*(.2+.9*bl)*(.45+.55*vL.y)*(1.-fFoam)+fFoam*vec3(.2,.22,.24); }`)
+        .replace('#include <dithering_fragment>','#include <dithering_fragment>\n'+SKYREFL.replace('clamp(fr,0.,1.)','clamp(fr*.32,0.,1.)'))
         .replace('void main() {','float fFoam=0.;\nvoid main() {'); };
     m.customProgramCacheKey=()=>'st-lip'; return m; }
   function lipMesh(){ const NA=LIP.NA, NR=2*(LIP.NS+1), n=(NA+1)*NR, g=new THREE.BufferGeometry();
@@ -296,7 +300,7 @@
   /* ---------- whitewater: foam and spray over the height field's foam ----------
      Puffs of foam boil up where the barrel collapses (the foam ball) and along the front of the bore behind it, carried
      shoreward with it; spray flies up where the lip lands and off the top of the wave. Soft round sprites, lit like foam. */
-  const FP={N:1600,i:0}; FP.pos=new Float32Array(FP.N*3); FP.vel=new Float32Array(FP.N*4); FP.life=new Float32Array(FP.N); FP.max=new Float32Array(FP.N); FP.size=new Float32Array(FP.N); FP.kind=new Float32Array(FP.N); FP.seed=new Float32Array(FP.N).map(()=>Math.random());
+  const FP={N:2400,i:0}; FP.pos=new Float32Array(FP.N*3); FP.vel=new Float32Array(FP.N*4); FP.life=new Float32Array(FP.N); FP.max=new Float32Array(FP.N); FP.size=new Float32Array(FP.N); FP.kind=new Float32Array(FP.N); FP.seed=new Float32Array(FP.N).map(()=>Math.random());
   const FOAM_U={uH:{value:400}};
   function foamPoints(){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(FP.pos,3)); g.setAttribute('aLife',new THREE.BufferAttribute(FP.life,1)); g.setAttribute('aMax',new THREE.BufferAttribute(FP.max,1));
     g.setAttribute('aSize',new THREE.BufferAttribute(FP.size,1)); g.setAttribute('aSeed',new THREE.BufferAttribute(FP.seed,1)); g.setAttribute('aKind',new THREE.BufferAttribute(FP.kind,1));
@@ -310,7 +314,7 @@
         void main(){ vec2 d=gl_PointCoord-.5; float r=length(d); float n=n2(d*4.5+vS*37.)*.6+n2(d*10.+vS*91.)*.4, edge=.5-.28*n; if(r>edge) discard;
           float a=smoothstep(edge,edge*.25,r)*smoothstep(0.,.35,vA)*smoothstep(1.,.85,vA)*(.55+.45*smoothstep(.3,.7,n2(d*16.+vS*13.)));
           vec3 c=mix(vec3(.84,.89,.92),vec3(1.),clamp(.55-d.y*1.2+.25*n,0.,1.))*mix(vec3(1.),uSunC,.12);
-          gl_FragColor=vec4(c,a*(vK>1.5?.22:.85)); }`});
+          gl_FragColor=vec4(c,a*(vK>1.5?.28:.85)); }`});
     const pts=new THREE.Points(g,m); pts.frustumCulled=false; pts.name='foam'; pts.renderOrder=2; return pts; }
   // kind: 0 a puff of foam (rises a little, slows), 1 spray (falls)
   function foamEmit(x,y,z,vx,vy,vz,size,life,kind){ const i=FP.i; FP.i=(FP.i+1)%FP.N; FP.kind[i]=kind; FP.pos[i*3]=x; FP.pos[i*3+1]=y; FP.pos[i*3+2]=z; FP.vel[i*4]=vx; FP.vel[i*4+1]=vy; FP.vel[i*4+2]=vz; FP.vel[i*4+3]=kind; FP.life[i]=life; FP.max[i]=life; FP.size[i]=size; }
@@ -322,16 +326,17 @@
       while(foamAcc>iv){ foamAcc-=iv;
         // the foam ball where the barrel collapses: puffs boiling up the face to about the crest
         { const qa=-S.tube-R()*2.5, L=lipAt(w,qa,_fl); if(L.Hu>.5&&Math.abs(L.x-cp.x)<70) for(let k=0;k<4;k++){ const P=C.surfPoint(L.x+(R()-.5)*2.2,shoreZ(L.x)-w.off+L.Lf*(.15+R()*1.25),_fw);
-          foamEmit(P.x,P.y+R()*L.Hu*.5,P.z,S.dir*S.peel*(.3+R()*.5),.3+R()*1.1,c*(.8+R()*.25),.55+R()*1.1,.8+R()*.9,0); } }
+          foamEmit(P.x,P.y+R()*L.Hu*.55,P.z,S.dir*S.peel*(.3+R()*.5),.4+R()*1.6,c*(.8+R()*.25),.7+R()*1.4,.8+R()*1.1,0); } }
         // the front of the bore behind it, back to where the other way closes out, near the camera
         { const qa0=-S.tube-2, qa1=Math.max(-S.tube-60,-(S.peel+S.back)*db); if(qa1<qa0) for(let k=0;k<3;k++){ const qa=lerp(qa0,qa1,R()), x=w.px+S.dir*(S.peel*db+qa);
           if(Math.abs(x-cp.x)<60){ surfOne(w,x,w.off,_fl); const Hb=_fl.Hb||1; if(Hb>.3){ const P=C.surfPoint(x,shoreZ(x)-w.off+(1.5*Hb+.5)*(R()*.9-.15),_fw);
             foamEmit(P.x,P.y+R()*Hb*.25,P.z,(R()-.5)*.6,.15+R()*.6,c*(.92+R()*.12),.45+R()*.9,.6+R()*.7,0); } } } }
         // spray where the lip lands in the barrel
-        for(let k=0;k<2;k++){ const qa=-1-R()*(S.tube-2), L=lipAt(w,qa,_fl); if(L.lam>.7&&Math.abs(L.x-cp.x)<60){ const P=C.surfPoint(L.x,shoreZ(L.x)-w.off+L.h0+L.X*L.lam,_fw);
-          foamEmit(P.x,P.y+.1,P.z,(R()-.5)*1.5,2+R()*3.5,c*(.6+R()*.4),.07+R()*.12,.5+R()*.5,1); } }
+        for(let k=0;k<4;k++){ const qa=-1-R()*(S.tube-2), L=lipAt(w,qa,_fl); if(L.lam>.7&&Math.abs(L.x-cp.x)<60){ const P=C.surfPoint(L.x,shoreZ(L.x)-w.off+L.h0+L.X*L.lam,_fw);
+          foamEmit(P.x,P.y+.1,P.z,(R()-.5)*1.8,2.5+R()*4.5,c*(.5+R()*.5),.07+R()*.14,.6+R()*.6,1);
+          if(k===0&&R()<.55) foamEmit(P.x,P.y+.3,P.z,(R()-.5),1.4+R()*2.2,c*(.55+R()*.3),1.1+R()*1.5,1.1+R()*.9,2); } }   // and the cloud of it hanging there
         // the plume blown back off the top of the wave (the wind over the lip: the spray goes out to sea), and drops off the crest
-        if(R()<.75){ const qa=-S.tube+R()*(S.tube+10), L=lipAt(w,qa,_fl); if(L.Hu>.9&&Math.abs(L.x-cp.x)<70){ const P=C.surfPoint(L.x+(R()-.5),shoreZ(L.x)-w.off,_fw);
+        for(let k=0;k<(R()<.5?1:2);k++){ const qa=-S.tube+R()*(S.tube+12), L=lipAt(w,qa,_fl); if(L.Hu>.9&&Math.abs(L.x-cp.x)<70){ const P=C.surfPoint(L.x+(R()-.5),shoreZ(L.x)-w.off,_fw);
           foamEmit(P.x,P.y+.15,P.z,(R()-.5)*.8,1.6+R()*1.6,c-3-R()*3,.5+R()*.9,1+R()*.8,2);
           foamEmit(P.x,P.y+.05,P.z,(R()-.5)*.6,1+R()*1.6,c-1.5-R()*2.5,.04+R()*.07,.5+R()*.5,1); } }
         // mist over the foam ball
