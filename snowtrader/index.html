@@ -59,6 +59,7 @@
   .chips span.soon{opacity:.6;border-style:dashed}
   .go{display:inline-flex;align-items:center;gap:10px;padding:10px 22px;border-radius:16px;font:900 clamp(16px,2vw,20px) var(--font);color:#05140c;background:linear-gradient(180deg,#3df2a6,#12c47a);box-shadow:0 6px 0 #0a7d4c}
   .beach .go{background:linear-gradient(180deg,#5ee7ff,#13b6e0);box-shadow:0 6px 0 #0a6f8a;color:#03222c}
+  .beach .go.surfnow{margin-inline-start:10px;background:linear-gradient(180deg,#ffffff,#d6f6ff);box-shadow:0 6px 0 #6fb7c9;color:#03222c}   /* straight into a surf session */
   .best{position:absolute;top:14px;right:14px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:12px;background:rgba(6,10,24,.55);backdrop-filter:blur(6px)}
   .best:empty{display:none}
   .purse{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:30px;background:rgba(255,200,58,.14);border:1px solid rgba(255,200,58,.45);font-weight:900;font-size:clamp(13px,1.8vw,16px)}
@@ -85,7 +86,7 @@
       <div class="best" id="bestBeach"></div>
       <div class="txt"><h2>SURF <b>RUSH</b></h2><div class="sub">עיירת חוף · גלים וקייטסרף</div>
         <div class="chips"><span>🌊 גלישת גלים</span><span>🪁 קייטסרף</span><span>🌴 טיילת לטייל בה</span><span class="soon">⛵ רוח — בקרוב</span></div>
-        <span class="go">🏖️ לעיירת החוף</span></div>
+        <span class="go">🏖️ לעיירת החוף</span><span class="go surfnow" role="link" tabindex="0" id="surfNow">🌊 ישר לגלים</span></div>
     </a>
   </div>
 </main>
@@ -97,6 +98,9 @@
     const sBest=s.best?Math.max(0,...Object.values(s.best).map(v=>v&&v.profit||0)):0; if(sBest>0) document.getElementById('bestSnow').textContent='שיא: '+fmt(sBest);
     const bb=Math.max(b.best||0,b.sbest||0); if(bb>0) document.getElementById('bestBeach').textContent='שיא סשן: '+fmt(bb);
     // the purse both worlds share (js/wallet.js): coins earned in either, spent on boards and plane tickets
+    // "straight to the waves": into a surf session at the surf school (the card itself goes to the town)
+    const sn=document.getElementById('surfNow'), goSurf=e=>{ e.preventDefault(); e.stopPropagation(); location.href='beach.html?go=surf'; };
+    sn.addEventListener('click',goSurf); sn.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' ') goSurf(e); });
     const W=window.RushWallet; if(W&&(W.coins>0||W.earned>0)){ document.getElementById('purseN').textContent=W.fmt(W.coins); if(W.flights) document.getElementById('purseF').textContent=' · ✈️ '+W.flights; document.getElementById('purse').hidden=false; } })();
 </script>
 </body>

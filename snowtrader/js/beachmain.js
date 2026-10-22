@@ -332,6 +332,7 @@
     set(100); await new Promise(r=>setTimeout(r,200)); $('#loading').remove();
     if(new URLSearchParams(location.search).get('arrive')){ townNote('✈️ נחתתם! ברוכים הבאים לחוף תל אביב ☀️'); history.replaceState(null,'',location.pathname); }
     const q=new URLSearchParams(location.search); if(q.get('auto')==='1'){ save.ctlSeen=1; startSession(); } else if(q.get('auto')==='surf'){ save.sctlSeen=1; startSurf(); }
+    else if(q.get('go')==='surf'){ history.replaceState(null,'',location.pathname); $('#surfBtn').onclick(); }   // the opening menu's "straight to the waves": the controls first the first time
     window.READY=true; requestAnimationFrame(loop); }
   ST.debug={town,townPlace,get mode(){ return mode; },setMode:m=>mode=m,tick,input,save,sess,startSession,endSession,toBeach,togglePause,ctl,readControls,tb,runPhysics,startSurf,surf,lineup,sctl,surfControls,get sport(){ return sport; }};
   boot();
