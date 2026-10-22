@@ -33,7 +33,7 @@
       if(W.sheet) mag=0;
       const run=mag>.12&&(k.run||Math.hypot(J.x,J.y)>.93); let want=mag<.12?0:run?RUN_V:WALK_V*clamp((mag-.12)/.55,.4,1);
       if(want>0){ const fx=-Math.sin(W.camYaw), fz=-Math.cos(W.camYaw), mx=fx*(-iy)+(-fz)*ix, mz=fz*(-iy)+fx*ix, tgt=Math.atan2(mx,mz), d=wrapA(tgt-W.hd);
-        W.hd=wrapA(W.hd+d*(1-Math.exp(-dt*(run?6.5:8.5)))); want*=Math.max(.2,Math.cos(Math.min(Math.abs(d),PI/2))); }   // turn first, then go
+        const tm=run?4.5:6; W.hd=wrapA(W.hd+clamp(d*(1-Math.exp(-dt*(run?6.5:8.5))),-tm*dt,tm*dt)); want*=Math.max(.2,Math.cos(Math.min(Math.abs(d),PI/2))); }   // turn first (at most ~340°/s walking, ~260° running: a person pivots, not a top), then go
       W.v=damp(W.v,want,want>W.v?4.5:9,dt);
       const p={x:W.x+Math.sin(W.hd)*W.v*dt,z:W.z+Math.cos(W.hd)*W.v*dt};
       if(pl&&pl.out) pl.out(p,.4);
