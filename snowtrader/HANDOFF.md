@@ -408,7 +408,7 @@
 - פרטים, מגבלות והמלצת השקעה ב-`ASSETS.md`.
 
 ## בדיקות (`tests/run.mjs`)
-הרצה: `cd snowtrader/tests && npm install && node run.mjs` (או `node run.mjs grind,pipe`). התוצאה האחרונה: **29/29**. ההרצה המלאה: 28/28 (17 בשלג, worlds, 9 בחוף, flight). אחר כך, אחרי השינויים בחוף: קבוצת התפריט והחוף 12/12 (כולל surfshop), ואחרי הגבלת הסיבוב של השחקן: walk, town, beach, crowd 4/4.
+הרצה: `cd snowtrader/tests && npm install && node run.mjs` (או `node run.mjs grind,pipe`). התוצאה האחרונה: **30/30** בהרצה מלאה אחת על הקוד הסופי (17 בשלג, worlds, 11 בחוף כולל crowd, lineup ו-surfshop, ו-flight).
 
 | בדיקה | מה נבדק |
 |---|---|
